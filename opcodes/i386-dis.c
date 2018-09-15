@@ -1957,7 +1957,6 @@ enum
   VEX_W_0F11_P_3,
   VEX_W_0F14,
   VEX_W_0F15,
-  VEX_W_0F2B_M_0,
   VEX_W_0F2E_P_0,
   VEX_W_0F2E_P_2,
   VEX_W_0F41_P_0_LEN_1,
@@ -10191,10 +10190,6 @@ static const struct dis386 vex_w_table[][2] = {
     { "vunpckhpX",	{ XM, Vex, EXx }, 0 },
   },
   {
-    /* VEX_W_0F2B_M_0 */
-    { "vmovntpX",	{ Mx, XM }, 0 },
-  },
-  {
     /* VEX_W_0F2E_P_0 */
     { "vucomiss",	{ XMScalar, EXdScalar }, 0 },
   },
@@ -11465,7 +11460,7 @@ static const struct dis386 mod_table[][2] = {
   },
   {
     /* MOD_VEX_0F2B */
-    { VEX_W_TABLE (VEX_W_0F2B_M_0) },
+    { "vmovntpX",	{ Mx, XM }, 0 },
   },
   {
     /* MOD_VEX_W_0_0F41_P_0_LEN_1 */
