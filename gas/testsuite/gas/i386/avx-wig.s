@@ -71,10 +71,14 @@ _start:
 	{store} vmovdqa %ymm4,%ymm6
 	{store} vmovdqu %ymm4,%ymm6
 	vmovhlps %xmm4,%xmm6,%xmm2
+	vmovhpd (%ecx),%xmm4,%xmm6
 	vmovhpd %xmm4,(%ecx)
+	vmovhps (%ecx),%xmm4,%xmm6
 	vmovhps %xmm4,(%ecx)
 	vmovlhps %xmm4,%xmm6,%xmm2
+	vmovlpd (%ecx),%xmm4,%xmm6
 	vmovlpd %xmm4,(%ecx)
+	vmovlps (%ecx),%xmm4,%xmm6
 	vmovlps %xmm4,(%ecx)
 	vmovmskpd %xmm4,%ecx
 	vmovmskps %xmm4,%ecx
