@@ -2060,7 +2060,6 @@ enum
   VEX_W_0FE3_P_2,
   VEX_W_0FE4_P_2,
   VEX_W_0FE5_P_2,
-  VEX_W_0FE7_P_2_M_0,
   VEX_W_0FE8_P_2,
   VEX_W_0FE9_P_2,
   VEX_W_0FEA_P_2,
@@ -10630,10 +10629,6 @@ static const struct dis386 vex_w_table[][2] = {
     { "vpmulhw",	{ XM, Vex, EXx }, 0 },
   },
   {
-    /* VEX_W_0FE7_P_2_M_0 */
-    { "vmovntdq",	{ Mx, XM }, 0 },
-  },
-  {
     /* VEX_W_0FE8_P_2  */
     { "vpsubsb",	{ XM, Vex, EXx }, 0 },
   },
@@ -11802,7 +11797,7 @@ static const struct dis386 mod_table[][2] = {
   },
   {
     /* MOD_VEX_0FE7_PREFIX_2 */
-    { VEX_W_TABLE (VEX_W_0FE7_P_2_M_0) },
+    { "vmovntdq",	{ Mx, XM }, 0 },
   },
   {
     /* MOD_VEX_0FF0_PREFIX_3 */
