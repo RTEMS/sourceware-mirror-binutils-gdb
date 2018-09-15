@@ -2210,7 +2210,6 @@ enum
   VEX_W_0F3878_P_2,
   VEX_W_0F3879_P_2,
   VEX_W_0F38CF_P_2,
-  VEX_W_0F38DB_P_2,
   VEX_W_0F3A00_P_2,
   VEX_W_0F3A01_P_2,
   VEX_W_0F3A02_P_2,
@@ -2250,7 +2249,6 @@ enum
   VEX_W_0F3A63_P_2,
   VEX_W_0F3ACE_P_2,
   VEX_W_0F3ACF_P_2,
-  VEX_W_0F3ADF_P_2,
 
   EVEX_W_0F10_P_0,
   EVEX_W_0F10_P_1_M_0,
@@ -9989,7 +9987,7 @@ static const struct dis386 vex_len_table[][2] = {
 
   /* VEX_LEN_0F38DB_P_2 */
   {
-    { VEX_W_TABLE (VEX_W_0F38DB_P_2) },
+    { "vaesimc",	{ XM, EXx }, 0 },
   },
 
   /* VEX_LEN_0F38F2_P_0 */
@@ -10234,7 +10232,7 @@ static const struct dis386 vex_len_table[][2] = {
 
   /* VEX_LEN_0F3ADF_P_2 */
   {
-    { VEX_W_TABLE (VEX_W_0F3ADF_P_2) },
+    { "vaeskeygenassist", { XM, EXx, Ib }, 0 },
   },
 
   /* VEX_LEN_0F3AF0_P_3 */
@@ -11326,10 +11324,6 @@ static const struct dis386 vex_w_table[][2] = {
     { "vgf2p8mulb", { XM, Vex, EXx }, 0 },
   },
   {
-    /* VEX_W_0F38DB_P_2 */
-    { "vaesimc",	{ XM, EXx }, 0 },
-  },
-  {
     /* VEX_W_0F3A00_P_2 */
     { Bad_Opcode },
     { "vpermq",		{ XM, EXx, Ib }, 0 },
@@ -11494,10 +11488,6 @@ static const struct dis386 vex_w_table[][2] = {
     /* VEX_W_0F3ACF_P_2 */
     { Bad_Opcode },
     { "vgf2p8affineinvqb",  { XM, Vex, EXx, Ib }, 0 },
-  },
-  {
-    /* VEX_W_0F3ADF_P_2 */
-    { "vaeskeygenassist", { XM, EXx, Ib }, 0 },
   },
 #define NEED_VEX_W_TABLE
 #include "i386-dis-evex.h"
