@@ -2207,8 +2207,6 @@ enum
   VEX_W_0F3A33_P_2_LEN_0,
   VEX_W_0F3A38_P_2,
   VEX_W_0F3A39_P_2,
-  VEX_W_0F3A40_P_2,
-  VEX_W_0F3A41_P_2,
   VEX_W_0F3A42_P_2,
   VEX_W_0F3A46_P_2,
   VEX_W_0F3A48_P_2,
@@ -6705,7 +6703,7 @@ static const struct dis386 prefix_table[][4] = {
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F3A40_P_2) },
+    { "vdpps",		{ XM, Vex, EXx, Ib }, 0 },
   },
 
   /* PREFIX_VEX_0F3A41 */
@@ -10084,7 +10082,7 @@ static const struct dis386 vex_len_table[][2] = {
 
   /* VEX_LEN_0F3A41_P_2 */
   {
-    { VEX_W_TABLE (VEX_W_0F3A41_P_2) },
+    { "vdppd",		{ XM, Vex128, EXx, Ib }, 0 },
   },
 
   /* VEX_LEN_0F3A46_P_2 */
@@ -11271,14 +11269,6 @@ static const struct dis386 vex_w_table[][2] = {
   {
     /* VEX_W_0F3A39_P_2 */
     { "vextracti128",	{ EXxmm, XM, Ib }, 0 },
-  },
-  {
-    /* VEX_W_0F3A40_P_2 */
-    { "vdpps",		{ XM, Vex, EXx, Ib }, 0 },
-  },
-  {
-    /* VEX_W_0F3A41_P_2 */
-    { "vdppd",		{ XM, Vex128, EXx, Ib }, 0 },
   },
   {
     /* VEX_W_0F3A42_P_2 */
