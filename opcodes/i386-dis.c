@@ -1979,7 +1979,6 @@ enum
   VEX_W_0F64_P_2,
   VEX_W_0F65_P_2,
   VEX_W_0F66_P_2,
-  VEX_W_0F67_P_2,
   VEX_W_0F68_P_2,
   VEX_W_0F69_P_2,
   VEX_W_0F6A_P_2,
@@ -2087,7 +2086,6 @@ enum
   VEX_W_0F3825_P_2,
   VEX_W_0F3828_P_2,
   VEX_W_0F3829_P_2,
-  VEX_W_0F382B_P_2,
   VEX_W_0F382C_P_2_M_0,
   VEX_W_0F382D_P_2_M_0,
   VEX_W_0F382E_P_2_M_0,
@@ -5036,7 +5034,7 @@ static const struct dis386 prefix_table[][4] = {
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F67_P_2) },
+    { "vpackuswb",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0F68 */
@@ -5869,7 +5867,7 @@ static const struct dis386 prefix_table[][4] = {
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F382B_P_2) },
+    { "vpackusdw",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0F382C */
@@ -10255,10 +10253,6 @@ static const struct dis386 vex_w_table[][2] = {
     { "vpcmpgtd",	{ XM, Vex, EXx }, 0 },
   },
   {
-    /* VEX_W_0F67_P_2  */
-    { "vpackuswb",	{ XM, Vex, EXx }, 0 },
-  },
-  {
     /* VEX_W_0F68_P_2  */
     { "vpunpckhbw",	{ XM, Vex, EXx }, 0 },
   },
@@ -10695,10 +10689,6 @@ static const struct dis386 vex_w_table[][2] = {
   {
     /* VEX_W_0F3829_P_2 */
     { "vpcmpeqq",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F382B_P_2 */
-    { "vpackusdw",	{ XM, Vex, EXx }, 0 },
   },
   {
     /* VEX_W_0F382C_P_2_M_0 */
