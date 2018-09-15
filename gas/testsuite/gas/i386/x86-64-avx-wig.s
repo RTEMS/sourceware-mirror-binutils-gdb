@@ -63,6 +63,8 @@ _start:
 	vminss %xmm4,%xmm6,%xmm2
 	vmovapd %ymm4,%ymm6
 	vmovaps %ymm4,%ymm6
+	{store} vmovapd %ymm4,%ymm6
+	{store} vmovaps %ymm4,%ymm6
 	vmovddup %ymm4,%ymm6
 	vmovdqa %ymm4,%ymm6
 	vmovdqu %ymm4,%ymm6
