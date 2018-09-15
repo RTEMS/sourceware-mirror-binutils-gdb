@@ -2002,19 +2002,6 @@ enum
   VEX_W_0F99_P_2_LEN_0,
   VEX_W_0FC4_P_2,
   VEX_W_0FC5_P_2,
-  VEX_W_0FD1_P_2,
-  VEX_W_0FD2_P_2,
-  VEX_W_0FD3_P_2,
-  VEX_W_0FD5_P_2,
-  VEX_W_0FD7_P_2_M_1,
-  VEX_W_0F3804_P_2,
-  VEX_W_0F3805_P_2,
-  VEX_W_0F3806_P_2,
-  VEX_W_0F3807_P_2,
-  VEX_W_0F3808_P_2,
-  VEX_W_0F3809_P_2,
-  VEX_W_0F380A_P_2,
-  VEX_W_0F380B_P_2,
   VEX_W_0F380C_P_2,
   VEX_W_0F380D_P_2,
   VEX_W_0F380E_P_2,
@@ -5224,21 +5211,21 @@ static const struct dis386 prefix_table[][4] = {
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FD1_P_2) },
+    { "vpsrlw",		{ XM, Vex, EXxmm }, 0 },
   },
 
   /* PREFIX_VEX_0FD2 */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FD2_P_2) },
+    { "vpsrld",		{ XM, Vex, EXxmm }, 0 },
   },
 
   /* PREFIX_VEX_0FD3 */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FD3_P_2) },
+    { "vpsrlq",		{ XM, Vex, EXxmm }, 0 },
   },
 
   /* PREFIX_VEX_0FD4 */
@@ -5252,7 +5239,7 @@ static const struct dis386 prefix_table[][4] = {
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FD5_P_2) },
+    { "vpmullw",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0FD6 */
@@ -5576,56 +5563,56 @@ static const struct dis386 prefix_table[][4] = {
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F3804_P_2) },
+    { "vpmaddubsw",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0F3805 */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F3805_P_2) },
+    { "vphsubw",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0F3806 */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F3806_P_2) },
+    { "vphsubd",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0F3807 */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F3807_P_2) },
+    { "vphsubsw",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0F3808 */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F3808_P_2) },
+    { "vpsignb",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0F3809 */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F3809_P_2) },
+    { "vpsignw",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0F380A */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F380A_P_2) },
+    { "vpsignd",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0F380B */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F380B_P_2) },
+    { "vpmulhrsw",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0F380C */
@@ -10270,58 +10257,6 @@ static const struct dis386 vex_w_table[][2] = {
     { "vpextrw",	{ Gdq, XS, Ib }, 0 },
   },
   {
-    /* VEX_W_0FD1_P_2 */
-    { "vpsrlw",		{ XM, Vex, EXxmm }, 0 },
-  },
-  {
-    /* VEX_W_0FD2_P_2 */
-    { "vpsrld",		{ XM, Vex, EXxmm }, 0 },
-  },
-  {
-    /* VEX_W_0FD3_P_2 */
-    { "vpsrlq",		{ XM, Vex, EXxmm }, 0 },
-  },
-  {
-    /* VEX_W_0FD5_P_2 */
-    { "vpmullw",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0FD7_P_2_M_1 */
-    { "vpmovmskb",	{ Gdq, XS }, 0 },
-  },
-  {
-    /* VEX_W_0F3804_P_2  */
-    { "vpmaddubsw",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F3805_P_2  */
-    { "vphsubw",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F3806_P_2  */
-    { "vphsubd",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F3807_P_2  */
-    { "vphsubsw",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F3808_P_2  */
-    { "vpsignb",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F3809_P_2  */
-    { "vpsignw",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F380A_P_2  */
-    { "vpsignd",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F380B_P_2  */
-    { "vpmulhrsw",	{ XM, Vex, EXx }, 0 },
-  },
-  {
     /* VEX_W_0F380C_P_2  */
     { "vpermilps",	{ XM, Vex, EXx }, 0 },
   },
@@ -11222,7 +11157,7 @@ static const struct dis386 mod_table[][2] = {
   {
     /* MOD_VEX_0FD7_PREFIX_2 */
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FD7_P_2_M_1) },
+    { "vpmovmskb",	{ Gdq, XS }, 0 },
   },
   {
     /* MOD_VEX_0FE7_PREFIX_2 */
