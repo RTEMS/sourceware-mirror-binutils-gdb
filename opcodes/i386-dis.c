@@ -2039,8 +2039,6 @@ enum
   VEX_W_0FE9_P_2,
   VEX_W_0FEA_P_2,
   VEX_W_0FEB_P_2,
-  VEX_W_0FEC_P_2,
-  VEX_W_0FED_P_2,
   VEX_W_0FEE_P_2,
   VEX_W_0FEF_P_2,
   VEX_W_0FF1_P_2,
@@ -5491,14 +5489,14 @@ static const struct dis386 prefix_table[][4] = {
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FEC_P_2) },
+    { "vpaddsb",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0FED */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FED_P_2) },
+    { "vpaddsw",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0FEE */
@@ -10497,14 +10495,6 @@ static const struct dis386 vex_w_table[][2] = {
   {
     /* VEX_W_0FEB_P_2  */
     { "vpor",		{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0FEC_P_2  */
-    { "vpaddsb",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0FED_P_2  */
-    { "vpaddsw",	{ XM, Vex, EXx }, 0 },
   },
   {
     /* VEX_W_0FEE_P_2  */
