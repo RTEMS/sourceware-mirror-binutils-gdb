@@ -2067,8 +2067,6 @@ enum
   VEX_W_0F98_P_2_LEN_0,
   VEX_W_0F99_P_0_LEN_0,
   VEX_W_0F99_P_2_LEN_0,
-  VEX_W_0FAE_R_2_M_0,
-  VEX_W_0FAE_R_3_M_0,
   VEX_W_0FC4_P_2,
   VEX_W_0FC5_P_2,
   VEX_W_0FD1_P_2,
@@ -9837,12 +9835,12 @@ static const struct dis386 vex_len_table[][2] = {
 
   /* VEX_LEN_0FAE_R_2_M_0 */
   {
-    { VEX_W_TABLE (VEX_W_0FAE_R_2_M_0) },
+    { "vldmxcsr",	{ Md }, 0 },
   },
 
   /* VEX_LEN_0FAE_R_3_M_0 */
   {
-    { VEX_W_TABLE (VEX_W_0FAE_R_3_M_0) },
+    { "vstmxcsr",	{ Md }, 0 },
   },
 
   /* VEX_LEN_0FC4_P_2 */
@@ -10697,14 +10695,6 @@ static const struct dis386 vex_w_table[][2] = {
     /* VEX_W_0F99_P_2_LEN_0 */
     { MOD_TABLE (MOD_VEX_W_0_0F99_P_2_LEN_0) },
     { MOD_TABLE (MOD_VEX_W_1_0F99_P_2_LEN_0) },
-  },
-  {
-    /* VEX_W_0FAE_R_2_M_0 */
-    { "vldmxcsr",	{ Md }, 0 },
-  },
-  {
-    /* VEX_W_0FAE_R_3_M_0 */
-    { "vstmxcsr",	{ Md }, 0 },
   },
   {
     /* VEX_W_0FC4_P_2 */
