@@ -1976,7 +1976,6 @@ enum
   VEX_W_0F4A_P_2_LEN_1,
   VEX_W_0F4B_P_0_LEN_1,
   VEX_W_0F4B_P_2_LEN_1,
-  VEX_W_0F50_M_0,
   VEX_W_0F51_P_0,
   VEX_W_0F51_P_1,
   VEX_W_0F51_P_2,
@@ -10285,10 +10284,6 @@ static const struct dis386 vex_w_table[][2] = {
     { MOD_TABLE (MOD_VEX_W_0_0F4B_P_2_LEN_1) },
   },
   {
-    /* VEX_W_0F50_M_0 */
-    { "vmovmskpX",	{ Gdq, XS }, 0 },
-  },
-  {
     /* VEX_W_0F51_P_0 */
     { "vsqrtps",	{ XM, EXx }, 0 },
   },
@@ -11640,7 +11635,7 @@ static const struct dis386 mod_table[][2] = {
   {
     /* MOD_VEX_0F50 */
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F50_M_0) },
+    { "vmovmskpX",	{ Gdq, XS }, 0 },
   },
   {
     /* MOD_VEX_0F71_REG_2 */
