@@ -2021,13 +2021,6 @@ enum
   VEX_W_0FD3_P_2,
   VEX_W_0FD5_P_2,
   VEX_W_0FD7_P_2_M_1,
-  VEX_W_0FD8_P_2,
-  VEX_W_0FD9_P_2,
-  VEX_W_0FDA_P_2,
-  VEX_W_0FDB_P_2,
-  VEX_W_0FDE_P_2,
-  VEX_W_0FDF_P_2,
-  VEX_W_0FE0_P_2,
   VEX_W_0FE1_P_2,
   VEX_W_0FE2_P_2,
   VEX_W_0FE3_P_2,
@@ -5345,28 +5338,28 @@ static const struct dis386 prefix_table[][4] = {
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FD8_P_2) },
+    { "vpsubusb",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0FD9 */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FD9_P_2) },
+    { "vpsubusw",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0FDA */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FDA_P_2) },
+    { "vpminub",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0FDB */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FDB_P_2) },
+    { "vpand",		{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0FDC */
@@ -5387,21 +5380,21 @@ static const struct dis386 prefix_table[][4] = {
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FDE_P_2) },
+    { "vpmaxub",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0FDF */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FDF_P_2) },
+    { "vpandn",		{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0FE0 */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FE0_P_2) },
+    { "vpavgb",		{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0FE1 */
@@ -10420,34 +10413,6 @@ static const struct dis386 vex_w_table[][2] = {
   {
     /* VEX_W_0FD7_P_2_M_1 */
     { "vpmovmskb",	{ Gdq, XS }, 0 },
-  },
-  {
-    /* VEX_W_0FD8_P_2 */
-    { "vpsubusb",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0FD9_P_2 */
-    { "vpsubusw",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0FDA_P_2 */
-    { "vpminub",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0FDB_P_2 */
-    { "vpand",		{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0FDE_P_2 */
-    { "vpmaxub",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0FDF_P_2 */
-    { "vpandn",		{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0FE0_P_2  */
-    { "vpavgb",		{ XM, Vex, EXx }, 0 },
   },
   {
     /* VEX_W_0FE1_P_2  */
