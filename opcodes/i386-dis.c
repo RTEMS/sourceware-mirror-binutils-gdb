@@ -2220,8 +2220,6 @@ enum
   VEX_W_0F3A09_P_2,
   VEX_W_0F3A0A_P_2,
   VEX_W_0F3A0B_P_2,
-  VEX_W_0F3A0C_P_2,
-  VEX_W_0F3A0D_P_2,
   VEX_W_0F3A0E_P_2,
   VEX_W_0F3A0F_P_2,
   VEX_W_0F3A14_P_2,
@@ -6594,14 +6592,14 @@ static const struct dis386 prefix_table[][4] = {
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F3A0C_P_2) },
+    { "vblendps",	{ XM, Vex, EXx, Ib }, 0 },
   },
 
   /* PREFIX_VEX_0F3A0D */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F3A0D_P_2) },
+    { "vblendpd",	{ XM, Vex, EXx, Ib }, 0 },
   },
 
   /* PREFIX_VEX_0F3A0E */
@@ -11364,14 +11362,6 @@ static const struct dis386 vex_w_table[][2] = {
   {
     /* VEX_W_0F3A0B_P_2 */
     { "vroundsd",	{ XMScalar, VexScalar, EXqScalar, Ib }, 0 },
-  },
-  {
-    /* VEX_W_0F3A0C_P_2 */
-    { "vblendps",	{ XM, Vex, EXx, Ib }, 0 },
-  },
-  {
-    /* VEX_W_0F3A0D_P_2 */
-    { "vblendpd",	{ XM, Vex, EXx, Ib }, 0 },
   },
   {
     /* VEX_W_0F3A0E_P_2 */
