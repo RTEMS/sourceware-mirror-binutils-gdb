@@ -1971,15 +1971,6 @@ enum
   VEX_W_0F5C_P_1,
   VEX_W_0F5C_P_2,
   VEX_W_0F5C_P_3,
-  VEX_W_0F60_P_2,
-  VEX_W_0F61_P_2,
-  VEX_W_0F62_P_2,
-  VEX_W_0F64_P_2,
-  VEX_W_0F65_P_2,
-  VEX_W_0F66_P_2,
-  VEX_W_0F68_P_2,
-  VEX_W_0F69_P_2,
-  VEX_W_0F6A_P_2,
   VEX_W_0F6C_P_2,
   VEX_W_0F6D_P_2,
   VEX_W_0F70_P_1,
@@ -4941,21 +4932,21 @@ static const struct dis386 prefix_table[][4] = {
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F60_P_2) },
+    { "vpunpcklbw",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0F61 */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F61_P_2) },
+    { "vpunpcklwd",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0F62 */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F62_P_2) },
+    { "vpunpckldq",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0F63 */
@@ -4969,21 +4960,21 @@ static const struct dis386 prefix_table[][4] = {
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F64_P_2) },
+    { "vpcmpgtb",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0F65 */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F65_P_2) },
+    { "vpcmpgtw",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0F66 */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F66_P_2) },
+    { "vpcmpgtd",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0F67 */
@@ -4997,21 +4988,21 @@ static const struct dis386 prefix_table[][4] = {
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F68_P_2) },
+    { "vpunpckhbw",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0F69 */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F69_P_2) },
+    { "vpunpckhwd",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0F6A */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F6A_P_2) },
+    { "vpunpckhdq",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0F6B */
@@ -10171,42 +10162,6 @@ static const struct dis386 vex_w_table[][2] = {
   {
     /* VEX_W_0F5C_P_3  */
     { "vsubsd",		{ XMScalar, VexScalar, EXqScalar }, 0 },
-  },
-  {
-    /* VEX_W_0F60_P_2  */
-    { "vpunpcklbw",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F61_P_2  */
-    { "vpunpcklwd",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F62_P_2  */
-    { "vpunpckldq",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F64_P_2  */
-    { "vpcmpgtb",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F65_P_2  */
-    { "vpcmpgtw",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F66_P_2  */
-    { "vpcmpgtd",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F68_P_2  */
-    { "vpunpckhbw",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F69_P_2  */
-    { "vpunpckhwd",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F6A_P_2  */
-    { "vpunpckhdq",	{ XM, Vex, EXx }, 0 },
   },
   {
     /* VEX_W_0F6C_P_2  */
