@@ -2105,7 +2105,6 @@ enum
   VEX_W_0FF4_P_2,
   VEX_W_0FF5_P_2,
   VEX_W_0FF6_P_2,
-  VEX_W_0FF7_P_2,
   VEX_W_0FF8_P_2,
   VEX_W_0FF9_P_2,
   VEX_W_0FFA_P_2,
@@ -9860,7 +9859,7 @@ static const struct dis386 vex_len_table[][2] = {
 
   /* VEX_LEN_0FF7_P_2 */
   {
-    { VEX_W_TABLE (VEX_W_0FF7_P_2) },
+    { "vmaskmovdqu",	{ XM, XS }, 0 },
   },
 
   /* VEX_LEN_0F3816_P_2 */
@@ -10847,10 +10846,6 @@ static const struct dis386 vex_w_table[][2] = {
   {
     /* VEX_W_0FF6_P_2 */
     { "vpsadbw",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0FF7_P_2 */
-    { "vmaskmovdqu",	{ XM, XS }, 0 },
   },
   {
     /* VEX_W_0FF8_P_2 */
