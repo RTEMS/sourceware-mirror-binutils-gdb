@@ -2019,7 +2019,6 @@ enum
   VEX_W_0FD1_P_2,
   VEX_W_0FD2_P_2,
   VEX_W_0FD3_P_2,
-  VEX_W_0FD4_P_2,
   VEX_W_0FD5_P_2,
   VEX_W_0FD7_P_2_M_1,
   VEX_W_0FD8_P_2,
@@ -5323,7 +5322,7 @@ static const struct dis386 prefix_table[][4] = {
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FD4_P_2) },
+    { "vpaddq",		{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0FD5 */
@@ -10418,10 +10417,6 @@ static const struct dis386 vex_w_table[][2] = {
   {
     /* VEX_W_0FD3_P_2 */
     { "vpsrlq",		{ XM, Vex, EXxmm }, 0 },
-  },
-  {
-    /* VEX_W_0FD4_P_2 */
-    { "vpaddq",		{ XM, Vex, EXx }, 0 },
   },
   {
     /* VEX_W_0FD5_P_2 */
