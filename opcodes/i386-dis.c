@@ -2196,7 +2196,6 @@ enum
   VEX_W_0F3A18_P_2,
   VEX_W_0F3A19_P_2,
   VEX_W_0F3A20_P_2,
-  VEX_W_0F3A21_P_2,
   VEX_W_0F3A30_P_2_LEN_0,
   VEX_W_0F3A31_P_2_LEN_0,
   VEX_W_0F3A32_P_2_LEN_0,
@@ -10036,7 +10035,7 @@ static const struct dis386 vex_len_table[][2] = {
 
   /* VEX_LEN_0F3A21_P_2 */
   {
-    { VEX_W_TABLE (VEX_W_0F3A21_P_2) },
+    { "vinsertps",	{ XM, Vex128, EXd, Ib }, 0 },
   },
 
   /* VEX_LEN_0F3A22_P_2 */
@@ -11217,10 +11216,6 @@ static const struct dis386 vex_w_table[][2] = {
   {
     /* VEX_W_0F3A20_P_2 */
     { "vpinsrb",	{ XM, Vex128, Edqb, Ib }, 0 },
-  },
-  {
-    /* VEX_W_0F3A21_P_2 */
-    { "vinsertps",	{ XM, Vex128, EXd, Ib }, 0 },
   },
   {
     /* VEX_W_0F3A30_P_2_LEN_0 */
