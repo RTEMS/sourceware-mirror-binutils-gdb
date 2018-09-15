@@ -95,7 +95,6 @@ static void OP_XMM_VexW (int, int);
 static void OP_Rounding (int, int);
 static void OP_REG_VexI4 (int, int);
 static void PCLMUL_Fixup (int, int);
-static void VZERO_Fixup (int, int);
 static void VCMP_Fixup (int, int);
 static void VPCMP_Fixup (int, int);
 static void VPCOM_Fixup (int, int);
@@ -442,7 +441,6 @@ fetch_data (struct disassemble_info *info, bfd_byte *addr)
 #define XMVexW { OP_XMM_VexW, 0 }
 #define XMVexI4 { OP_REG_VexI4, x_mode }
 #define PCLMUL { PCLMUL_Fixup, 0 }
-#define VZERO { VZERO_Fixup, 0 }
 #define VCMP { VCMP_Fixup, 0 }
 #define VPCMP { VPCMP_Fixup, 0 }
 #define VPCOM { VPCOM_Fixup, 0 }
@@ -1869,6 +1867,7 @@ enum
   VEX_LEN_0F5F_P_1,
   VEX_LEN_0F5F_P_3,
   VEX_LEN_0F6E_P_2,
+  VEX_LEN_0F77_P_0,
   VEX_LEN_0F7E_P_1,
   VEX_LEN_0F7E_P_2,
   VEX_LEN_0F90_P_0,
@@ -2077,7 +2076,6 @@ enum
   VEX_W_0F74_P_2,
   VEX_W_0F75_P_2,
   VEX_W_0F76_P_2,
-  VEX_W_0F77_P_0,
   VEX_W_0F7C_P_2,
   VEX_W_0F7C_P_3,
   VEX_W_0F7D_P_2,
@@ -5307,7 +5305,7 @@ static const struct dis386 prefix_table[][4] = {
 
   /* PREFIX_VEX_0F77 */
   {
-    { VEX_W_TABLE (VEX_W_0F77_P_0) },
+    { VEX_LEN_TABLE (VEX_LEN_0F77_P_0) },
   },
 
   /* PREFIX_VEX_0F7C */
@@ -9845,6 +9843,12 @@ static const struct dis386 vex_len_table[][2] = {
     { "vmovK",		{ XMScalar, Edq }, 0 },
   },
 
+  /* VEX_LEN_0F77_P_1 */
+  {
+    { "vzeroupper",	{ XX }, 0 },
+    { "vzeroall",	{ XX }, 0 },
+  },
+
   /* VEX_LEN_0F7E_P_1 */
   {
     { VEX_W_TABLE (VEX_W_0F7E_P_1) },
@@ -10786,10 +10790,6 @@ static const struct dis386 vex_w_table[][2] = {
   {
     /* VEX_W_0F76_P_2 */
     { "vpcmpeqd",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F77_P_0 */
-    { "",		{ VZERO }, 0 },
   },
   {
     /* VEX_W_0F7C_P_2 */
@@ -17624,22 +17624,6 @@ OP_XMM_Vex (int bytemode, int sizeflag)
       need_vex_reg = 0;
     }
   OP_XMM (bytemode, sizeflag);
-}
-
-static void
-VZERO_Fixup (int bytemode ATTRIBUTE_UNUSED, int sizeflag ATTRIBUTE_UNUSED)
-{
-  switch (vex.length)
-    {
-    case 128:
-      mnemonicendp = stpcpy (obuf, "vzeroupper");
-      break;
-    case 256:
-      mnemonicendp = stpcpy (obuf, "vzeroall");
-      break;
-    default:
-      abort ();
-    }
 }
 
 static struct op vex_cmp_op[] =
