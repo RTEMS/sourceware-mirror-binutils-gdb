@@ -2021,16 +2021,6 @@ enum
   VEX_W_0FD3_P_2,
   VEX_W_0FD5_P_2,
   VEX_W_0FD7_P_2_M_1,
-  VEX_W_0FE1_P_2,
-  VEX_W_0FE2_P_2,
-  VEX_W_0FE3_P_2,
-  VEX_W_0FE4_P_2,
-  VEX_W_0FE5_P_2,
-  VEX_W_0FE8_P_2,
-  VEX_W_0FE9_P_2,
-  VEX_W_0FEA_P_2,
-  VEX_W_0FEB_P_2,
-  VEX_W_0FEE_P_2,
   VEX_W_0FEF_P_2,
   VEX_W_0FF1_P_2,
   VEX_W_0FF2_P_2,
@@ -5401,35 +5391,35 @@ static const struct dis386 prefix_table[][4] = {
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FE1_P_2) },
+    { "vpsraw",		{ XM, Vex, EXxmm }, 0 },
   },
 
   /* PREFIX_VEX_0FE2 */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FE2_P_2) },
+    { "vpsrad",		{ XM, Vex, EXxmm }, 0 },
   },
 
   /* PREFIX_VEX_0FE3 */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FE3_P_2) },
+    { "vpavgw",		{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0FE4 */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FE4_P_2) },
+    { "vpmulhuw",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0FE5 */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FE5_P_2) },
+    { "vpmulhw",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0FE6 */
@@ -5451,28 +5441,28 @@ static const struct dis386 prefix_table[][4] = {
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FE8_P_2) },
+    { "vpsubsb",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0FE9 */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FE9_P_2) },
+    { "vpsubsw",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0FEA */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FEA_P_2) },
+    { "vpminsw",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0FEB */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FEB_P_2) },
+    { "vpor",		{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0FEC */
@@ -5493,7 +5483,7 @@ static const struct dis386 prefix_table[][4] = {
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0FEE_P_2) },
+    { "vpmaxsw",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0FEF */
@@ -10413,46 +10403,6 @@ static const struct dis386 vex_w_table[][2] = {
   {
     /* VEX_W_0FD7_P_2_M_1 */
     { "vpmovmskb",	{ Gdq, XS }, 0 },
-  },
-  {
-    /* VEX_W_0FE1_P_2  */
-    { "vpsraw",		{ XM, Vex, EXxmm }, 0 },
-  },
-  {
-    /* VEX_W_0FE2_P_2  */
-    { "vpsrad",		{ XM, Vex, EXxmm }, 0 },
-  },
-  {
-    /* VEX_W_0FE3_P_2  */
-    { "vpavgw",		{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0FE4_P_2  */
-    { "vpmulhuw",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0FE5_P_2  */
-    { "vpmulhw",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0FE8_P_2  */
-    { "vpsubsb",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0FE9_P_2  */
-    { "vpsubsw",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0FEA_P_2  */
-    { "vpminsw",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0FEB_P_2  */
-    { "vpor",		{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0FEE_P_2  */
-    { "vpmaxsw",	{ XM, Vex, EXx }, 0 },
   },
   {
     /* VEX_W_0FEF_P_2  */
