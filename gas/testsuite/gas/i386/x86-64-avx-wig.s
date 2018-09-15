@@ -68,6 +68,8 @@ _start:
 	vmovddup %ymm4,%ymm6
 	vmovdqa %ymm4,%ymm6
 	vmovdqu %ymm4,%ymm6
+	{store} vmovdqa %ymm4,%ymm6
+	{store} vmovdqu %ymm4,%ymm6
 	vmovhlps %xmm4,%xmm6,%xmm2
 	vmovhpd %xmm4,(%rcx)
 	vmovhps %xmm4,(%rcx)
