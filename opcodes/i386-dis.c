@@ -2082,8 +2082,6 @@ enum
   VEX_W_0F3A4A_P_2,
   VEX_W_0F3A4B_P_2,
   VEX_W_0F3A4C_P_2,
-  VEX_W_0F3A62_P_2,
-  VEX_W_0F3A63_P_2,
   VEX_W_0F3ACE_P_2,
   VEX_W_0F3ACF_P_2,
 
@@ -9899,12 +9897,12 @@ static const struct dis386 vex_len_table[][2] = {
 
   /* VEX_LEN_0F3A62_P_2 */
   {
-    { VEX_W_TABLE (VEX_W_0F3A62_P_2) },
+    { "vpcmpistrm",	{ XM, EXx, Ib }, 0 },
   },
 
   /* VEX_LEN_0F3A63_P_2 */
   {
-    { VEX_W_TABLE (VEX_W_0F3A63_P_2) },
+    { "vpcmpistri",	{ XM, EXx, Ib }, 0 },
   },
 
   /* VEX_LEN_0F3A6A_P_2 */
@@ -10615,14 +10613,6 @@ static const struct dis386 vex_w_table[][2] = {
   {
     /* VEX_W_0F3A4C_P_2 */
     { "vpblendvb",	{ XM, Vex, EXx, XMVexI4 }, 0 },
-  },
-  {
-    /* VEX_W_0F3A62_P_2 */
-    { "vpcmpistrm",	{ XM, EXx, Ib }, 0 },
-  },
-  {
-    /* VEX_W_0F3A63_P_2 */
-    { "vpcmpistri",	{ XM, EXx, Ib }, 0 },
   },
   {
     /* VEX_W_0F3ACE_P_2 */
