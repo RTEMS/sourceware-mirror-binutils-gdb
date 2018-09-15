@@ -86,6 +86,7 @@ _start:
 	vmovntdqa (%ecx),%xmm4
 	vmovntpd %ymm4,(%ecx)
 	vmovntps %ymm4,(%ecx)
+	vmovq %xmm4,%xmm6
 	vmovq %xmm4,(%ecx)
 	vmovsd (%ecx),%xmm4
 	vmovshdup %ymm4,%ymm6
