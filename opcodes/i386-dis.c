@@ -1846,8 +1846,6 @@ enum
   VEX_LEN_0F51_P_3,
   VEX_LEN_0F52_P_1,
   VEX_LEN_0F53_P_1,
-  VEX_LEN_0F59_P_1,
-  VEX_LEN_0F59_P_3,
   VEX_LEN_0F5C_P_1,
   VEX_LEN_0F5C_P_3,
   VEX_LEN_0F6E_P_2,
@@ -1971,10 +1969,6 @@ enum
   VEX_W_0F52_P_1,
   VEX_W_0F53_P_0,
   VEX_W_0F53_P_1,
-  VEX_W_0F59_P_0,
-  VEX_W_0F59_P_1,
-  VEX_W_0F59_P_2,
-  VEX_W_0F59_P_3,
   VEX_W_0F5C_P_0,
   VEX_W_0F5C_P_1,
   VEX_W_0F5C_P_2,
@@ -4941,10 +4935,10 @@ static const struct dis386 prefix_table[][4] = {
 
   /* PREFIX_VEX_0F59 */
   {
-    { VEX_W_TABLE (VEX_W_0F59_P_0) },
-    { VEX_LEN_TABLE (VEX_LEN_0F59_P_1) },
-    { VEX_W_TABLE (VEX_W_0F59_P_2) },
-    { VEX_LEN_TABLE (VEX_LEN_0F59_P_3) },
+    { "vmulps",		{ XM, Vex, EXx }, 0 },
+    { "vmulss",		{ XMScalar, VexScalar, EXdScalar }, 0 },
+    { "vmulpd",		{ XM, Vex, EXx }, 0 },
+    { "vmulsd",		{ XMScalar, VexScalar, EXqScalar }, 0 },
   },
 
   /* PREFIX_VEX_0F5A */
@@ -9619,18 +9613,6 @@ static const struct dis386 vex_len_table[][2] = {
     { VEX_W_TABLE (VEX_W_0F53_P_1) },
   },
 
-  /* VEX_LEN_0F59_P_1 */
-  {
-    { VEX_W_TABLE (VEX_W_0F59_P_1) },
-    { VEX_W_TABLE (VEX_W_0F59_P_1) },
-  },
-
-  /* VEX_LEN_0F59_P_3 */
-  {
-    { VEX_W_TABLE (VEX_W_0F59_P_3) },
-    { VEX_W_TABLE (VEX_W_0F59_P_3) },
-  },
-
   /* VEX_LEN_0F5C_P_1 */
   {
     { VEX_W_TABLE (VEX_W_0F5C_P_1) },
@@ -10236,22 +10218,6 @@ static const struct dis386 vex_w_table[][2] = {
   {
     /* VEX_W_0F53_P_1  */
     { "vrcpss",		{ XMScalar, VexScalar, EXdScalar }, 0 },
-  },
-  {
-    /* VEX_W_0F59_P_0  */
-    { "vmulps",		{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F59_P_1  */
-    { "vmulss",		{ XMScalar, VexScalar, EXdScalar }, 0 },
-  },
-  {
-    /* VEX_W_0F59_P_2  */
-    { "vmulpd",		{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F59_P_3  */
-    { "vmulsd",		{ XMScalar, VexScalar, EXqScalar }, 0 },
   },
   {
     /* VEX_W_0F5C_P_0  */
