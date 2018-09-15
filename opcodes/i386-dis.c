@@ -2050,10 +2050,6 @@ enum
   VEX_W_0F74_P_2,
   VEX_W_0F75_P_2,
   VEX_W_0F76_P_2,
-  VEX_W_0F7C_P_2,
-  VEX_W_0F7C_P_3,
-  VEX_W_0F7D_P_2,
-  VEX_W_0F7D_P_3,
   VEX_W_0F7E_P_1,
   VEX_W_0F7F_P_1,
   VEX_W_0F7F_P_2,
@@ -5271,16 +5267,16 @@ static const struct dis386 prefix_table[][4] = {
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F7C_P_2) },
-    { VEX_W_TABLE (VEX_W_0F7C_P_3) },
+    { "vhaddpd",	{ XM, Vex, EXx }, 0 },
+    { "vhaddps",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0F7D */
   {
     { Bad_Opcode },
     { Bad_Opcode },
-    { VEX_W_TABLE (VEX_W_0F7D_P_2) },
-    { VEX_W_TABLE (VEX_W_0F7D_P_3) },
+    { "vhsubpd",	{ XM, Vex, EXx }, 0 },
+    { "vhsubps",	{ XM, Vex, EXx }, 0 },
   },
 
   /* PREFIX_VEX_0F7E */
@@ -10625,22 +10621,6 @@ static const struct dis386 vex_w_table[][2] = {
   {
     /* VEX_W_0F76_P_2 */
     { "vpcmpeqd",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F7C_P_2 */
-    { "vhaddpd",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F7C_P_3 */
-    { "vhaddps",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F7D_P_2 */
-    { "vhsubpd",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F7D_P_3 */
-    { "vhsubps",	{ XM, Vex, EXx }, 0 },
   },
   {
     /* VEX_W_0F7E_P_1 */
