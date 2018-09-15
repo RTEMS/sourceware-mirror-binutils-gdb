@@ -1955,11 +1955,6 @@ enum
   VEX_W_0F11_P_1,
   VEX_W_0F11_P_2,
   VEX_W_0F11_P_3,
-  VEX_W_0F12_P_0_M_0,
-  VEX_W_0F12_P_0_M_1,
-  VEX_W_0F12_P_1,
-  VEX_W_0F12_P_2,
-  VEX_W_0F12_P_3,
   VEX_W_0F13_M_0,
   VEX_W_0F14,
   VEX_W_0F15,
@@ -4839,9 +4834,9 @@ static const struct dis386 prefix_table[][4] = {
   /* PREFIX_VEX_0F12 */
   {
     { MOD_TABLE (MOD_VEX_0F12_PREFIX_0) },
-    { VEX_W_TABLE (VEX_W_0F12_P_1) },
+    { "vmovsldup",	{ XM, EXx }, 0 },
     { VEX_LEN_TABLE (VEX_LEN_0F12_P_2) },
-    { VEX_W_TABLE (VEX_W_0F12_P_3) },
+    { "vmovddup",	{ XM, EXymmq }, 0 },
   },
 
   /* PREFIX_VEX_0F16 */
@@ -9488,17 +9483,17 @@ static const struct dis386 vex_len_table[][2] = {
 
   /* VEX_LEN_0F12_P_0_M_0 */
   {
-    { VEX_W_TABLE (VEX_W_0F12_P_0_M_0) },
+    { "vmovlps",	{ XM, Vex128, EXq }, 0 },
   },
 
   /* VEX_LEN_0F12_P_0_M_1 */
   {
-    { VEX_W_TABLE (VEX_W_0F12_P_0_M_1) },
+    { "vmovhlps",	{ XM, Vex128, EXq }, 0 },
   },
 
   /* VEX_LEN_0F12_P_2 */
   {
-    { VEX_W_TABLE (VEX_W_0F12_P_2) },
+    { "vmovlpd",	{ XM, Vex128, EXq }, 0 },
   },
 
   /* VEX_LEN_0F13_M_0 */
@@ -10199,26 +10194,6 @@ static const struct dis386 vex_w_table[][2] = {
   {
     /* VEX_W_0F11_P_3 */
     { "vmovsd",		{ EXqVexScalarS, VexScalar, XMScalar }, 0 },
-  },
-  {
-    /* VEX_W_0F12_P_0_M_0 */
-    { "vmovlps",	{ XM, Vex128, EXq }, 0 },
-  },
-  {
-    /* VEX_W_0F12_P_0_M_1 */
-    { "vmovhlps",	{ XM, Vex128, EXq }, 0 },
-  },
-  {
-    /* VEX_W_0F12_P_1 */
-    { "vmovsldup",	{ XM, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F12_P_2 */
-    { "vmovlpd",	{ XM, Vex128, EXq }, 0 },
-  },
-  {
-    /* VEX_W_0F12_P_3 */
-    { "vmovddup",	{ XM, EXymmq }, 0 },
   },
   {
     /* VEX_W_0F13_M_0 */
