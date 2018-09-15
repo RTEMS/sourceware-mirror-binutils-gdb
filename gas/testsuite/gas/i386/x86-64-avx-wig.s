@@ -91,11 +91,15 @@ _start:
 	vmovq %xmm4,%rcx
 	vmovq %rcx,%xmm4
 	vmovsd (%rcx),%xmm4
+	vmovsd %xmm4,(%rcx)
 	vmovshdup %ymm4,%ymm6
 	vmovsldup %ymm4,%ymm6
 	vmovss (%rcx),%xmm4
+	vmovss %xmm4,(%rcx)
 	vmovupd %ymm4,%ymm6
+	vmovupd %ymm4,(%rcx)
 	vmovups %ymm4,%ymm6
+	vmovups %ymm4,(%rcx)
 	vmpsadbw $7,%xmm4,%xmm6,%xmm2
 	vmulpd %ymm4,%ymm6,%ymm2
 	vmulps %ymm4,%ymm6,%ymm2
