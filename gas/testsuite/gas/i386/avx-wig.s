@@ -224,6 +224,7 @@ _start:
 	vroundsd $7,%xmm4,%xmm6,%xmm2
 	vroundss $7,%xmm4,%xmm6,%xmm2
 	vrsqrtps %ymm4,%ymm6
+	vrsqrtss %xmm4,%xmm6,%xmm2
 	vshufpd $7,%ymm4,%ymm6,%ymm2
 	vshufps $7,%ymm4,%ymm6,%ymm2
 	vsqrtpd %ymm4,%ymm6
