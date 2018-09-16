@@ -1824,8 +1824,6 @@ enum
   VEX_LEN_0F2C_P_3,
   VEX_LEN_0F2D_P_1,
   VEX_LEN_0F2D_P_3,
-  VEX_LEN_0F2E_P_0,
-  VEX_LEN_0F2E_P_2,
   VEX_LEN_0F41_P_0,
   VEX_LEN_0F41_P_2,
   VEX_LEN_0F42_P_0,
@@ -1933,11 +1931,7 @@ enum
 
 enum
 {
-  VEX_W_0F14 = 0,
-  VEX_W_0F15,
-  VEX_W_0F2E_P_0,
-  VEX_W_0F2E_P_2,
-  VEX_W_0F41_P_0_LEN_1,
+  VEX_W_0F41_P_0_LEN_1 = 0,
   VEX_W_0F41_P_2_LEN_1,
   VEX_W_0F42_P_0_LEN_1,
   VEX_W_0F42_P_2_LEN_1,
@@ -4696,9 +4690,9 @@ static const struct dis386 prefix_table[][4] = {
 
   /* PREFIX_VEX_0F2E */
   {
-    { VEX_LEN_TABLE (VEX_LEN_0F2E_P_0) },
+    { "vucomiss",	{ XMScalar, EXdScalar }, 0 },
     { Bad_Opcode },
-    { VEX_LEN_TABLE (VEX_LEN_0F2E_P_2) },
+    { "vucomisd",	{ XMScalar, EXqScalar }, 0 },
   },
 
   /* PREFIX_VEX_0F2F */
@@ -8427,8 +8421,8 @@ static const struct dis386 vex_table[][256] = {
     { PREFIX_TABLE (PREFIX_VEX_0F11) },
     { PREFIX_TABLE (PREFIX_VEX_0F12) },
     { MOD_TABLE (MOD_VEX_0F13) },
-    { VEX_W_TABLE (VEX_W_0F14) },
-    { VEX_W_TABLE (VEX_W_0F15) },
+    { "vunpcklpX",	{ XM, Vex, EXx }, 0 },
+    { "vunpckhpX",	{ XM, Vex, EXx }, 0 },
     { PREFIX_TABLE (PREFIX_VEX_0F16) },
     { MOD_TABLE (MOD_VEX_0F17) },
     /* 18 */
@@ -9357,18 +9351,6 @@ static const struct dis386 vex_len_table[][2] = {
     { "vcvtsd2si",	{ Gv, EXqScalar }, 0 },
   },
 
-  /* VEX_LEN_0F2E_P_0 */
-  {
-    { VEX_W_TABLE (VEX_W_0F2E_P_0) },
-    { VEX_W_TABLE (VEX_W_0F2E_P_0) },
-  },
-
-  /* VEX_LEN_0F2E_P_2 */
-  {
-    { VEX_W_TABLE (VEX_W_0F2E_P_2) },
-    { VEX_W_TABLE (VEX_W_0F2E_P_2) },
-  },
-
   /* VEX_LEN_0F41_P_0 */
   {
     { Bad_Opcode },
@@ -9903,22 +9885,6 @@ static const struct dis386 vex_len_table[][2] = {
 };
 
 static const struct dis386 vex_w_table[][2] = {
-  {
-    /* VEX_W_0F14 */
-    { "vunpcklpX",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F15 */
-    { "vunpckhpX",	{ XM, Vex, EXx }, 0 },
-  },
-  {
-    /* VEX_W_0F2E_P_0 */
-    { "vucomiss",	{ XMScalar, EXdScalar }, 0 },
-  },
-  {
-    /* VEX_W_0F2E_P_2 */
-    { "vucomisd",	{ XMScalar, EXqScalar }, 0 },
-  },
   {
     /* VEX_W_0F41_P_0_LEN_1 */
     { MOD_TABLE (MOD_VEX_W_0_0F41_P_0_LEN_1) },
