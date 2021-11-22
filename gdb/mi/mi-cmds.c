@@ -32,7 +32,7 @@ typedef std::unique_ptr<struct mi_command> mi_cmd_up;
 
 /* MI command table (built at run time). */
 
-static std::map<std::string, mi_cmd_up> mi_cmd_table;
+std::map<std::string, mi_cmd_up> mi_cmd_table;
 
 /* MI command with a pure MI implementation.  */
 
@@ -91,10 +91,9 @@ private:
   bool m_args_p;
 };
 
-/* Insert a new mi-command into the command table.  Return true if
-   insertion was successful.  */
+/* See mi-cmds.h.  */
 
-static bool
+bool
 insert_mi_cmd_entry (mi_cmd_up command)
 {
   gdb_assert (command != nullptr);

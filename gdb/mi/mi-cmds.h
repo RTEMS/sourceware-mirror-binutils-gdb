@@ -22,7 +22,9 @@
 #ifndef MI_MI_CMDS_H
 #define MI_MI_CMDS_H
 
+#include <map>
 #include "gdbsupport/gdb_optional.h"
+
 enum print_values {
    PRINT_NO_VALUES,
    PRINT_ALL_VALUES,
@@ -181,14 +183,25 @@ private:
   int *m_suppress_notification;
 };
 
+/* A command held in the MI_CMD_TABLE.  */
+
+typedef std::unique_ptr<struct mi_command> mi_cmd_up;
+
 /* Lookup a command in the MI command table, returns nullptr if COMMAND is
    not found.  */
 
 extern mi_command *mi_cmd_lookup (const char *command);
 
+extern std::map<std::string, mi_cmd_up> mi_cmd_table;
+
 /* Debug flag */
 extern int mi_debug_p;
 
 extern void mi_execute_command (const char *cmd, int from_tty);
+
+/* Insert a new mi-command into the command table.  Return true if
+   insertion was successful.  */
+
+extern bool insert_mi_cmd_entry (mi_cmd_up command);
 
 #endif /* MI_MI_CMDS_H */
