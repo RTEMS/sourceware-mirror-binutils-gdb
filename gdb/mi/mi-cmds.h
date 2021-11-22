@@ -159,6 +159,9 @@ struct mi_command
      wrong.  */
   void invoke (struct mi_parse *parse) const;
 
+  /* Return TRUE if command can be redefined, FALSE otherwise. */
+  virtual bool can_be_redefined();
+
 protected:
 
   /* The core of command invocation, this needs to be overridden in each
