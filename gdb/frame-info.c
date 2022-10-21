@@ -48,8 +48,8 @@ frame_info_ptr::frame_info_ptr (struct frame_info *ptr)
 
 /* See frame-info-ptr.h.  */
 
-void
-frame_info_ptr::reinflate ()
+frame_info *
+frame_info_ptr::reinflate () const
 {
   /* Ensure we have a valid frame level (sentinel frame or above), indicating
      prepare_reinflate was called.  */
@@ -58,7 +58,7 @@ frame_info_ptr::reinflate ()
   if (m_ptr != nullptr)
     {
       /* The frame_info wasn't invalidated, no need to reinflate.  */
-      return;
+      return m_ptr;
     }
 
   /* Frame #0 needs special handling, see comment in select_frame.  */
@@ -77,6 +77,7 @@ frame_info_ptr::reinflate ()
     }
 
   gdb_assert (m_ptr != nullptr);
+  return m_ptr;
 }
 
 #if GDB_SELF_TEST
@@ -97,7 +98,6 @@ test_user_created_frame ()
   SELF_CHECK (id.code_addr == 0x5678);
 
   reinit_frame_cache ();
-  frame.reinflate ();
 
   id = get_frame_id (frame);
   SELF_CHECK (id.stack_status == FID_STACK_VALID);
