@@ -188,6 +188,10 @@ struct frame_info
   /* A frame specific string describing the STOP_REASON in more detail.
      Only valid when PREV_P is set, but even then may still be NULL.  */
   const char *stop_string;
+
+  /* True if this frame was created from addresses given by the user (see
+     create_new_frame) rather than through unwinding.  */
+  bool is_user_created;
 };
 
 /* See frame.h.  */
@@ -1669,6 +1673,11 @@ get_current_frame (void)
    never 0 and SELECTED_FRAME_ID is never the ID of the innermost
    frame.
 
+   An exception to that is if the selected frame is a used-created one
+   (created and selected through the "select-frame view" command).  That
+   is encoded by having SELECTED_FRAME_LEVEL == 0 and SELECTED_FRAME_ID
+   the frame id derived from the user-provided addresses.
+
    If SELECTED_FRAME_ID / SELECTED_FRAME_LEVEL are null_frame_id / -1,
    and the target has no stack or is executing, then there's no
    selected frame.  */
@@ -1695,10 +1704,6 @@ void
 restore_selected_frame (frame_id frame_id, int frame_level)
   noexcept
 {
-  /* save_selected_frame never returns level == 0, so we shouldn't see
-     it here either.  */
-  gdb_assert (frame_level != 0);
-
   /* FRAME_ID can be null_frame_id only IFF frame_level is -1.  */
   gdb_assert ((frame_level == -1 && !frame_id_p (frame_id))
 	      || (frame_level != -1 && frame_id_p (frame_id)));
@@ -1728,6 +1733,15 @@ lookup_selected_frame (struct frame_id a_frame_id, int frame_level)
   if (frame_level == -1)
     {
       select_frame (get_current_frame ());
+      return;
+    }
+
+  /* This means the selected frame was a user-created one.  Create a new one
+     using the user-provided addresses, which happen to be in the frame id.  */
+  if (frame_level == 0)
+    {
+      select_frame (create_new_frame (a_frame_id.stack_addr,
+				      a_frame_id.code_addr));
       return;
     }
 
@@ -1855,7 +1869,10 @@ select_frame (frame_info_ptr fi)
 
   selected_frame = fi;
   selected_frame_level = frame_relative_level (fi);
-  if (selected_frame_level == 0)
+
+  /* If the frame is a user-created one, save its level and frame id just like
+     any other non-level-0 frame.  */
+  if (selected_frame_level == 0 && !fi->is_user_created)
     {
       /* Treat the current frame especially -- we want to always
 	 save/restore it without warning, even if the frame ID changes
@@ -1934,6 +1951,7 @@ create_new_frame (CORE_ADDR addr, CORE_ADDR pc)
 
   fi = FRAME_OBSTACK_ZALLOC (struct frame_info);
 
+  fi->is_user_created = true;
   fi->next = create_sentinel_frame (current_program_space,
 				    get_current_regcache ());
 
@@ -2839,6 +2857,14 @@ get_frame_type (frame_info_ptr frame)
        provides the frame's type.  */
     frame_unwind_find_by_frame (frame, &frame->prologue_cache);
   return frame->unwind->type;
+}
+
+/* See frame.h.  */
+
+bool
+frame_is_user_created (const frame_info *frame)
+{
+  return frame->is_user_created;
 }
 
 struct program_space *

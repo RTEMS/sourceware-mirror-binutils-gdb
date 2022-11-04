@@ -419,6 +419,10 @@ extern int frame_relative_level (frame_info_ptr fi);
 
 extern enum frame_type get_frame_type (frame_info_ptr);
 
+/* Return whether FRAME is user created.  */
+
+extern bool frame_is_user_created (const frame_info *frame);
+
 /* Return the frame's program space.  */
 extern struct program_space *get_frame_program_space (frame_info_ptr);
 
