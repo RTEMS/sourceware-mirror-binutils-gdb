@@ -31,14 +31,19 @@ intrusive_list<frame_info_ptr> frame_info_ptr::frame_list;
 
 /* See frame-info-ptr.h.  */
 
-void
-frame_info_ptr::prepare_reinflate ()
+frame_info_ptr::frame_info_ptr (struct frame_info *ptr)
+  : m_ptr (ptr)
 {
-  m_cached_level = frame_relative_level (*this);
+  frame_list.push_back (*this);
 
-  if (m_cached_level != 0
-      || (m_ptr != nullptr && frame_is_user_created (m_ptr)))
-    m_cached_id = get_frame_id (*this);
+  if (m_ptr != nullptr)
+    {
+      m_cached_level = frame_relative_level (m_ptr);
+
+      if (m_cached_level != 0
+	  || (m_ptr != nullptr && frame_is_user_created (m_ptr)))
+	m_cached_id = get_frame_id (m_ptr);
+    }
 }
 
 /* See frame-info-ptr.h.  */
@@ -91,7 +96,6 @@ test_user_created_frame ()
   SELF_CHECK (id.code_addr_p);
   SELF_CHECK (id.code_addr == 0x5678);
 
-  frame.prepare_reinflate ();
   reinit_frame_cache ();
   frame.reinflate ();
 
