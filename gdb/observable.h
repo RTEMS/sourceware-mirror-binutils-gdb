@@ -30,6 +30,7 @@ struct inferior;
 struct process_stratum_target;
 struct target_ops;
 struct trace_state_variable;
+class frame_info_ptr;
 
 namespace gdb
 {

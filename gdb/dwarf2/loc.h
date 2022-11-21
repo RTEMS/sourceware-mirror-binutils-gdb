@@ -65,7 +65,7 @@ value *compute_var_value (const char *name);
    otherwise.  */
 
 struct call_site_parameter *dwarf_expr_reg_to_entry_parameter
-  (frame_info_ptr frame, enum call_site_parameter_kind kind,
+  (frame_info *frame, enum call_site_parameter_kind kind,
    union call_site_parameter_u kind_u, dwarf2_per_cu_data **per_cu_return,
    dwarf2_per_objfile **per_objfile_return);
 

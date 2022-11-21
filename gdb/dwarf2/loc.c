@@ -1126,7 +1126,7 @@ call_site_parameter_matches (struct call_site_parameter *parameter,
 /* See loc.h.  */
 
 struct call_site_parameter *
-dwarf_expr_reg_to_entry_parameter (frame_info_ptr frame,
+dwarf_expr_reg_to_entry_parameter (frame_info *frame,
 				   enum call_site_parameter_kind kind,
 				   union call_site_parameter_u kind_u,
 				   dwarf2_per_cu_data **per_cu_return,
@@ -1143,7 +1143,7 @@ dwarf_expr_reg_to_entry_parameter (frame_info_ptr frame,
 
   while (get_frame_type (frame) == INLINE_FRAME)
     {
-      frame = get_prev_frame (frame);
+      frame = get_prev_frame (frame).get ();
       gdb_assert (frame != NULL);
     }
 
@@ -1339,7 +1339,7 @@ value_of_dwarf_reg_entry (struct type *type, frame_info_ptr frame,
   dwarf2_per_cu_data *caller_per_cu;
   dwarf2_per_objfile *caller_per_objfile;
 
-  parameter = dwarf_expr_reg_to_entry_parameter (frame, kind, kind_u,
+  parameter = dwarf_expr_reg_to_entry_parameter (frame.get (), kind, kind_u,
 						 &caller_per_cu,
 						 &caller_per_objfile);
 
@@ -1510,7 +1510,7 @@ dwarf2_evaluate_loc_desc_full (struct type *type, frame_info_ptr frame,
 
   try
     {
-      retval = ctx.evaluate (data, size, as_lval, per_cu, frame, nullptr,
+      retval = ctx.evaluate (data, size, as_lval, per_cu, frame.get (), nullptr,
 			     type, subobj_type, subobj_byte_offset);
     }
   catch (const gdb_exception_error &ex)
@@ -1595,7 +1595,7 @@ dwarf2_locexpr_baton_eval (const struct dwarf2_locexpr_baton *dlbaton,
   try
     {
       result = ctx.evaluate (dlbaton->data, dlbaton->size,
-			     true, per_cu, frame, addr_stack);
+			     true, per_cu, frame.get (), addr_stack);
     }
   catch (const gdb_exception_error &ex)
     {

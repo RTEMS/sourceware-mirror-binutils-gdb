@@ -22,7 +22,6 @@
 #define AMD64_TDEP_H
 
 struct gdbarch;
-class frame_info_ptr;
 struct regcache;
 
 #include "i386-tdep.h"

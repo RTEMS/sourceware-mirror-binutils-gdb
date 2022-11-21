@@ -277,7 +277,7 @@ static struct arm_get_next_pcs_ops arm_linux_get_next_pcs_ops = {
 };
 
 static void
-arm_linux_sigtramp_cache (frame_info_ptr this_frame,
+arm_linux_sigtramp_cache (frame_info *this_frame,
 			  struct trad_frame_cache *this_cache,
 			  CORE_ADDR func, int regs_offset)
 {
@@ -300,7 +300,7 @@ arm_linux_sigtramp_cache (frame_info_ptr this_frame,
 /* See arm-linux.h for stack layout details.  */
 static void
 arm_linux_sigreturn_init (const struct tramp_frame *self,
-			  frame_info_ptr this_frame,
+			  frame_info *this_frame,
 			  struct trad_frame_cache *this_cache,
 			  CORE_ADDR func)
 {
@@ -320,7 +320,7 @@ arm_linux_sigreturn_init (const struct tramp_frame *self,
 
 static void
 arm_linux_rt_sigreturn_init (const struct tramp_frame *self,
-			  frame_info_ptr this_frame,
+			  frame_info *this_frame,
 			  struct trad_frame_cache *this_cache,
 			  CORE_ADDR func)
 {
@@ -343,7 +343,7 @@ arm_linux_rt_sigreturn_init (const struct tramp_frame *self,
 
 static void
 arm_linux_restart_syscall_init (const struct tramp_frame *self,
-				frame_info_ptr this_frame,
+				frame_info *this_frame,
 				struct trad_frame_cache *this_cache,
 				CORE_ADDR func)
 {

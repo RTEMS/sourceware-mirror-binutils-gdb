@@ -292,7 +292,7 @@ int arm_get_next_pcs_is_thumb (struct arm_get_next_pcs *self);
 
 std::vector<CORE_ADDR> arm_software_single_step (struct regcache *);
 int arm_is_thumb (struct regcache *regcache);
-int arm_frame_is_thumb (frame_info_ptr frame);
+int arm_frame_is_thumb (frame_info *frame);
 
 extern void arm_displaced_step_fixup (struct gdbarch *,
 				      displaced_step_copy_insn_closure *,

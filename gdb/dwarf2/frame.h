@@ -23,7 +23,7 @@
 #define DWARF2_FRAME_H 1
 
 struct gdbarch;
-class frame_info_ptr;
+struct frame_info;
 struct dwarf2_per_cu_data;
 struct agent_expr;
 struct axs_value;
@@ -78,7 +78,7 @@ struct dwarf2_frame_state_reg
       const gdb_byte *start;
       ULONGEST len;
     } exp;
-    struct value *(*fn) (frame_info_ptr this_frame, void **this_cache,
+    struct value *(*fn) (frame_info *this_frame, void **this_cache,
 			 int regnum);
   } loc;
   enum dwarf2_frame_reg_rule how;
@@ -208,7 +208,7 @@ extern bool dwarf2_frame_unwinders_enabled_p;
 extern void dwarf2_frame_set_init_reg (struct gdbarch *gdbarch,
 				       void (*init_reg) (struct gdbarch *, int,
 					     struct dwarf2_frame_state_reg *,
-					     frame_info_ptr));
+					     frame_info *));
 
 /* Set the architecture-specific signal trampoline recognition
    function for GDBARCH to SIGNAL_FRAME_P.  */
@@ -216,7 +216,7 @@ extern void dwarf2_frame_set_init_reg (struct gdbarch *gdbarch,
 extern void
   dwarf2_frame_set_signal_frame_p (struct gdbarch *gdbarch,
 				   int (*signal_frame_p) (struct gdbarch *,
-							  frame_info_ptr));
+							  frame_info *));
 
 /* Set the architecture-specific adjustment of .eh_frame and .debug_frame
    register numbers.  */
@@ -234,11 +234,11 @@ void dwarf2_append_unwinders (struct gdbarch *gdbarch);
    NULL if it can't be handled by the DWARF CFI frame unwinder.  */
 
 extern const struct frame_base *
-  dwarf2_frame_base_sniffer (frame_info_ptr this_frame);
+  dwarf2_frame_base_sniffer (frame_info *this_frame);
 
 /* Compute the DWARF CFA for a frame.  */
 
-CORE_ADDR dwarf2_frame_cfa (frame_info_ptr this_frame);
+CORE_ADDR dwarf2_frame_cfa (frame_info *this_frame);
 
 /* Find the CFA information for PC.
 

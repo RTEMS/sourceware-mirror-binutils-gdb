@@ -2177,7 +2177,7 @@ set_gdbarch_register_type (struct gdbarch *gdbarch,
 }
 
 struct frame_id
-gdbarch_dummy_id (struct gdbarch *gdbarch, frame_info_ptr this_frame)
+gdbarch_dummy_id (struct gdbarch *gdbarch, frame_info *this_frame)
 {
   gdb_assert (gdbarch != NULL);
   gdb_assert (gdbarch->dummy_id != NULL);
@@ -2460,7 +2460,7 @@ set_gdbarch_convert_register_p (struct gdbarch *gdbarch,
 }
 
 int
-gdbarch_register_to_value (struct gdbarch *gdbarch, frame_info_ptr frame, int regnum, struct type *type, gdb_byte *buf, int *optimizedp, int *unavailablep)
+gdbarch_register_to_value (struct gdbarch *gdbarch, frame_info *frame, int regnum, struct type *type, gdb_byte *buf, int *optimizedp, int *unavailablep)
 {
   gdb_assert (gdbarch != NULL);
   gdb_assert (gdbarch->register_to_value != NULL);
@@ -2951,7 +2951,7 @@ set_gdbarch_frame_args_skip (struct gdbarch *gdbarch,
 }
 
 CORE_ADDR
-gdbarch_unwind_pc (struct gdbarch *gdbarch, frame_info_ptr next_frame)
+gdbarch_unwind_pc (struct gdbarch *gdbarch, frame_info *next_frame)
 {
   gdb_assert (gdbarch != NULL);
   gdb_assert (gdbarch->unwind_pc != NULL);
@@ -2968,7 +2968,7 @@ set_gdbarch_unwind_pc (struct gdbarch *gdbarch,
 }
 
 CORE_ADDR
-gdbarch_unwind_sp (struct gdbarch *gdbarch, frame_info_ptr next_frame)
+gdbarch_unwind_sp (struct gdbarch *gdbarch, frame_info *next_frame)
 {
   gdb_assert (gdbarch != NULL);
   gdb_assert (gdbarch->unwind_sp != NULL);

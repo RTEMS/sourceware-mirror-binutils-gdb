@@ -1042,7 +1042,7 @@ mn10300_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR pc)
    use the current frame PC as the limit, then
    invoke mn10300_analyze_prologue and return its result.  */
 static struct mn10300_prologue *
-mn10300_analyze_frame_prologue (frame_info_ptr this_frame,
+mn10300_analyze_frame_prologue (frame_info *this_frame,
 			   void **this_prologue_cache)
 {
   if (!*this_prologue_cache)
@@ -1071,7 +1071,7 @@ mn10300_analyze_frame_prologue (frame_info_ptr this_frame,
 /* Given the next frame and a prologue cache, return this frame's
    base.  */
 static CORE_ADDR
-mn10300_frame_base (frame_info_ptr this_frame, void **this_prologue_cache)
+mn10300_frame_base (frame_info *this_frame, void **this_prologue_cache)
 {
   struct mn10300_prologue *p
     = mn10300_analyze_frame_prologue (this_frame, this_prologue_cache);
@@ -1095,7 +1095,7 @@ mn10300_frame_base (frame_info_ptr this_frame, void **this_prologue_cache)
 }
 
 static void
-mn10300_frame_this_id (frame_info_ptr this_frame,
+mn10300_frame_this_id (frame_info *this_frame,
 		       void **this_prologue_cache,
 		       struct frame_id *this_id)
 {
@@ -1106,7 +1106,7 @@ mn10300_frame_this_id (frame_info_ptr this_frame,
 }
 
 static struct value *
-mn10300_frame_prev_register (frame_info_ptr this_frame,
+mn10300_frame_prev_register (frame_info *this_frame,
 			     void **this_prologue_cache, int regnum)
 {
   struct mn10300_prologue *p
@@ -1275,7 +1275,7 @@ mn10300_push_dummy_call (struct gdbarch *gdbarch,
   {
     CORE_ADDR func_addr = find_function_addr (target_func, NULL);
     CORE_ADDR unwound_sp 
-      = gdbarch_unwind_sp (gdbarch, create_new_frame (sp, func_addr));
+      = gdbarch_unwind_sp (gdbarch, create_new_frame (sp, func_addr).get ());
     if (sp != unwound_sp)
       regcache_cooked_write_unsigned (regcache, E_SP_REGNUM,
 				      sp - (unwound_sp - sp));

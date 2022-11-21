@@ -79,7 +79,7 @@ tic6x_register_sigcontext_offset (unsigned int regnum, struct gdbarch *gdbarch)
 
 static void
 tic6x_linux_rt_sigreturn_init (const struct tramp_frame *self,
-			       frame_info_ptr this_frame,
+			       frame_info *this_frame,
 			       struct trad_frame_cache *this_cache,
 			       CORE_ADDR func)
 {

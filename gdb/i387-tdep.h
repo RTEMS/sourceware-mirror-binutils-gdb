@@ -100,7 +100,7 @@ extern int i387_convert_register_p (struct gdbarch *gdbarch, int regnum,
 /* Read a value of type TYPE from register REGNUM in frame FRAME, and
    return its contents in TO.  */
 
-extern int i387_register_to_value (frame_info_ptr frame, int regnum,
+extern int i387_register_to_value (frame_info *frame, int regnum,
 				   struct type *type, gdb_byte *to,
 				   int *optimizedp, int *unavailablep);
 

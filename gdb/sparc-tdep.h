@@ -207,10 +207,10 @@ extern CORE_ADDR sparc_analyze_prologue (struct gdbarch *gdbarch,
 					 struct sparc_frame_cache *cache);
 
 extern struct sparc_frame_cache *
-  sparc_frame_cache (frame_info_ptr this_frame, void **this_cache);
+  sparc_frame_cache (frame_info *this_frame, void **this_cache);
 
 extern struct sparc_frame_cache *
-  sparc32_frame_cache (frame_info_ptr this_frame, void **this_cache);
+  sparc32_frame_cache (frame_info *this_frame, void **this_cache);
 
 extern int
   sparc_stack_frame_destroyed_p (struct gdbarch *gdbarch, CORE_ADDR pc);
@@ -262,6 +262,6 @@ extern void sparc32nbsd_init_abi (struct gdbarch_info info,
 				  struct gdbarch *gdbarch);
 
 extern struct trad_frame_saved_reg *
-  sparc32nbsd_sigcontext_saved_regs (frame_info_ptr next_frame);
+  sparc32nbsd_sigcontext_saved_regs (frame_info *next_frame);
 
 #endif /* sparc-tdep.h */

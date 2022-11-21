@@ -241,7 +241,7 @@ push_pull_get_stack_adjustment (int n_operands,
 /* Initialize a prologue cache.  */
 
 static struct trad_frame_cache *
-s12z_frame_cache (frame_info_ptr this_frame, void **prologue_cache)
+s12z_frame_cache (frame_info *this_frame, void **prologue_cache)
 {
   struct trad_frame_cache *info;
 
@@ -420,7 +420,7 @@ s12z_frame_cache (frame_info_ptr this_frame, void **prologue_cache)
 
 /* Implement the this_id function for the stub unwinder.  */
 static void
-s12z_frame_this_id (frame_info_ptr this_frame,
+s12z_frame_this_id (frame_info *this_frame,
 		    void **prologue_cache, struct frame_id *this_id)
 {
   struct trad_frame_cache *info = s12z_frame_cache (this_frame,
@@ -432,7 +432,7 @@ s12z_frame_this_id (frame_info_ptr this_frame,
 
 /* Implement the prev_register function for the stub unwinder.  */
 static struct value *
-s12z_frame_prev_register (frame_info_ptr this_frame,
+s12z_frame_prev_register (frame_info *this_frame,
 			  void **prologue_cache, int regnum)
 {
   struct trad_frame_cache *info = s12z_frame_cache (this_frame,

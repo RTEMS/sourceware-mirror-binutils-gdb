@@ -940,7 +940,7 @@ mips_convert_register_p (struct gdbarch *gdbarch,
 }
 
 static int
-mips_register_to_value (frame_info_ptr frame, int regnum,
+mips_register_to_value (frame_info *frame, int regnum,
 			struct type *type, gdb_byte *to,
 			int *optimizedp, int *unavailablep)
 {
@@ -1402,7 +1402,7 @@ mips_read_pc (readable_regcache *regcache)
 }
 
 static CORE_ADDR
-mips_unwind_pc (struct gdbarch *gdbarch, frame_info_ptr next_frame)
+mips_unwind_pc (struct gdbarch *gdbarch, frame_info *next_frame)
 {
   CORE_ADDR pc;
 
@@ -1424,7 +1424,7 @@ mips_unwind_pc (struct gdbarch *gdbarch, frame_info_ptr next_frame)
 }
 
 static CORE_ADDR
-mips_unwind_sp (struct gdbarch *gdbarch, frame_info_ptr next_frame)
+mips_unwind_sp (struct gdbarch *gdbarch, frame_info *next_frame)
 {
   return frame_unwind_register_signed
 	   (next_frame, gdbarch_num_regs (gdbarch) + MIPS_SP_REGNUM);
@@ -1436,7 +1436,7 @@ mips_unwind_sp (struct gdbarch *gdbarch, frame_info_ptr next_frame)
    breakpoint.  */
 
 static struct frame_id
-mips_dummy_id (struct gdbarch *gdbarch, frame_info_ptr this_frame)
+mips_dummy_id (struct gdbarch *gdbarch, frame_info *this_frame)
 {
   return frame_id_build
 	   (get_frame_register_signed (this_frame,
@@ -2519,7 +2519,7 @@ mips16_get_imm (unsigned short prev_inst,	/* previous instruction */
 static CORE_ADDR
 mips16_scan_prologue (struct gdbarch *gdbarch,
 		      CORE_ADDR start_pc, CORE_ADDR limit_pc,
-		      frame_info_ptr this_frame,
+		      frame_info *this_frame,
 		      struct mips_frame_cache *this_cache)
 {
   int prev_non_prologue_insn = 0;
@@ -2855,7 +2855,7 @@ mips16_scan_prologue (struct gdbarch *gdbarch,
    mips_insn32 unwinder.  */
 
 static struct mips_frame_cache *
-mips_insn16_frame_cache (frame_info_ptr this_frame, void **this_cache)
+mips_insn16_frame_cache (frame_info *this_frame, void **this_cache)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
   struct mips_frame_cache *cache;
@@ -2891,7 +2891,7 @@ mips_insn16_frame_cache (frame_info_ptr this_frame, void **this_cache)
 }
 
 static void
-mips_insn16_frame_this_id (frame_info_ptr this_frame, void **this_cache,
+mips_insn16_frame_this_id (frame_info *this_frame, void **this_cache,
 			   struct frame_id *this_id)
 {
   struct mips_frame_cache *info = mips_insn16_frame_cache (this_frame,
@@ -2903,7 +2903,7 @@ mips_insn16_frame_this_id (frame_info_ptr this_frame, void **this_cache,
 }
 
 static struct value *
-mips_insn16_frame_prev_register (frame_info_ptr this_frame,
+mips_insn16_frame_prev_register (frame_info *this_frame,
 				 void **this_cache, int regnum)
 {
   struct mips_frame_cache *info = mips_insn16_frame_cache (this_frame,
@@ -2913,7 +2913,7 @@ mips_insn16_frame_prev_register (frame_info_ptr this_frame,
 
 static int
 mips_insn16_frame_sniffer (const struct frame_unwind *self,
-			   frame_info_ptr this_frame, void **this_cache)
+			   frame_info *this_frame, void **this_cache)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
   CORE_ADDR pc = get_frame_pc (this_frame);
@@ -2934,7 +2934,7 @@ static const struct frame_unwind mips_insn16_frame_unwind =
 };
 
 static CORE_ADDR
-mips_insn16_frame_base_address (frame_info_ptr this_frame,
+mips_insn16_frame_base_address (frame_info *this_frame,
 				void **this_cache)
 {
   struct mips_frame_cache *info = mips_insn16_frame_cache (this_frame,
@@ -2951,7 +2951,7 @@ static const struct frame_base mips_insn16_frame_base =
 };
 
 static const struct frame_base *
-mips_insn16_frame_base_sniffer (frame_info_ptr this_frame)
+mips_insn16_frame_base_sniffer (frame_info *this_frame)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
   CORE_ADDR pc = get_frame_pc (this_frame);
@@ -2980,7 +2980,7 @@ micromips_decode_imm9 (int imm)
 static CORE_ADDR
 micromips_scan_prologue (struct gdbarch *gdbarch,
 			 CORE_ADDR start_pc, CORE_ADDR limit_pc,
-			 frame_info_ptr this_frame,
+			 frame_info *this_frame,
 			 struct mips_frame_cache *this_cache)
 {
   CORE_ADDR end_prologue_addr;
@@ -3289,7 +3289,7 @@ micromips_scan_prologue (struct gdbarch *gdbarch,
    mips_insn32 unwinder.  Likewise MIPS16 and the mips_insn16 unwinder. */
 
 static struct mips_frame_cache *
-mips_micro_frame_cache (frame_info_ptr this_frame, void **this_cache)
+mips_micro_frame_cache (frame_info *this_frame, void **this_cache)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
   struct mips_frame_cache *cache;
@@ -3326,7 +3326,7 @@ mips_micro_frame_cache (frame_info_ptr this_frame, void **this_cache)
 }
 
 static void
-mips_micro_frame_this_id (frame_info_ptr this_frame, void **this_cache,
+mips_micro_frame_this_id (frame_info *this_frame, void **this_cache,
 			  struct frame_id *this_id)
 {
   struct mips_frame_cache *info = mips_micro_frame_cache (this_frame,
@@ -3338,7 +3338,7 @@ mips_micro_frame_this_id (frame_info_ptr this_frame, void **this_cache,
 }
 
 static struct value *
-mips_micro_frame_prev_register (frame_info_ptr this_frame,
+mips_micro_frame_prev_register (frame_info *this_frame,
 				void **this_cache, int regnum)
 {
   struct mips_frame_cache *info = mips_micro_frame_cache (this_frame,
@@ -3348,7 +3348,7 @@ mips_micro_frame_prev_register (frame_info_ptr this_frame,
 
 static int
 mips_micro_frame_sniffer (const struct frame_unwind *self,
-			  frame_info_ptr this_frame, void **this_cache)
+			  frame_info *this_frame, void **this_cache)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
   CORE_ADDR pc = get_frame_pc (this_frame);
@@ -3370,7 +3370,7 @@ static const struct frame_unwind mips_micro_frame_unwind =
 };
 
 static CORE_ADDR
-mips_micro_frame_base_address (frame_info_ptr this_frame,
+mips_micro_frame_base_address (frame_info *this_frame,
 			       void **this_cache)
 {
   struct mips_frame_cache *info = mips_micro_frame_cache (this_frame,
@@ -3387,7 +3387,7 @@ static const struct frame_base mips_micro_frame_base =
 };
 
 static const struct frame_base *
-mips_micro_frame_base_sniffer (frame_info_ptr this_frame)
+mips_micro_frame_base_sniffer (frame_info *this_frame)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
   CORE_ADDR pc = get_frame_pc (this_frame);
@@ -3425,7 +3425,7 @@ reset_saved_regs (struct gdbarch *gdbarch, struct mips_frame_cache *this_cache)
 static CORE_ADDR
 mips32_scan_prologue (struct gdbarch *gdbarch,
 		      CORE_ADDR start_pc, CORE_ADDR limit_pc,
-		      frame_info_ptr this_frame,
+		      frame_info *this_frame,
 		      struct mips_frame_cache *this_cache)
 {
   int prev_non_prologue_insn;
@@ -3670,7 +3670,7 @@ restart:
    unwinder.  Likewise microMIPS and the mips_micro unwinder. */
 
 static struct mips_frame_cache *
-mips_insn32_frame_cache (frame_info_ptr this_frame, void **this_cache)
+mips_insn32_frame_cache (frame_info *this_frame, void **this_cache)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
   struct mips_frame_cache *cache;
@@ -3707,7 +3707,7 @@ mips_insn32_frame_cache (frame_info_ptr this_frame, void **this_cache)
 }
 
 static void
-mips_insn32_frame_this_id (frame_info_ptr this_frame, void **this_cache,
+mips_insn32_frame_this_id (frame_info *this_frame, void **this_cache,
 			   struct frame_id *this_id)
 {
   struct mips_frame_cache *info = mips_insn32_frame_cache (this_frame,
@@ -3719,7 +3719,7 @@ mips_insn32_frame_this_id (frame_info_ptr this_frame, void **this_cache,
 }
 
 static struct value *
-mips_insn32_frame_prev_register (frame_info_ptr this_frame,
+mips_insn32_frame_prev_register (frame_info *this_frame,
 				 void **this_cache, int regnum)
 {
   struct mips_frame_cache *info = mips_insn32_frame_cache (this_frame,
@@ -3729,7 +3729,7 @@ mips_insn32_frame_prev_register (frame_info_ptr this_frame,
 
 static int
 mips_insn32_frame_sniffer (const struct frame_unwind *self,
-			   frame_info_ptr this_frame, void **this_cache)
+			   frame_info *this_frame, void **this_cache)
 {
   CORE_ADDR pc = get_frame_pc (this_frame);
   if (mips_pc_is_mips (pc))
@@ -3749,7 +3749,7 @@ static const struct frame_unwind mips_insn32_frame_unwind =
 };
 
 static CORE_ADDR
-mips_insn32_frame_base_address (frame_info_ptr this_frame,
+mips_insn32_frame_base_address (frame_info *this_frame,
 				void **this_cache)
 {
   struct mips_frame_cache *info = mips_insn32_frame_cache (this_frame,
@@ -3766,7 +3766,7 @@ static const struct frame_base mips_insn32_frame_base =
 };
 
 static const struct frame_base *
-mips_insn32_frame_base_sniffer (frame_info_ptr this_frame)
+mips_insn32_frame_base_sniffer (frame_info *this_frame)
 {
   CORE_ADDR pc = get_frame_pc (this_frame);
   if (mips_pc_is_mips (pc))
@@ -3776,7 +3776,7 @@ mips_insn32_frame_base_sniffer (frame_info_ptr this_frame)
 }
 
 static struct trad_frame_cache *
-mips_stub_frame_cache (frame_info_ptr this_frame, void **this_cache)
+mips_stub_frame_cache (frame_info *this_frame, void **this_cache)
 {
   CORE_ADDR pc;
   CORE_ADDR start_addr;
@@ -3811,7 +3811,7 @@ mips_stub_frame_cache (frame_info_ptr this_frame, void **this_cache)
 }
 
 static void
-mips_stub_frame_this_id (frame_info_ptr this_frame, void **this_cache,
+mips_stub_frame_this_id (frame_info *this_frame, void **this_cache,
 			 struct frame_id *this_id)
 {
   struct trad_frame_cache *this_trad_cache
@@ -3820,7 +3820,7 @@ mips_stub_frame_this_id (frame_info_ptr this_frame, void **this_cache,
 }
 
 static struct value *
-mips_stub_frame_prev_register (frame_info_ptr this_frame,
+mips_stub_frame_prev_register (frame_info *this_frame,
 			       void **this_cache, int regnum)
 {
   struct trad_frame_cache *this_trad_cache
@@ -3830,7 +3830,7 @@ mips_stub_frame_prev_register (frame_info_ptr this_frame,
 
 static int
 mips_stub_frame_sniffer (const struct frame_unwind *self,
-			 frame_info_ptr this_frame, void **this_cache)
+			 frame_info *this_frame, void **this_cache)
 {
   gdb_byte dummy[4];
   CORE_ADDR pc = get_frame_address_in_block (this_frame);
@@ -3866,7 +3866,7 @@ static const struct frame_unwind mips_stub_frame_unwind =
 };
 
 static CORE_ADDR
-mips_stub_frame_base_address (frame_info_ptr this_frame,
+mips_stub_frame_base_address (frame_info *this_frame,
 			      void **this_cache)
 {
   struct trad_frame_cache *this_trad_cache
@@ -3883,7 +3883,7 @@ static const struct frame_base mips_stub_frame_base =
 };
 
 static const struct frame_base *
-mips_stub_frame_base_sniffer (frame_info_ptr this_frame)
+mips_stub_frame_base_sniffer (frame_info *this_frame)
 {
   if (mips_stub_frame_sniffer (&mips_stub_frame_unwind, this_frame, NULL))
     return &mips_stub_frame_base;
@@ -6256,7 +6256,7 @@ mips_read_fp_register_single (frame_info_ptr frame, int regno,
   int raw_size = register_size (gdbarch, regno);
   gdb_byte *raw_buffer = (gdb_byte *) alloca (raw_size);
 
-  if (!deprecated_frame_register_read (frame, regno, raw_buffer))
+  if (!deprecated_frame_register_read (frame.get (), regno, raw_buffer))
     error (_("can't read register %d (%s)"),
 	   regno, gdbarch_register_name (gdbarch, regno));
   if (raw_size == 8)
@@ -6293,7 +6293,7 @@ mips_read_fp_register_double (frame_info_ptr frame, int regno,
     {
       /* We have a 64-bit value for this register, and we should use
 	 all 64 bits.  */
-      if (!deprecated_frame_register_read (frame, regno, rare_buffer))
+      if (!deprecated_frame_register_read (frame.get (), regno, rare_buffer))
 	error (_("can't read register %d (%s)"),
 	       regno, gdbarch_register_name (gdbarch, regno));
     }
@@ -8066,7 +8066,7 @@ mips_register_g_packet_guesses (struct gdbarch *gdbarch)
 }
 
 static struct value *
-value_of_mips_user_reg (frame_info_ptr frame, const void *baton)
+value_of_mips_user_reg (frame_info *frame, const void *baton)
 {
   const int *reg_p = (const int *) baton;
   return value_of_register (*reg_p, frame);

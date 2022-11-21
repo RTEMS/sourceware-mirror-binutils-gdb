@@ -90,12 +90,12 @@ cache_eq (const void *arg1, const void *arg2)
    tailcall_cache.  */
 
 static struct tailcall_cache *
-cache_new_ref1 (frame_info_ptr next_bottom_frame)
+cache_new_ref1 (frame_info *next_bottom_frame)
 {
   struct tailcall_cache *cache = XCNEW (struct tailcall_cache);
   void **slot;
 
-  cache->next_bottom_frame = next_bottom_frame.get ();
+  cache->next_bottom_frame = next_bottom_frame;
   cache->refc = 1;
 
   slot = htab_find_slot (cache_htab, cache, INSERT);
@@ -137,7 +137,7 @@ cache_unref (struct tailcall_cache *cache)
    return 0.  */
 
 static int
-frame_is_tailcall (frame_info_ptr fi)
+frame_is_tailcall (frame_info *fi)
 {
   return frame_unwinder_is (fi, &dwarf2_tailcall_frame_unwind);
 }
@@ -146,7 +146,7 @@ frame_is_tailcall (frame_info_ptr fi)
    call chain.  Otherwise return NULL.  No new reference is created.  */
 
 static struct tailcall_cache *
-cache_find (frame_info_ptr fi)
+cache_find (frame_info *fi)
 {
   struct tailcall_cache *cache;
   struct tailcall_cache search;
@@ -158,7 +158,7 @@ cache_find (frame_info_ptr fi)
       gdb_assert (fi != NULL);
     }
 
-  search.next_bottom_frame = fi.get();
+  search.next_bottom_frame = fi;
   search.refc = 1;
   slot = htab_find_slot (cache_htab, &search, NO_INSERT);
   if (slot == NULL)
@@ -173,11 +173,11 @@ cache_find (frame_info_ptr fi)
    If THIS_FRAME is CACHE-> NEXT_BOTTOM_FRAME return -1.  */
 
 static int
-existing_next_levels (frame_info_ptr this_frame,
+existing_next_levels (frame_info *this_frame,
 		      struct tailcall_cache *cache)
 {
   int retval = (frame_relative_level (this_frame)
-		- frame_relative_level (frame_info_ptr (cache->next_bottom_frame)) - 1);
+		- frame_relative_level (cache->next_bottom_frame) - 1);
 
   gdb_assert (retval >= -1);
 
@@ -210,14 +210,13 @@ pretended_chain_levels (struct call_site_chain *chain)
    Specific virtual tail call frames are tracked by INLINE_DEPTH.  */
 
 static void
-tailcall_frame_this_id (frame_info_ptr this_frame, void **this_cache,
+tailcall_frame_this_id (frame_info *this_frame, void **this_cache,
 			struct frame_id *this_id)
 {
   struct tailcall_cache *cache = (struct tailcall_cache *) *this_cache;
-  frame_info_ptr next_frame;
 
   /* Tail call does not make sense for a sentinel frame.  */
-  next_frame = get_next_frame (this_frame);
+  frame_info *next_frame = get_next_frame (this_frame);
   gdb_assert (next_frame != NULL);
 
   *this_id = get_frame_id (next_frame);
@@ -232,7 +231,7 @@ tailcall_frame_this_id (frame_info_ptr this_frame, void **this_cache,
    CACHE.  */
 
 static CORE_ADDR
-pretend_pc (frame_info_ptr this_frame, struct tailcall_cache *cache)
+pretend_pc (frame_info *this_frame, struct tailcall_cache *cache)
 {
   int next_levels = existing_next_levels (this_frame, cache);
   struct call_site_chain *chain = cache->chain;
@@ -264,7 +263,7 @@ pretend_pc (frame_info_ptr this_frame, struct tailcall_cache *cache)
    frames unwind the NULL case differently.  */
 
 struct value *
-dwarf2_tailcall_prev_register_first (frame_info_ptr this_frame,
+dwarf2_tailcall_prev_register_first (frame_info *this_frame,
 				     void **tailcall_cachep, int regnum)
 {
   struct gdbarch *this_gdbarch = get_frame_arch (this_frame);
@@ -294,7 +293,7 @@ dwarf2_tailcall_prev_register_first (frame_info_ptr this_frame,
    dwarf2_tailcall_prev_register_first.  */
 
 static struct value *
-tailcall_frame_prev_register (frame_info_ptr this_frame,
+tailcall_frame_prev_register (frame_info *this_frame,
 			       void **this_cache, int regnum)
 {
   struct tailcall_cache *cache = (struct tailcall_cache *) *this_cache;
@@ -316,9 +315,8 @@ tailcall_frame_prev_register (frame_info_ptr this_frame,
 
 static int
 tailcall_frame_sniffer (const struct frame_unwind *self,
-			 frame_info_ptr this_frame, void **this_cache)
+			 frame_info *this_frame, void **this_cache)
 {
-  frame_info_ptr next_frame;
   int next_levels;
   struct tailcall_cache *cache;
 
@@ -326,7 +324,7 @@ tailcall_frame_sniffer (const struct frame_unwind *self,
     return 0;
 
   /* Inner tail call element does not make sense for a sentinel frame.  */
-  next_frame = get_next_frame (this_frame);
+  frame_info *next_frame = get_next_frame (this_frame);
   if (next_frame == NULL)
     return 0;
 
@@ -363,7 +361,7 @@ tailcall_frame_sniffer (const struct frame_unwind *self,
    address pushed on the stack.  */
 
 void
-dwarf2_tailcall_sniffer_first (frame_info_ptr this_frame,
+dwarf2_tailcall_sniffer_first (frame_info *this_frame,
 			       void **tailcall_cachep,
 			       const LONGEST *entry_cfa_sp_offsetp)
 {
@@ -458,7 +456,7 @@ tailcall_frame_dealloc_cache (frame_info *self, void *this_cache)
    call frames have gdbarch of the bottom (callee) frame.  */
 
 static struct gdbarch *
-tailcall_frame_prev_arch (frame_info_ptr this_frame,
+tailcall_frame_prev_arch (frame_info *this_frame,
 			  void **this_prologue_cache)
 {
   struct tailcall_cache *cache = (struct tailcall_cache *) *this_prologue_cache;

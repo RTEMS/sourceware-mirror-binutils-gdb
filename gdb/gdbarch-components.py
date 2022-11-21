@@ -613,7 +613,7 @@ frame.
 """,
     type="struct frame_id",
     name="dummy_id",
-    params=[("frame_info_ptr", "this_frame")],
+    params=[("frame_info *", "this_frame")],
     predefault="default_dummy_id",
     invalid=False,
 )
@@ -778,7 +778,7 @@ Function(
     type="int",
     name="register_to_value",
     params=[
-        ("frame_info_ptr", "frame"),
+        ("frame_info *", "frame"),
         ("int", "regnum"),
         ("struct type *", "type"),
         ("gdb_byte *", "buf"),
@@ -1080,7 +1080,7 @@ Value(
 Method(
     type="CORE_ADDR",
     name="unwind_pc",
-    params=[("frame_info_ptr", "next_frame")],
+    params=[("frame_info *", "next_frame")],
     predefault="default_unwind_pc",
     invalid=False,
 )
@@ -1088,7 +1088,7 @@ Method(
 Method(
     type="CORE_ADDR",
     name="unwind_sp",
-    params=[("frame_info_ptr", "next_frame")],
+    params=[("frame_info *", "next_frame")],
     predefault="default_unwind_sp",
     invalid=False,
 )

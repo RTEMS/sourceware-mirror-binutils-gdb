@@ -284,7 +284,6 @@ enum return_value_convention
 
 struct symtab;
 struct breakpoint;
-class frame_info_ptr;
 struct gdbarch;
 struct value;
 

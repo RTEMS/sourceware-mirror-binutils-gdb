@@ -107,8 +107,9 @@ register_to_value_test (struct gdbarch *gdbarch)
 	      /* Set the fingerprint in the last two bytes.  */
 	      buf [type->length ()]= 'w';
 	      buf [type->length () + 1]= 'l';
-	      ok = gdbarch_register_to_value (gdbarch, frame, regnum, type,
-					      buf.data (), &optim, &unavail);
+	      ok = gdbarch_register_to_value (gdbarch, frame.get (), regnum,
+					      type, buf.data (), &optim,
+					      &unavail);
 
 	      SELF_CHECK (ok);
 	      SELF_CHECK (!optim);

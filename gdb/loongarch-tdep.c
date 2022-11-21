@@ -397,7 +397,7 @@ loongarch_frame_align (struct gdbarch *gdbarch, CORE_ADDR addr)
 /* Generate, or return the cached frame cache for frame unwinder.  */
 
 static struct trad_frame_cache *
-loongarch_frame_cache (frame_info_ptr this_frame, void **this_cache)
+loongarch_frame_cache (frame_info *this_frame, void **this_cache)
 {
   struct trad_frame_cache *cache;
   CORE_ADDR pc;
@@ -419,7 +419,7 @@ loongarch_frame_cache (frame_info_ptr this_frame, void **this_cache)
 /* Implement the this_id callback for frame unwinder.  */
 
 static void
-loongarch_frame_this_id (frame_info_ptr this_frame, void **prologue_cache,
+loongarch_frame_this_id (frame_info *this_frame, void **prologue_cache,
 			 struct frame_id *this_id)
 {
   struct trad_frame_cache *info;
@@ -431,7 +431,7 @@ loongarch_frame_this_id (frame_info_ptr this_frame, void **prologue_cache,
 /* Implement the prev_register callback for frame unwinder.  */
 
 static struct value *
-loongarch_frame_prev_register (frame_info_ptr this_frame,
+loongarch_frame_prev_register (frame_info *this_frame,
 			       void **prologue_cache, int regnum)
 {
   struct trad_frame_cache *info;

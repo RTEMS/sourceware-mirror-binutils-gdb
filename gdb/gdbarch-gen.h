@@ -315,8 +315,8 @@ extern void set_gdbarch_register_type (struct gdbarch *gdbarch, gdbarch_register
    should match the address at which the breakpoint was set in the dummy
    frame. */
 
-typedef struct frame_id (gdbarch_dummy_id_ftype) (struct gdbarch *gdbarch, frame_info_ptr this_frame);
-extern struct frame_id gdbarch_dummy_id (struct gdbarch *gdbarch, frame_info_ptr this_frame);
+typedef struct frame_id (gdbarch_dummy_id_ftype) (struct gdbarch *gdbarch, frame_info *this_frame);
+extern struct frame_id gdbarch_dummy_id (struct gdbarch *gdbarch, frame_info *this_frame);
 extern void set_gdbarch_dummy_id (struct gdbarch *gdbarch, gdbarch_dummy_id_ftype *dummy_id);
 
 /* Implement DUMMY_ID and PUSH_DUMMY_CALL, then delete
@@ -393,8 +393,8 @@ typedef int (gdbarch_convert_register_p_ftype) (struct gdbarch *gdbarch, int reg
 extern int gdbarch_convert_register_p (struct gdbarch *gdbarch, int regnum, struct type *type);
 extern void set_gdbarch_convert_register_p (struct gdbarch *gdbarch, gdbarch_convert_register_p_ftype *convert_register_p);
 
-typedef int (gdbarch_register_to_value_ftype) (frame_info_ptr frame, int regnum, struct type *type, gdb_byte *buf, int *optimizedp, int *unavailablep);
-extern int gdbarch_register_to_value (struct gdbarch *gdbarch, frame_info_ptr frame, int regnum, struct type *type, gdb_byte *buf, int *optimizedp, int *unavailablep);
+typedef int (gdbarch_register_to_value_ftype) (frame_info *frame, int regnum, struct type *type, gdb_byte *buf, int *optimizedp, int *unavailablep);
+extern int gdbarch_register_to_value (struct gdbarch *gdbarch, frame_info *frame, int regnum, struct type *type, gdb_byte *buf, int *optimizedp, int *unavailablep);
 extern void set_gdbarch_register_to_value (struct gdbarch *gdbarch, gdbarch_register_to_value_ftype *register_to_value);
 
 typedef void (gdbarch_value_to_register_ftype) (frame_info_ptr frame, int regnum, struct type *type, const gdb_byte *buf);
@@ -578,12 +578,12 @@ extern void set_gdbarch_get_thread_local_address (struct gdbarch *gdbarch, gdbar
 extern CORE_ADDR gdbarch_frame_args_skip (struct gdbarch *gdbarch);
 extern void set_gdbarch_frame_args_skip (struct gdbarch *gdbarch, CORE_ADDR frame_args_skip);
 
-typedef CORE_ADDR (gdbarch_unwind_pc_ftype) (struct gdbarch *gdbarch, frame_info_ptr next_frame);
-extern CORE_ADDR gdbarch_unwind_pc (struct gdbarch *gdbarch, frame_info_ptr next_frame);
+typedef CORE_ADDR (gdbarch_unwind_pc_ftype) (struct gdbarch *gdbarch, frame_info *next_frame);
+extern CORE_ADDR gdbarch_unwind_pc (struct gdbarch *gdbarch, frame_info *next_frame);
 extern void set_gdbarch_unwind_pc (struct gdbarch *gdbarch, gdbarch_unwind_pc_ftype *unwind_pc);
 
-typedef CORE_ADDR (gdbarch_unwind_sp_ftype) (struct gdbarch *gdbarch, frame_info_ptr next_frame);
-extern CORE_ADDR gdbarch_unwind_sp (struct gdbarch *gdbarch, frame_info_ptr next_frame);
+typedef CORE_ADDR (gdbarch_unwind_sp_ftype) (struct gdbarch *gdbarch, frame_info *next_frame);
+extern CORE_ADDR gdbarch_unwind_sp (struct gdbarch *gdbarch, frame_info *next_frame);
 extern void set_gdbarch_unwind_sp (struct gdbarch *gdbarch, gdbarch_unwind_sp_ftype *unwind_sp);
 
 /* DEPRECATED_FRAME_LOCALS_ADDRESS as been replaced by the per-frame

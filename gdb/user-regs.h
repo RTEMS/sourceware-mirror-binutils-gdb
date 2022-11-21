@@ -38,7 +38,9 @@
    of assumed to be read-only.  Should it, for instance, return a
    register descriptor that contains all the relevant access methods.  */
 
-class frame_info_ptr;
+#include "frame-info.h"
+
+struct frame_info;
 struct gdbarch;
 
 /* Given an architecture, map a user visible register name onto its
@@ -56,9 +58,17 @@ extern const char *user_reg_map_regnum_to_name (struct gdbarch *gdbarch,
    bytes as, at the time the register is being added, the type needed
    to describe the register has not bee initialized.  */
 
-typedef struct value *(user_reg_read_ftype) (frame_info_ptr frame,
+typedef struct value *(user_reg_read_ftype) (frame_info *frame,
 					     const void *baton);
-extern struct value *value_of_user_reg (int regnum, frame_info_ptr frame);
+extern struct value *value_of_user_reg (int regnum, frame_info *frame);
+
+/* Same as the above, but accept a frame_info_ptr.  */
+
+static inline value *
+value_of_user_reg (int regnum, frame_info_ptr frame)
+{
+  return value_of_user_reg (regnum, frame.get ());
+}
 
 /* Add a builtin register (present in all architectures).  */
 extern void user_reg_add_builtin (const char *name,

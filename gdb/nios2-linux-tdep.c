@@ -134,7 +134,7 @@ nios2_iterate_over_regset_sections (struct gdbarch *gdbarch,
 
 static void
 nios2_linux_rt_sigreturn_init (const struct tramp_frame *self,
-			       frame_info_ptr next_frame,
+			       frame_info *next_frame,
 			       struct trad_frame_cache *this_cache,
 			       CORE_ADDR func)
 {

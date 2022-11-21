@@ -202,7 +202,7 @@ m68k_convert_register_p (struct gdbarch *gdbarch,
    return its contents in TO.  */
 
 static int
-m68k_register_to_value (frame_info_ptr frame, int regnum,
+m68k_register_to_value (frame_info *frame, int regnum,
 			struct type *type, gdb_byte *to,
 			int *optimizedp, int *unavailablep)
 {
@@ -896,7 +896,7 @@ m68k_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR start_pc)
 }
 
 static CORE_ADDR
-m68k_unwind_pc (struct gdbarch *gdbarch, frame_info_ptr next_frame)
+m68k_unwind_pc (struct gdbarch *gdbarch, frame_info *next_frame)
 {
   gdb_byte buf[8];
 
@@ -907,7 +907,7 @@ m68k_unwind_pc (struct gdbarch *gdbarch, frame_info_ptr next_frame)
 /* Normal frames.  */
 
 static struct m68k_frame_cache *
-m68k_frame_cache (frame_info_ptr this_frame, void **this_cache)
+m68k_frame_cache (frame_info *this_frame, void **this_cache)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
@@ -972,7 +972,7 @@ m68k_frame_cache (frame_info_ptr this_frame, void **this_cache)
 }
 
 static void
-m68k_frame_this_id (frame_info_ptr this_frame, void **this_cache,
+m68k_frame_this_id (frame_info *this_frame, void **this_cache,
 		    struct frame_id *this_id)
 {
   struct m68k_frame_cache *cache = m68k_frame_cache (this_frame, this_cache);
@@ -986,7 +986,7 @@ m68k_frame_this_id (frame_info_ptr this_frame, void **this_cache,
 }
 
 static struct value *
-m68k_frame_prev_register (frame_info_ptr this_frame, void **this_cache,
+m68k_frame_prev_register (frame_info *this_frame, void **this_cache,
 			  int regnum)
 {
   struct m68k_frame_cache *cache = m68k_frame_cache (this_frame, this_cache);
@@ -1015,7 +1015,7 @@ static const struct frame_unwind m68k_frame_unwind =
 };
 
 static CORE_ADDR
-m68k_frame_base_address (frame_info_ptr this_frame, void **this_cache)
+m68k_frame_base_address (frame_info *this_frame, void **this_cache)
 {
   struct m68k_frame_cache *cache = m68k_frame_cache (this_frame, this_cache);
 
@@ -1031,7 +1031,7 @@ static const struct frame_base m68k_frame_base =
 };
 
 static struct frame_id
-m68k_dummy_id (struct gdbarch *gdbarch, frame_info_ptr this_frame)
+m68k_dummy_id (struct gdbarch *gdbarch, frame_info *this_frame)
 {
   CORE_ADDR fp;
 

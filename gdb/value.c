@@ -4102,9 +4102,8 @@ value_fetch_lazy_register (struct value *val)
   if (frame_debug)
     {
       struct gdbarch *gdbarch;
-      frame_info_ptr frame;
-      frame = frame_find_by_id (VALUE_NEXT_FRAME_ID (val));
-      frame = get_prev_frame_always (frame);
+      frame_info *frame = frame_find_by_id (VALUE_NEXT_FRAME_ID (val)).get ();
+      frame = get_prev_frame_always_raw (frame);
       regnum = VALUE_REGNUM (val);
       gdbarch = get_frame_arch (frame);
 

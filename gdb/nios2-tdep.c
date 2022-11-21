@@ -1189,7 +1189,7 @@ static CORE_ADDR
 nios2_analyze_prologue (struct gdbarch *gdbarch, const CORE_ADDR start_pc,
 			const CORE_ADDR current_pc,
 			struct nios2_unwind_cache *cache,
-			frame_info_ptr this_frame)
+			frame_info *this_frame)
 {
   /* Maximum number of possibly-prologue instructions to check.
      Note that this number should not be too large, else we can
@@ -1880,7 +1880,7 @@ nios2_push_dummy_call (struct gdbarch *gdbarch, struct value *function,
 /* Implement the unwind_pc gdbarch method.  */
 
 static CORE_ADDR
-nios2_unwind_pc (struct gdbarch *gdbarch, frame_info_ptr next_frame)
+nios2_unwind_pc (struct gdbarch *gdbarch, frame_info *next_frame)
 {
   gdb_byte buf[4];
 
@@ -1893,7 +1893,7 @@ nios2_unwind_pc (struct gdbarch *gdbarch, frame_info_ptr next_frame)
    *THIS_PROLOGUE_CACHE first.  */
 
 static struct nios2_unwind_cache *
-nios2_frame_unwind_cache (frame_info_ptr this_frame,
+nios2_frame_unwind_cache (frame_info *this_frame,
 			  void **this_prologue_cache)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
@@ -1920,7 +1920,7 @@ nios2_frame_unwind_cache (frame_info_ptr this_frame,
 /* Implement the this_id function for the normal unwinder.  */
 
 static void
-nios2_frame_this_id (frame_info_ptr this_frame, void **this_cache,
+nios2_frame_this_id (frame_info *this_frame, void **this_cache,
 		     struct frame_id *this_id)
 {
   struct nios2_unwind_cache *cache =
@@ -1936,7 +1936,7 @@ nios2_frame_this_id (frame_info_ptr this_frame, void **this_cache,
 /* Implement the prev_register function for the normal unwinder.  */
 
 static struct value *
-nios2_frame_prev_register (frame_info_ptr this_frame, void **this_cache,
+nios2_frame_prev_register (frame_info *this_frame, void **this_cache,
 			   int regnum)
 {
   struct nios2_unwind_cache *cache =
@@ -1966,7 +1966,7 @@ nios2_frame_prev_register (frame_info_ptr this_frame, void **this_cache,
    for the normal unwinder.  */
 
 static CORE_ADDR
-nios2_frame_base_address (frame_info_ptr this_frame, void **this_cache)
+nios2_frame_base_address (frame_info *this_frame, void **this_cache)
 {
   struct nios2_unwind_cache *info
     = nios2_frame_unwind_cache (this_frame, this_cache);
@@ -2000,7 +2000,7 @@ static const struct frame_base nios2_frame_base =
    in the stub unwinder.  */
 
 static struct trad_frame_cache *
-nios2_stub_frame_cache (frame_info_ptr this_frame, void **this_cache)
+nios2_stub_frame_cache (frame_info *this_frame, void **this_cache)
 {
   CORE_ADDR pc;
   CORE_ADDR start_addr;
@@ -2033,7 +2033,7 @@ nios2_stub_frame_cache (frame_info_ptr this_frame, void **this_cache)
 /* Implement the this_id function for the stub unwinder.  */
 
 static void
-nios2_stub_frame_this_id (frame_info_ptr this_frame, void **this_cache,
+nios2_stub_frame_this_id (frame_info *this_frame, void **this_cache,
 			  struct frame_id *this_id)
 {
   struct trad_frame_cache *this_trad_cache
@@ -2045,7 +2045,7 @@ nios2_stub_frame_this_id (frame_info_ptr this_frame, void **this_cache,
 /* Implement the prev_register function for the stub unwinder.  */
 
 static struct value *
-nios2_stub_frame_prev_register (frame_info_ptr this_frame,
+nios2_stub_frame_prev_register (frame_info *this_frame,
 				void **this_cache, int regnum)
 {
   struct trad_frame_cache *this_trad_cache
@@ -2061,7 +2061,7 @@ nios2_stub_frame_prev_register (frame_info_ptr this_frame,
 
 static int
 nios2_stub_frame_sniffer (const struct frame_unwind *self,
-			  frame_info_ptr this_frame, void **cache)
+			  frame_info *this_frame, void **cache)
 {
   gdb_byte dummy[4];
   CORE_ADDR pc = get_frame_address_in_block (this_frame);
@@ -2188,7 +2188,7 @@ nios2_get_next_pc (struct regcache *regcache, CORE_ADDR pc)
       /* If ra is in the reglist, we have to use the value saved in the
 	 stack frame rather than the current value.  */
       if (uimm & (1 << NIOS2_RA_REGNUM))
-	pc = nios2_unwind_pc (gdbarch, get_current_frame ());
+	pc = nios2_unwind_pc (gdbarch, get_current_frame ().get ());
       else
 	pc = regcache_raw_get_unsigned (regcache, NIOS2_RA_REGNUM);
     }

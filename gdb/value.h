@@ -723,14 +723,20 @@ extern struct value *default_value_from_register (struct gdbarch *gdbarch,
 						  int regnum,
 						  struct frame_id frame_id);
 
-extern void read_frame_register_value (struct value *value,
-				       frame_info_ptr frame);
+extern void read_frame_register_value (struct value *value, frame_info *frame);
 
 extern struct value *value_from_register (struct type *type, int regnum,
-					  frame_info_ptr frame);
+					  frame_info *frame);
 
-extern CORE_ADDR address_from_register (int regnum,
-					frame_info_ptr frame);
+/* Same as the above, but accept a frame_info_ptr.  */
+
+static inline value *
+value_from_register (type *type, int regnum, frame_info_ptr frame)
+{
+  return value_from_register (type, regnum, frame.get ());
+}
+
+extern CORE_ADDR address_from_register (int regnum, frame_info *frame);
 
 extern struct value *value_of_variable (struct symbol *var,
 					const struct block *b);
@@ -738,9 +744,17 @@ extern struct value *value_of_variable (struct symbol *var,
 extern struct value *address_of_variable (struct symbol *var,
 					  const struct block *b);
 
-extern struct value *value_of_register (int regnum, frame_info_ptr frame);
+extern struct value *value_of_register (int regnum, frame_info *frame);
 
-struct value *value_of_register_lazy (frame_info_ptr frame, int regnum);
+/* Same as the above, but accept a frame_info_ptr.  */
+
+static inline value *
+value_of_register (int regnum, frame_info_ptr frame)
+{
+  return value_of_register (regnum, frame.get ());
+}
+
+struct value *value_of_register_lazy (frame_info *frame, int regnum);
 
 /* Return the symbol's reading requirement.  */
 

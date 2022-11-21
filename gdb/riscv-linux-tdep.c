@@ -86,7 +86,7 @@ riscv_linux_iterate_over_regset_sections (struct gdbarch *gdbarch,
 /* Signal trampoline support.  */
 
 static void riscv_linux_sigframe_init (const struct tramp_frame *self,
-				       frame_info_ptr this_frame,
+				       frame_info *this_frame,
 				       struct trad_frame_cache *this_cache,
 				       CORE_ADDR func);
 
@@ -125,7 +125,7 @@ static const struct tramp_frame riscv_linux_sigframe = {
 
 static void
 riscv_linux_sigframe_init (const struct tramp_frame *self,
-			   frame_info_ptr this_frame,
+			   frame_info *this_frame,
 			   struct trad_frame_cache *this_cache,
 			   CORE_ADDR func)
 {

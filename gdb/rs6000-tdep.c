@@ -743,7 +743,7 @@ insn_changes_sp_or_jumps (unsigned long insn)
 	   limit for the size of an epilogue.  */
 
 static int
-rs6000_in_function_epilogue_frame_p (frame_info_ptr curfrm,
+rs6000_in_function_epilogue_frame_p (frame_info *curfrm,
 				     struct gdbarch *gdbarch, CORE_ADDR pc)
 {
   ppc_gdbarch_tdep *tdep = gdbarch_tdep<ppc_gdbarch_tdep> (gdbarch);
@@ -810,7 +810,7 @@ rs6000_in_function_epilogue_frame_p (frame_info_ptr curfrm,
 static int
 rs6000_stack_frame_destroyed_p (struct gdbarch *gdbarch, CORE_ADDR pc)
 {
-  return rs6000_in_function_epilogue_frame_p (get_current_frame (),
+  return rs6000_in_function_epilogue_frame_p (get_current_frame ().get (),
 					      gdbarch, pc);
 }
 
@@ -2669,7 +2669,7 @@ rs6000_convert_register_p (struct gdbarch *gdbarch, int regnum,
 }
 
 static int
-rs6000_register_to_value (frame_info_ptr frame,
+rs6000_register_to_value (frame_info *frame,
 			  int regnum,
 			  struct type *type,
 			  gdb_byte *to,
@@ -3553,7 +3553,7 @@ struct rs6000_frame_cache
 };
 
 static struct rs6000_frame_cache *
-rs6000_frame_cache (frame_info_ptr this_frame, void **this_cache)
+rs6000_frame_cache (frame_info *this_frame, void **this_cache)
 {
   struct rs6000_frame_cache *cache;
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
@@ -3746,7 +3746,7 @@ rs6000_frame_cache (frame_info_ptr this_frame, void **this_cache)
 }
 
 static void
-rs6000_frame_this_id (frame_info_ptr this_frame, void **this_cache,
+rs6000_frame_this_id (frame_info *this_frame, void **this_cache,
 		      struct frame_id *this_id)
 {
   struct rs6000_frame_cache *info = rs6000_frame_cache (this_frame,
@@ -3766,7 +3766,7 @@ rs6000_frame_this_id (frame_info_ptr this_frame, void **this_cache,
 }
 
 static struct value *
-rs6000_frame_prev_register (frame_info_ptr this_frame,
+rs6000_frame_prev_register (frame_info *this_frame,
 			    void **this_cache, int regnum)
 {
   struct rs6000_frame_cache *info = rs6000_frame_cache (this_frame,
@@ -3789,7 +3789,7 @@ static const struct frame_unwind rs6000_frame_unwind =
    SP is restored and prev-PC is stored in LR.  */
 
 static struct rs6000_frame_cache *
-rs6000_epilogue_frame_cache (frame_info_ptr this_frame, void **this_cache)
+rs6000_epilogue_frame_cache (frame_info *this_frame, void **this_cache)
 {
   struct rs6000_frame_cache *cache;
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
@@ -3829,7 +3829,7 @@ rs6000_epilogue_frame_cache (frame_info_ptr this_frame, void **this_cache)
    Return the frame ID of an epilogue frame.  */
 
 static void
-rs6000_epilogue_frame_this_id (frame_info_ptr this_frame,
+rs6000_epilogue_frame_this_id (frame_info *this_frame,
 			       void **this_cache, struct frame_id *this_id)
 {
   CORE_ADDR pc;
@@ -3847,7 +3847,7 @@ rs6000_epilogue_frame_this_id (frame_info_ptr this_frame,
    Return the register value of REGNUM in previous frame.  */
 
 static struct value *
-rs6000_epilogue_frame_prev_register (frame_info_ptr this_frame,
+rs6000_epilogue_frame_prev_register (frame_info *this_frame,
 				     void **this_cache, int regnum)
 {
   struct rs6000_frame_cache *info =
@@ -3860,7 +3860,7 @@ rs6000_epilogue_frame_prev_register (frame_info_ptr this_frame,
 
 static int
 rs6000_epilogue_frame_sniffer (const struct frame_unwind *self,
-			       frame_info_ptr this_frame,
+			       frame_info *this_frame,
 			       void **this_prologue_cache)
 {
   if (frame_relative_level (this_frame) == 0)
@@ -3886,7 +3886,7 @@ static const struct frame_unwind rs6000_epilogue_frame_unwind =
 
 
 static CORE_ADDR
-rs6000_frame_base_address (frame_info_ptr this_frame, void **this_cache)
+rs6000_frame_base_address (frame_info *this_frame, void **this_cache)
 {
   struct rs6000_frame_cache *info = rs6000_frame_cache (this_frame,
 							this_cache);
@@ -3901,7 +3901,7 @@ static const struct frame_base rs6000_frame_base = {
 };
 
 static const struct frame_base *
-rs6000_frame_base_sniffer (frame_info_ptr this_frame)
+rs6000_frame_base_sniffer (frame_info *this_frame)
 {
   return &rs6000_frame_base;
 }
@@ -3912,7 +3912,7 @@ rs6000_frame_base_sniffer (frame_info_ptr this_frame)
 static void
 ppc_dwarf2_frame_init_reg (struct gdbarch *gdbarch, int regnum,
 			    struct dwarf2_frame_state_reg *reg,
-			    frame_info_ptr this_frame)
+			    frame_info *this_frame)
 {
   ppc_gdbarch_tdep *tdep = gdbarch_tdep<ppc_gdbarch_tdep> (gdbarch);
 

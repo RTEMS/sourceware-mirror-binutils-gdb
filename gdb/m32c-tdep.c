@@ -1851,7 +1851,7 @@ m32c_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR ip)
 /* Stack unwinding.  */
 
 static struct m32c_prologue *
-m32c_analyze_frame_prologue (frame_info_ptr this_frame,
+m32c_analyze_frame_prologue (frame_info *this_frame,
 			     void **this_prologue_cache)
 {
   if (! *this_prologue_cache)
@@ -1875,7 +1875,7 @@ m32c_analyze_frame_prologue (frame_info_ptr this_frame,
 
 
 static CORE_ADDR
-m32c_frame_base (frame_info_ptr this_frame,
+m32c_frame_base (frame_info *this_frame,
 		void **this_prologue_cache)
 {
   struct m32c_prologue *p
@@ -1915,7 +1915,7 @@ m32c_frame_base (frame_info_ptr this_frame,
 
 
 static void
-m32c_this_id (frame_info_ptr this_frame,
+m32c_this_id (frame_info *this_frame,
 	      void **this_prologue_cache,
 	      struct frame_id *this_id)
 {
@@ -1928,7 +1928,7 @@ m32c_this_id (frame_info_ptr this_frame,
 
 
 static struct value *
-m32c_prev_register (frame_info_ptr this_frame,
+m32c_prev_register (frame_info *this_frame,
 		    void **this_prologue_cache, int regnum)
 {
   gdbarch *arch = get_frame_arch (this_frame);

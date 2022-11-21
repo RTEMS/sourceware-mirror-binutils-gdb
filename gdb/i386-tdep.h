@@ -223,10 +223,10 @@ struct i386_gdbarch_tdep : gdbarch_tdep_base
   CORE_ADDR sigtramp_end = 0;
 
   /* Detect sigtramp.  */
-  int (*sigtramp_p) (frame_info_ptr) = nullptr;
+  int (*sigtramp_p) (frame_info *) = nullptr;
 
   /* Get address of sigcontext for sigtramp.  */
-  CORE_ADDR (*sigcontext_addr) (frame_info_ptr) = nullptr;
+  CORE_ADDR (*sigcontext_addr) (frame_info *) = nullptr;
 
   /* Offset of registers in `struct sigcontext'.  */
   int *sc_reg_offset = 0;
@@ -414,7 +414,7 @@ extern CORE_ADDR i386_thiscall_push_dummy_call (struct gdbarch *gdbarch,
 						bool thiscall);
 
 /* Return whether the THIS_FRAME corresponds to a sigtramp routine.  */
-extern int i386_sigtramp_p (frame_info_ptr this_frame);
+extern int i386_sigtramp_p (frame_info *this_frame);
 
 /* Return non-zero if REGNUM is a member of the specified group.  */
 extern int i386_register_reggroup_p (struct gdbarch *gdbarch, int regnum,

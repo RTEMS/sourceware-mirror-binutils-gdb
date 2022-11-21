@@ -22,8 +22,6 @@
 
 #include "gdbarch.h"
 
-class frame_info_ptr;
-
 /* Register numbers of various important registers.  */
 
 enum m68k_regnum

@@ -257,7 +257,7 @@ copy_integer_to_size (gdb_byte *dest, int dest_size, const gdb_byte *source,
    determined by register_type ().  */
 
 struct value *
-value_of_register (int regnum, frame_info_ptr frame)
+value_of_register (int regnum, frame_info *frame)
 {
   struct gdbarch *gdbarch = get_frame_arch (frame);
   struct value *reg_val;
@@ -277,17 +277,16 @@ value_of_register (int regnum, frame_info_ptr frame)
    determined by register_type ().  The value is not fetched.  */
 
 struct value *
-value_of_register_lazy (frame_info_ptr frame, int regnum)
+value_of_register_lazy (frame_info *frame, int regnum)
 {
   struct gdbarch *gdbarch = get_frame_arch (frame);
   struct value *reg_val;
-  frame_info_ptr next_frame;
 
   gdb_assert (regnum < gdbarch_num_cooked_regs (gdbarch));
 
   gdb_assert (frame != NULL);
 
-  next_frame = get_next_frame_sentinel_okay (frame);
+  frame_info *next_frame = get_next_frame_sentinel_okay_raw (frame);
 
   /* In some cases NEXT_FRAME may not have a valid frame-id yet.  This can
      happen if we end up trying to unwind a register as part of the frame
@@ -295,7 +294,7 @@ value_of_register_lazy (frame_info_ptr frame, int regnum)
      if NEXT_FRAME is an inline frame.  If this is the case then we can
      avoid getting into trouble here by skipping past the inline frames.  */
   while (get_frame_type (next_frame) == INLINE_FRAME)
-    next_frame = get_next_frame_sentinel_okay (next_frame);
+    next_frame = get_next_frame_sentinel_okay_raw (next_frame);
 
   /* We should have a valid next frame.  */
   gdb_assert (frame_id_p (get_frame_id (next_frame)));
@@ -832,7 +831,7 @@ default_value_from_register (struct gdbarch *gdbarch, struct type *type,
    complete resulting value as optimized out.  */
 
 void
-read_frame_register_value (struct value *value, frame_info_ptr frame)
+read_frame_register_value (struct value *value, frame_info *frame)
 {
   struct gdbarch *gdbarch = get_frame_arch (frame);
   LONGEST offset = 0;
@@ -872,7 +871,7 @@ read_frame_register_value (struct value *value, frame_info_ptr frame)
 /* Return a value of type TYPE, stored in register REGNUM, in frame FRAME.  */
 
 struct value *
-value_from_register (struct type *type, int regnum, frame_info_ptr frame)
+value_from_register (struct type *type, int regnum, frame_info *frame)
 {
   struct gdbarch *gdbarch = get_frame_arch (frame);
   struct type *type1 = check_typedef (type);
@@ -922,7 +921,7 @@ value_from_register (struct type *type, int regnum, frame_info_ptr frame)
    Will abort if register value is not available.  */
 
 CORE_ADDR
-address_from_register (int regnum, frame_info_ptr frame)
+address_from_register (int regnum, frame_info *frame)
 {
   struct gdbarch *gdbarch = get_frame_arch (frame);
   struct type *type = builtin_type (gdbarch)->builtin_data_ptr;

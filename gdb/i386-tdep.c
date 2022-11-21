@@ -1965,7 +1965,7 @@ i386_skip_main_prologue (struct gdbarch *gdbarch, CORE_ADDR pc)
 /* This function is 64-bit safe.  */
 
 static CORE_ADDR
-i386_unwind_pc (struct gdbarch *gdbarch, frame_info_ptr next_frame)
+i386_unwind_pc (struct gdbarch *gdbarch, frame_info *next_frame)
 {
   gdb_byte buf[8];
 
@@ -1977,7 +1977,7 @@ i386_unwind_pc (struct gdbarch *gdbarch, frame_info_ptr next_frame)
 /* Normal frames.  */
 
 static void
-i386_frame_cache_1 (frame_info_ptr this_frame,
+i386_frame_cache_1 (frame_info *this_frame,
 		    struct i386_frame_cache *cache)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
@@ -2078,7 +2078,7 @@ i386_frame_cache_1 (frame_info_ptr this_frame,
 }
 
 static struct i386_frame_cache *
-i386_frame_cache (frame_info_ptr this_frame, void **this_cache)
+i386_frame_cache (frame_info *this_frame, void **this_cache)
 {
   struct i386_frame_cache *cache;
 
@@ -2102,7 +2102,7 @@ i386_frame_cache (frame_info_ptr this_frame, void **this_cache)
 }
 
 static void
-i386_frame_this_id (frame_info_ptr this_frame, void **this_cache,
+i386_frame_this_id (frame_info *this_frame, void **this_cache,
 		    struct frame_id *this_id)
 {
   struct i386_frame_cache *cache = i386_frame_cache (this_frame, this_cache);
@@ -2121,7 +2121,7 @@ i386_frame_this_id (frame_info_ptr this_frame, void **this_cache,
 }
 
 static enum unwind_stop_reason
-i386_frame_unwind_stop_reason (frame_info_ptr this_frame,
+i386_frame_unwind_stop_reason (frame_info *this_frame,
 			       void **this_cache)
 {
   struct i386_frame_cache *cache = i386_frame_cache (this_frame, this_cache);
@@ -2137,7 +2137,7 @@ i386_frame_unwind_stop_reason (frame_info_ptr this_frame,
 }
 
 static struct value *
-i386_frame_prev_register (frame_info_ptr this_frame, void **this_cache,
+i386_frame_prev_register (frame_info *this_frame, void **this_cache,
 			  int regnum)
 {
   struct i386_frame_cache *cache = i386_frame_cache (this_frame, this_cache);
@@ -2236,7 +2236,7 @@ i386_stack_frame_destroyed_p (struct gdbarch *gdbarch, CORE_ADDR pc)
 
 static int
 i386_epilogue_frame_sniffer (const struct frame_unwind *self,
-			     frame_info_ptr this_frame,
+			     frame_info *this_frame,
 			     void **this_prologue_cache)
 {
   if (frame_relative_level (this_frame) == 0)
@@ -2247,7 +2247,7 @@ i386_epilogue_frame_sniffer (const struct frame_unwind *self,
 }
 
 static struct i386_frame_cache *
-i386_epilogue_frame_cache (frame_info_ptr this_frame, void **this_cache)
+i386_epilogue_frame_cache (frame_info *this_frame, void **this_cache)
 {
   struct i386_frame_cache *cache;
   CORE_ADDR sp;
@@ -2282,7 +2282,7 @@ i386_epilogue_frame_cache (frame_info_ptr this_frame, void **this_cache)
 }
 
 static enum unwind_stop_reason
-i386_epilogue_frame_unwind_stop_reason (frame_info_ptr this_frame,
+i386_epilogue_frame_unwind_stop_reason (frame_info *this_frame,
 					void **this_cache)
 {
   struct i386_frame_cache *cache =
@@ -2295,7 +2295,7 @@ i386_epilogue_frame_unwind_stop_reason (frame_info_ptr this_frame,
 }
 
 static void
-i386_epilogue_frame_this_id (frame_info_ptr this_frame,
+i386_epilogue_frame_this_id (frame_info *this_frame,
 			     void **this_cache,
 			     struct frame_id *this_id)
 {
@@ -2309,7 +2309,7 @@ i386_epilogue_frame_this_id (frame_info_ptr this_frame,
 }
 
 static struct value *
-i386_epilogue_frame_prev_register (frame_info_ptr this_frame,
+i386_epilogue_frame_prev_register (frame_info *this_frame,
 				   void **this_cache, int regnum)
 {
   /* Make sure we've initialized the cache.  */
@@ -2391,7 +2391,7 @@ i386_in_stack_tramp_p (CORE_ADDR pc)
 
 static int
 i386_stack_tramp_frame_sniffer (const struct frame_unwind *self,
-				frame_info_ptr this_frame,
+				frame_info *this_frame,
 				void **this_cache)
 {
   if (frame_relative_level (this_frame) == 0)
@@ -2431,7 +2431,7 @@ i386_gen_return_address (struct gdbarch *gdbarch,
 /* Signal trampolines.  */
 
 static struct i386_frame_cache *
-i386_sigtramp_frame_cache (frame_info_ptr this_frame, void **this_cache)
+i386_sigtramp_frame_cache (frame_info *this_frame, void **this_cache)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
   i386_gdbarch_tdep *tdep = gdbarch_tdep<i386_gdbarch_tdep> (gdbarch);
@@ -2480,7 +2480,7 @@ i386_sigtramp_frame_cache (frame_info_ptr this_frame, void **this_cache)
 }
 
 static enum unwind_stop_reason
-i386_sigtramp_frame_unwind_stop_reason (frame_info_ptr this_frame,
+i386_sigtramp_frame_unwind_stop_reason (frame_info *this_frame,
 					void **this_cache)
 {
   struct i386_frame_cache *cache =
@@ -2493,7 +2493,7 @@ i386_sigtramp_frame_unwind_stop_reason (frame_info_ptr this_frame,
 }
 
 static void
-i386_sigtramp_frame_this_id (frame_info_ptr this_frame, void **this_cache,
+i386_sigtramp_frame_this_id (frame_info *this_frame, void **this_cache,
 			     struct frame_id *this_id)
 {
   struct i386_frame_cache *cache =
@@ -2509,7 +2509,7 @@ i386_sigtramp_frame_this_id (frame_info_ptr this_frame, void **this_cache,
 }
 
 static struct value *
-i386_sigtramp_frame_prev_register (frame_info_ptr this_frame,
+i386_sigtramp_frame_prev_register (frame_info *this_frame,
 				   void **this_cache, int regnum)
 {
   /* Make sure we've initialized the cache.  */
@@ -2520,7 +2520,7 @@ i386_sigtramp_frame_prev_register (frame_info_ptr this_frame,
 
 static int
 i386_sigtramp_frame_sniffer (const struct frame_unwind *self,
-			     frame_info_ptr this_frame,
+			     frame_info *this_frame,
 			     void **this_prologue_cache)
 {
   gdbarch *arch = get_frame_arch (this_frame);
@@ -2562,7 +2562,7 @@ static const struct frame_unwind i386_sigtramp_frame_unwind =
 
 
 static CORE_ADDR
-i386_frame_base_address (frame_info_ptr this_frame, void **this_cache)
+i386_frame_base_address (frame_info *this_frame, void **this_cache)
 {
   struct i386_frame_cache *cache = i386_frame_cache (this_frame, this_cache);
 
@@ -2578,7 +2578,7 @@ static const struct frame_base i386_frame_base =
 };
 
 static struct frame_id
-i386_dummy_id (struct gdbarch *gdbarch, frame_info_ptr this_frame)
+i386_dummy_id (struct gdbarch *gdbarch, frame_info *this_frame)
 {
   CORE_ADDR fp;
 
@@ -3825,7 +3825,7 @@ i386_convert_register_p (struct gdbarch *gdbarch,
    return its contents in TO.  */
 
 static int
-i386_register_to_value (frame_info_ptr frame, int regnum,
+i386_register_to_value (frame_info *frame, int regnum,
 			struct type *type, gdb_byte *to,
 			int *optimizedp, int *unavailablep)
 {
@@ -4048,7 +4048,7 @@ i386_pe_skip_trampoline_code (frame_info_ptr frame,
    routine.  */
 
 int
-i386_sigtramp_p (frame_info_ptr this_frame)
+i386_sigtramp_p (frame_info *this_frame)
 {
   CORE_ADDR pc = get_frame_pc (this_frame);
   const char *name;
@@ -4084,7 +4084,7 @@ i386_print_insn (bfd_vma pc, struct disassemble_info *info)
    routine.  */
 
 static int
-i386_svr4_sigtramp_p (frame_info_ptr this_frame)
+i386_svr4_sigtramp_p (frame_info *this_frame)
 {
   CORE_ADDR pc = get_frame_pc (this_frame);
   const char *name;
@@ -4099,7 +4099,7 @@ i386_svr4_sigtramp_p (frame_info_ptr this_frame)
    address of the associated sigcontext (ucontext) structure.  */
 
 static CORE_ADDR
-i386_svr4_sigcontext_addr (frame_info_ptr this_frame)
+i386_svr4_sigcontext_addr (frame_info *this_frame)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);

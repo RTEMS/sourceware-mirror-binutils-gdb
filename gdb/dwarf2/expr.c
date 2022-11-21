@@ -49,7 +49,7 @@ static const registry<gdbarch>::key<dwarf_gdbarch_types> dwarf_arch_cookie;
 /* Ensure that a FRAME is defined, throw an exception otherwise.  */
 
 static void
-ensure_have_frame (frame_info_ptr frame, const char *op_name)
+ensure_have_frame (frame_info *frame, const char *op_name)
 {
   if (frame == nullptr)
     throw_error (GENERIC_ERROR,
@@ -78,7 +78,7 @@ bits_to_bytes (ULONGEST start, ULONGEST n_bits)
 /* See expr.h.  */
 
 CORE_ADDR
-read_addr_from_reg (frame_info_ptr frame, int reg)
+read_addr_from_reg (frame_info *frame, int reg)
 {
   struct gdbarch *gdbarch = get_frame_arch (frame);
   int regnum = dwarf_reg_to_regnum_or_error (gdbarch, reg);
@@ -112,7 +112,7 @@ static piece_closure *
 allocate_piece_closure (dwarf2_per_cu_data *per_cu,
 			dwarf2_per_objfile *per_objfile,
 			std::vector<dwarf_expr_piece> &&pieces,
-			frame_info_ptr frame)
+			frame_info *frame)
 {
   piece_closure *c = new piece_closure;
 
@@ -810,7 +810,7 @@ dwarf_expr_context::dwarf_call (cu_offset die_cu_off)
 {
   ensure_have_per_cu (this->m_per_cu, "DW_OP_call");
 
-  frame_info_ptr frame = this->m_frame;
+  frame_info *frame = this->m_frame;
 
   auto get_pc_from_frame = [frame] ()
     {
@@ -887,7 +887,7 @@ dwarf_expr_context::push_dwarf_reg_entry_value (call_site_parameter_kind kind,
      It is possible for the caller to be from a different objfile from the
      callee if the call is made through a function pointer.  */
   scoped_restore save_frame = make_scoped_restore (&this->m_frame,
-						   caller_frame);
+						   caller_frame.get ());
   scoped_restore save_per_cu = make_scoped_restore (&this->m_per_cu,
 						    caller_per_cu);
   scoped_restore save_addr_info = make_scoped_restore (&this->m_addr_info,
@@ -1069,7 +1069,7 @@ dwarf_expr_context::fetch_result (struct type *type, struct type *subobj_type,
 
 value *
 dwarf_expr_context::evaluate (const gdb_byte *addr, size_t len, bool as_lval,
-			      dwarf2_per_cu_data *per_cu, frame_info_ptr frame,
+			      dwarf2_per_cu_data *per_cu, frame_info *frame,
 			      const struct property_addr_info *addr_info,
 			      struct type *type, struct type *subobj_type,
 			      LONGEST subobj_offset)

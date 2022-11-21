@@ -1216,7 +1216,7 @@ ia64_convert_register_p (struct gdbarch *gdbarch, int regno, struct type *type)
 }
 
 static int
-ia64_register_to_value (frame_info_ptr frame, int regnum,
+ia64_register_to_value (frame_info *frame, int regnum,
 			struct type *valtype, gdb_byte *out,
 			int *optimizedp, int *unavailablep)
 {
@@ -1357,7 +1357,7 @@ ia64_alloc_frame_cache (void)
 
 static CORE_ADDR
 examine_prologue (CORE_ADDR pc, CORE_ADDR lim_pc,
-		  frame_info_ptr this_frame,
+		  frame_info *this_frame,
 		  struct ia64_frame_cache *cache)
 {
   CORE_ADDR next_pc;
@@ -1838,7 +1838,7 @@ ia64_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR pc)
 /* Normal frames.  */
 
 static struct ia64_frame_cache *
-ia64_frame_cache (frame_info_ptr this_frame, void **this_cache)
+ia64_frame_cache (frame_info *this_frame, void **this_cache)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
@@ -1883,7 +1883,7 @@ ia64_frame_cache (frame_info_ptr this_frame, void **this_cache)
 }
 
 static void
-ia64_frame_this_id (frame_info_ptr this_frame, void **this_cache,
+ia64_frame_this_id (frame_info *this_frame, void **this_cache,
 		    struct frame_id *this_id)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
@@ -1900,11 +1900,11 @@ ia64_frame_this_id (frame_info_ptr this_frame, void **this_cache,
 		paddress (gdbarch, this_id->code_addr),
 		paddress (gdbarch, this_id->stack_addr),
 		paddress (gdbarch, cache->bsp),
-		host_address_to_string (this_frame.get ()));
+		host_address_to_string (this_frame));
 }
 
 static struct value *
-ia64_frame_prev_register (frame_info_ptr this_frame, void **this_cache,
+ia64_frame_prev_register (frame_info *this_frame, void **this_cache,
 			  int regnum)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
@@ -2172,7 +2172,7 @@ static const struct frame_unwind ia64_frame_unwind =
 /* Signal trampolines.  */
 
 static void
-ia64_sigtramp_frame_init_saved_regs (frame_info_ptr this_frame,
+ia64_sigtramp_frame_init_saved_regs (frame_info *this_frame,
 				     struct ia64_frame_cache *cache)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
@@ -2226,7 +2226,7 @@ ia64_sigtramp_frame_init_saved_regs (frame_info_ptr this_frame,
 }
 
 static struct ia64_frame_cache *
-ia64_sigtramp_frame_cache (frame_info_ptr this_frame, void **this_cache)
+ia64_sigtramp_frame_cache (frame_info *this_frame, void **this_cache)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
@@ -2257,7 +2257,7 @@ ia64_sigtramp_frame_cache (frame_info_ptr this_frame, void **this_cache)
 }
 
 static void
-ia64_sigtramp_frame_this_id (frame_info_ptr this_frame,
+ia64_sigtramp_frame_this_id (frame_info *this_frame,
 			     void **this_cache, struct frame_id *this_id)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
@@ -2274,11 +2274,11 @@ ia64_sigtramp_frame_this_id (frame_info_ptr this_frame,
 		paddress (gdbarch, this_id->code_addr),
 		paddress (gdbarch, this_id->stack_addr),
 		paddress (gdbarch, cache->bsp),
-		host_address_to_string (this_frame.get ()));
+		host_address_to_string (this_frame));
 }
 
 static struct value *
-ia64_sigtramp_frame_prev_register (frame_info_ptr this_frame,
+ia64_sigtramp_frame_prev_register (frame_info *this_frame,
 				   void **this_cache, int regnum)
 {
   struct ia64_frame_cache *cache =
@@ -2331,7 +2331,7 @@ ia64_sigtramp_frame_prev_register (frame_info_ptr this_frame,
 
 static int
 ia64_sigtramp_frame_sniffer (const struct frame_unwind *self,
-			     frame_info_ptr this_frame,
+			     frame_info *this_frame,
 			     void **this_cache)
 {
   gdbarch *arch = get_frame_arch (this_frame);
@@ -2361,7 +2361,7 @@ static const struct frame_unwind ia64_sigtramp_frame_unwind =
 
 
 static CORE_ADDR
-ia64_frame_base_address (frame_info_ptr this_frame, void **this_cache)
+ia64_frame_base_address (frame_info *this_frame, void **this_cache)
 {
   struct ia64_frame_cache *cache = ia64_frame_cache (this_frame, this_cache);
 
@@ -2890,7 +2890,7 @@ ia64_get_dyn_info_list (unw_addr_space_t as,
 /* Frame interface functions for libunwind.  */
 
 static void
-ia64_libunwind_frame_this_id (frame_info_ptr this_frame, void **this_cache,
+ia64_libunwind_frame_this_id (frame_info *this_frame, void **this_cache,
 			      struct frame_id *this_id)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
@@ -2924,7 +2924,7 @@ ia64_libunwind_frame_this_id (frame_info_ptr this_frame, void **this_cache,
 }
 
 static struct value *
-ia64_libunwind_frame_prev_register (frame_info_ptr this_frame,
+ia64_libunwind_frame_prev_register (frame_info *this_frame,
 				    void **this_cache, int regnum)
 {
   int reg = regnum;
@@ -3020,7 +3020,7 @@ static const struct frame_unwind ia64_libunwind_frame_unwind =
 };
 
 static void
-ia64_libunwind_sigtramp_frame_this_id (frame_info_ptr this_frame,
+ia64_libunwind_sigtramp_frame_this_id (frame_info *this_frame,
 				       void **this_cache,
 				       struct frame_id *this_id)
 {
@@ -3056,7 +3056,7 @@ ia64_libunwind_sigtramp_frame_this_id (frame_info_ptr this_frame,
 }
 
 static struct value *
-ia64_libunwind_sigtramp_frame_prev_register (frame_info_ptr this_frame,
+ia64_libunwind_sigtramp_frame_prev_register (frame_info *this_frame,
 					     void **this_cache, int regnum)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
@@ -3863,7 +3863,7 @@ static const struct ia64_infcall_ops ia64_infcall_ops =
 };
 
 static struct frame_id
-ia64_dummy_id (struct gdbarch *gdbarch, frame_info_ptr this_frame)
+ia64_dummy_id (struct gdbarch *gdbarch, frame_info *this_frame)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
   gdb_byte buf[8];
@@ -3885,7 +3885,7 @@ ia64_dummy_id (struct gdbarch *gdbarch, frame_info_ptr this_frame)
 }
 
 static CORE_ADDR 
-ia64_unwind_pc (struct gdbarch *gdbarch, frame_info_ptr next_frame)
+ia64_unwind_pc (struct gdbarch *gdbarch, frame_info *next_frame)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
   gdb_byte buf[8];
