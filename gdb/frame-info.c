@@ -21,6 +21,9 @@
 
 #include "frame-info.h"
 #include "frame.h"
+#include "gdbsupport/selftest.h"
+#include "scoped-mock-context.h"
+#include "test-target.h"
 
 /* See frame-info-ptr.h.  */
 
@@ -33,7 +36,8 @@ frame_info_ptr::prepare_reinflate ()
 {
   m_cached_level = frame_relative_level (*this);
 
-  if (m_cached_level != 0)
+  if (m_cached_level != 0
+      || (m_ptr != nullptr && frame_is_user_created (m_ptr)))
     m_cached_id = get_frame_id (*this);
 }
 
@@ -54,7 +58,13 @@ frame_info_ptr::reinflate ()
 
   /* Frame #0 needs special handling, see comment in select_frame.  */
   if (m_cached_level == 0)
-    m_ptr = get_current_frame ().get ();
+    {
+      if (!frame_id_p (m_cached_id))
+	m_ptr = get_current_frame ().get ();
+      else
+	m_ptr = create_new_frame (m_cached_id.stack_addr,
+				  m_cached_id.code_addr).get ();
+    }
   else
     {
       gdb_assert (frame_id_p (m_cached_id));
@@ -62,4 +72,46 @@ frame_info_ptr::reinflate ()
     }
 
   gdb_assert (m_ptr != nullptr);
+}
+
+#if GDB_SELF_TEST
+
+namespace selftests {
+
+static void
+test_user_created_frame ()
+{
+  scoped_mock_context<test_target_ops> mock_context
+    (current_inferior ()->gdbarch);
+  frame_info_ptr frame = create_new_frame (0x1234, 0x5678);
+
+  frame_id id = get_frame_id (frame);
+  SELF_CHECK (id.stack_status == FID_STACK_VALID);
+  SELF_CHECK (id.stack_addr == 0x1234);
+  SELF_CHECK (id.code_addr_p);
+  SELF_CHECK (id.code_addr == 0x5678);
+
+  frame.prepare_reinflate ();
+  reinit_frame_cache ();
+  frame.reinflate ();
+
+  id = get_frame_id (frame);
+  SELF_CHECK (id.stack_status == FID_STACK_VALID);
+  SELF_CHECK (id.stack_addr == 0x1234);
+  SELF_CHECK (id.code_addr_p);
+  SELF_CHECK (id.code_addr == 0x5678);
+}
+
+} /* namespace selftests */
+
+#endif
+
+void _initialize_frame_info ();
+void
+_initialize_frame_info ()
+{
+#if GDB_SELF_TEST
+  selftests::register_test ("frame_info_ptr_user",
+			    selftests::test_user_created_frame);
+#endif
 }
