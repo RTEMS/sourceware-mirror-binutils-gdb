@@ -116,7 +116,7 @@ dump_sframe_func_with_fres (sframe_decoder_ctx *sfd_ctx,
   char temp[100];
   memset (temp, 0, 100);
 
-  printf ("\n    %-7s%-8s %-10s%-10s%-10s", "STARTPC", fde_type_marker, "CFA", "FP", "RA");
+  printf ("\n    %-7s%-8s %-10s%-10s%-13s", "STARTPC", fde_type_marker, "CFA", "FP", "RA");
   for (j = 0; j < num_fres; j++)
     {
       sframe_decoder_get_fre (sfd_ctx, funcidx, j, &fre);
@@ -149,10 +149,17 @@ dump_sframe_func_with_fres (sframe_decoder_ctx *sfd_ctx,
       /* Dump RA info.  */
       memset (temp, 0, 100);
       if (err[2] == 0)
-	sprintf (temp, "c%+d", ra_offset);
+	{
+	  /* Mark SFrame FRE's RA information with "[s]" if the RA is mangled
+	     with signature bits.  */
+	  const char *ra_mangled_p_str
+	    = ((sframe_fre_get_ra_mangled_p (sfd_ctx, &fre, &err[2]))
+	       ? "[s]" : "   ");
+	  sprintf (temp, "c%+d%-3s", ra_offset, ra_mangled_p_str);
+	}
       else
 	strcpy (temp, "u");
-      printf ("%-10s", temp);
+      printf ("%-13s", temp);
     }
 }
 
