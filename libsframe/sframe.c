@@ -935,7 +935,7 @@ sframe_decoder_get_fixed_ra_offset (sframe_decoder_ctx *ctx)
 /* Find the function descriptor entry starting which contains the specified
    address ADDR.  */
 
-sframe_func_desc_entry *
+static sframe_func_desc_entry *
 sframe_get_funcdesc_with_addr (sframe_decoder_ctx *ctx,
 			       int32_t addr, int *errp)
 {
