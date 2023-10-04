@@ -1,4 +1,6 @@
 -*- text -*-
+* New command line option --scfi[=all,none] to synthesize CFI for hand-written
+  asm.
 
 * Initial support for Intel APX: 32 GPRs, NDD, PUSH2/POP2 and PUSHP/POPP.
 
