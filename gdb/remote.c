@@ -83,7 +83,6 @@
 #include "gdbsupport/selftest.h"
 #include "cli/cli-style.h"
 #include "gdbsupport/remote-args.h"
-#include "gdbsupport/gdb_argv_vec.h"
 #include "finish-thread-state.h"
 
 /* The remote target.  */
@@ -12761,21 +12760,13 @@ test_remote_args_command (const char *args, int from_tty)
   for (const std::string &a : split_args)
     gdb_printf ("  (%s)\n", a.c_str ());
 
-  gdb::argv_vec tmp_split_args;
-  for (const std::string &a : split_args)
-    tmp_split_args.emplace_back (xstrdup (a.c_str ()));
-
-  std::string joined_args = gdb::remote_args::join (tmp_split_args.get ());
+  std::string joined_args = gdb::remote_args::join (split_args);
 
   gdb_printf ("Output (%s)\n", joined_args.c_str ());
 
   std::vector<std::string> resplit = gdb::remote_args::split (joined_args);
 
-  tmp_split_args.clear ();
-  for (const std::string &a : resplit)
-    tmp_split_args.emplace_back (xstrdup (a.c_str ()));
-
-  std::string rejoined = gdb::remote_args::join (tmp_split_args.get ());
+  std::string rejoined = gdb::remote_args::join (resplit);
 
   if (joined_args != rejoined || split_args != resplit)
     {
