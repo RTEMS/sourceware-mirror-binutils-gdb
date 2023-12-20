@@ -750,6 +750,9 @@ enum
   /* No CSPAZO flags update indication.  */
   NF,
 
+  /* Instruction updates stack pointer implicitly.  */
+  ImplicitStackOp,
+
   /* The last bitfield in i386_opcode_modifier.  */
   Opcode_Modifier_Num
 };
@@ -796,6 +799,7 @@ typedef struct i386_opcode_modifier
   unsigned int isa64:2;
   unsigned int noegpr:1;
   unsigned int nf:1;
+  unsigned int implicitstackop:1;
 } i386_opcode_modifier;
 
 /* Operand classes.  */

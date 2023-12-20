@@ -488,6 +488,7 @@ static bitfield opcode_modifiers[] =
   BITFIELD (ISA64),
   BITFIELD (NoEgpr),
   BITFIELD (NF),
+  BITFIELD (ImplicitStackOp),
 };
 
 #define CLASS(n) #n, n
