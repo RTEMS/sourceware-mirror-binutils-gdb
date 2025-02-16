@@ -152,7 +152,7 @@ static ctf_list_t open_errors;
    open errors list if NULL): if ERR is nonzero it is the errno to report to the
    debug stream instead of that recorded on fp.  */
 _libctf_printflike_ (4, 5)
-extern void
+void
 ctf_err_warn (ctf_dict_t *fp, int is_warning, int err,
 	      const char *format, ...)
 {
@@ -201,6 +201,33 @@ void
 ctf_err_warn_to_open (ctf_dict_t *fp)
 {
   ctf_list_splice (&open_errors, &fp->ctf_errs_warnings);
+}
+
+/* Copy all the errors/warnings from one fp to another one, and the error code
+   as well.  */
+void
+ctf_err_copy (ctf_dict_t *dest, ctf_dict_t *src)
+{
+  ctf_err_warning_t *cew;
+  for (cew = ctf_list_next (&src->ctf_errs_warnings); cew != NULL;
+       cew = ctf_list_next (cew))
+    {
+      ctf_err_warning_t *new_cew;
+
+      if ((new_cew = malloc (sizeof (ctf_err_warning_t))) == NULL)
+	goto oom;
+      memcpy (new_cew, cew, sizeof (ctf_err_warning_t));
+      if ((new_cew->cew_text = strdup (new_cew->cew_text)) == NULL)
+	{
+	  free (new_cew);
+	  goto oom;
+	}
+      ctf_list_append (&dest->ctf_errs_warnings, new_cew);
+    }
+  ctf_set_errno (dest, ctf_errno (src));
+  return;
+ oom:
+  ctf_set_errno (dest, ENOMEM);
 }
 
 /* Error-warning reporting: an 'iterator' that returns errors and warnings from
