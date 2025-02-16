@@ -1186,34 +1186,47 @@ ctf_type_reference (ctf_dict_t *fp, ctf_id_t type)
     }
 }
 
-/* Find a pointer to type by looking in fp->ctf_ptrtab.  If we can't find a
-   pointer to the given type, see if we can compute a pointer to the type
-   resulting from resolving the type down to its base type and use that
+/* Find a pointer to type by looking in fp->ctf_ptrtab and fp->ctf_pptrtab.  If
+   we can't find a pointer to the given type, see if we can compute a pointer to
+   the type resulting from resolving the type down to its base type and use that
    instead.  This helps with cases where the CTF data includes "struct foo *"
-   but not "foo_t *" and the user accesses "foo_t *" in the debugger.
-
-   XXX what about parent dicts?  */
+   but not "foo_t *" and the user accesses "foo_t *" in the debugger.  */
 
 ctf_id_t
 ctf_type_pointer (ctf_dict_t *fp, ctf_id_t type)
 {
   ctf_dict_t *ofp = fp;
   ctf_id_t ntype;
+  uint32_t idx;
 
   if (ctf_lookup_by_id (&fp, type) == NULL)
     return CTF_ERR;		/* errno is set for us.  */
 
-  if ((ntype = fp->ctf_ptrtab[ctf_type_to_index (fp, type)]) != 0)
+  idx = ctf_type_to_index (fp, type);
+  if ((ntype = fp->ctf_ptrtab[idx]) != 0)
     return (ctf_index_to_type (fp, ntype));
 
-  if ((type = ctf_type_resolve (fp, type)) == CTF_ERR)
+  if (ctf_refresh_pptrtab (fp) < 0)
+    return CTF_ERR;		/* errno is set for us.  */
+
+  if (idx < ofp->ctf_pptrtab_len
+      && (ntype = ofp->ctf_pptrtab[idx]) != 0)
+    return (ctf_index_to_type (ofp, ntype));
+
+  /* Try again after resolution.  */
+  if ((type = ctf_type_resolve (ofp, type)) == CTF_ERR)
     return (ctf_set_typed_errno (ofp, ECTF_NOTYPE));
 
   if (ctf_lookup_by_id (&fp, type) == NULL)
     return (ctf_set_typed_errno (ofp, ECTF_NOTYPE));
 
-  if ((ntype = fp->ctf_ptrtab[ctf_type_to_index (fp, type)]) != 0)
+  idx = ctf_type_to_index (fp, type);
+  if ((ntype = fp->ctf_ptrtab[idx]) != 0)
     return (ctf_index_to_type (fp, ntype));
+
+  if (idx < ofp->ctf_pptrtab_len
+      && (ntype = ofp->ctf_pptrtab[idx]) != 0)
+    return (ctf_index_to_type (ofp, ntype));
 
   return (ctf_set_typed_errno (ofp, ECTF_NOTYPE));
 }
@@ -1339,11 +1352,11 @@ ctf_type_compat (ctf_dict_t *lfp, ctf_id_t ltype,
 
   if (ctf_type_isparent (lfp, ltype) && (lfp->ctf_flags & LCTF_CHILD)
       && !lfp->ctf_parent)
-    return (ctf_set_errno (ofp, ECTF_NOPARENT));
+    return (ctf_set_errno (lfp, ECTF_NOPARENT));
 
   if (ctf_type_isparent (rfp, rtype) && (rfp->ctf_flags & LCTF_CHILD)
       && !rfp->ctf_parent)
-    return (ctf_set_errno (ofp, ECTF_NOPARENT));
+    return (ctf_set_errno (rfp, ECTF_NOPARENT));
 
   if (ctf_type_cmp (lfp, ltype, rfp, rtype) == 0)
     return 1;

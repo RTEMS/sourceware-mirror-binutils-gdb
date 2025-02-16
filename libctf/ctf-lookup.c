@@ -43,10 +43,14 @@ grow_pptrtab (ctf_dict_t *fp, size_t new_len)
 
 /* Update entries in the pptrtab that relate to types newly added in the
    child.  */
-static int
-refresh_pptrtab (ctf_dict_t *fp, ctf_dict_t *pfp)
+int
+ctf_refresh_pptrtab (ctf_dict_t *fp)
 {
   uint32_t i;
+  ctf_dict_t *pfp = fp->ctf_parent;
+
+  if (!pfp || fp->ctf_pptrtab_typemax >= fp->ctf_typemax)
+    return 0;
 
   for (i = fp->ctf_pptrtab_typemax; i <= fp->ctf_typemax; i++)
     {
@@ -347,11 +351,8 @@ ctf_lookup_by_name_internal (ctf_dict_t *fp, ctf_dict_t *child,
       /* Need to look up in the parent, from the child's perspective.
 	 Make sure the pptrtab is up to date.  */
 
-      if (fp->ctf_pptrtab_typemax < fp->ctf_typemax)
-	{
-	  if (refresh_pptrtab (fp, fp->ctf_parent) < 0)
-	    return CTF_ERR;			/* errno is set for us.  */
-	}
+      if (ctf_refresh_pptrtab (fp) < 0)
+	return CTF_ERR;				/* errno is set for us.  */
 
       if ((ptype = ctf_lookup_by_name_internal (fp->ctf_parent, fp,
 						name)) != CTF_ERR)

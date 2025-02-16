@@ -616,6 +616,7 @@ extern ctf_id_t ctf_lookup_variable_here (ctf_dict_t *fp, const char *name);
 extern ctf_id_t ctf_lookup_by_sym_or_name (ctf_dict_t *, unsigned long symidx,
 					   const char *symname, int try_parent,
 					   int is_function);
+extern int ctf_refresh_pptrtab (ctf_dict_t *);
 extern ctf_id_t ctf_lookup_by_rawname (ctf_dict_t *, int, const char *);
 extern void ctf_set_ctl_hashes (ctf_dict_t *);
 extern ctf_id_t ctf_symbol_next_static (ctf_dict_t *, ctf_next_t **,
