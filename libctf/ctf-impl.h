@@ -182,6 +182,8 @@ typedef struct ctf_dtdef
 {
   ctf_list_t dtd_list;		/* List forward/back pointers.  */
   ctf_id_t dtd_type;		/* Type identifier for this definition.  */
+  ctf_id_t dtd_final_type;	/* Final (nonprovisional) id, if nonzero.  */
+  ctf_list_t dtd_refs;		/* Refs to this DTD's dtd_type: see below.  */
   ctf_type_t dtd_data;		/* Type node, including name.  */
   size_t dtd_vlen_alloc;	/* Total vlen space allocated (vbytes).  */
   unsigned char *dtd_vlen;	/* Variable-length data for this type.  */
@@ -432,8 +434,13 @@ struct ctf_dict
   ctf_list_t ctf_in_flight_dynsyms; /* Dynsyms during accumulation.  */
   struct ctf_varent *ctf_vars;	  /* Sorted variable->type mapping.  */
   unsigned long ctf_nvars;	  /* Number of variables in ctf_vars.  */
-  unsigned long ctf_typemax;	  /* Maximum valid type ID number.  */
-  unsigned long ctf_stypes;	  /* Number of static (non-dynamic) types.  */
+  uint32_t ctf_typemax;		  /* Maximum valid type index.  */
+  uint32_t ctf_idmax;		  /* Maximum valid non-provisional type ID.  */
+  uint32_t ctf_stypes;		  /* Number of static (non-dynamic) types.  */
+  uint32_t ctf_provtypemax;	  /* Latest valid provisional type ID.
+				     Counts down.  Parent only.  */
+  uint32_t ctf_nprovtypes;	  /* Number of provisional types (convenience).  */
+  uint32_t ctf_max_child_typemax; /* Highest typemax among all imported children.  */
   const ctf_dmodel_t *ctf_dmodel; /* Data model pointer (see above).  */
   const char *ctf_cuname;	  /* Compilation unit name (if any).  */
   char *ctf_dyncuname;		  /* Dynamically allocated name of CU.  */
@@ -442,7 +449,6 @@ struct ctf_dict
   const char *ctf_parlabel;	  /* Label in parent dict (if any).  */
   const char *ctf_parname;	  /* Basename of parent (if any).  */
   char *ctf_dynparname;		  /* Dynamically allocated name of parent.  */
-  uint32_t ctf_parmax;		  /* Highest type ID of a parent type.  */
   uint32_t ctf_refcnt;		  /* Reference count (for parent links).  */
   uint32_t ctf_flags;		  /* Libctf flags (see below).  */
   uint32_t ctf_max_children;	  /* Max number of child dicts.  */
@@ -452,7 +458,7 @@ struct ctf_dict
   ctf_list_t ctf_dtdefs;	  /* List of dynamic type definitions.  */
   ctf_dynhash_t *ctf_dvhash;	  /* Hash of dynamic variable mappings.  */
   ctf_list_t ctf_dvdefs;	  /* List of dynamic variable definitions.  */
-  unsigned long ctf_dtoldid;	  /* Oldest id that has been committed.  */
+  ctf_snapshot_id_t ctf_updateid; /* Snapshot at time of last ctf_update().  */
   unsigned long ctf_snapshots;	  /* ctf_snapshot() plus ctf_update() count.  */
   unsigned long ctf_snapshot_lu;  /* ctf_snapshot() call count at last update.  */
   ctf_archive_t *ctf_archive;	  /* Archive this ctf_dict_t came from.  */
@@ -607,7 +613,7 @@ extern ctf_id_t ctf_index_to_type (const ctf_dict_t *, uint32_t);
 #define LCTF_LINKING		0x0002  /* CTF link is underway: respect ctf_link_flags.  */
 #define LCTF_STRICT_NO_DUP_ENUMERATORS 0x0004 /* Duplicate enums prohibited.  */
 #define LCTF_NO_STR		0x0008  /* No string lookup possible yet.  */
-#define LCTF_NO_SERIALIZE	0x0010  /* Serialization of this dict prohibited.  */
+#define LCTF_NO_TYPE		0x0010	/* No type additions possible.  */
 #define LCTF_PRESERIALIZED	0x0020  /* Already serialized all but the strtab.  */
 
 extern ctf_dynhash_t *ctf_name_table (ctf_dict_t *, int);
