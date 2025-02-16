@@ -145,7 +145,6 @@ ctf_create (int *errp)
   fp->ctf_unions = unions;
   fp->ctf_enums = enums;
   fp->ctf_names = names;
-  fp->ctf_dtoldid = 0;
   fp->ctf_snapshot_lu = 0;
 
   /* Make sure the ptrtab starts out at a reasonable size.  */
@@ -172,7 +171,7 @@ ctf_create (int *errp)
 int
 ctf_update (ctf_dict_t *fp)
 {
-  fp->ctf_dtoldid = fp->ctf_typemax;
+  fp->ctf_updateid = ctf_snapshot (fp);
   return 0;
 }
 
@@ -308,18 +307,15 @@ ctf_dvd_lookup (const ctf_dict_t *fp, const char *name)
 /* Discard all of the dynamic type definitions and variable definitions that
    have been added to the dict since the last call to ctf_update().  We locate
    such types by scanning the dtd list and deleting elements that have type IDs
-   greater than ctf_dtoldid, which is set by ctf_update(), above, and by
+   greater than that recorded in the snapshot recorded by ctf_update(), and by
    scanning the variable list and deleting elements that have update IDs equal
    to the current value of the last-update snapshot count (indicating that they
-   were added after the most recent call to ctf_update()).  */
+   were added after the most recent call to ctf_update()).  We reset every piece
+   of type-ID-related state to the value recorded in the snapshot.  */
 int
 ctf_discard (ctf_dict_t *fp)
 {
-  ctf_snapshot_id_t last_update =
-    { fp->ctf_dtoldid,
-      fp->ctf_snapshot_lu + 1 };
-
-  return (ctf_rollback (fp, last_update));
+  return (ctf_rollback (fp, fp->ctf_updateid));
 }
 
 ctf_snapshot_id_t
@@ -328,10 +324,13 @@ ctf_snapshot (ctf_dict_t *fp)
   ctf_snapshot_id_t snapid;
   snapid.dtd_id = fp->ctf_typemax;
   snapid.snapshot_id = fp->ctf_snapshots++;
+  snapid.provtypemax = fp->ctf_provtypemax;
+  snapid.nprovtypes = fp->ctf_nprovtypes;
+  snapid.idmax = fp->ctf_idmax;
   return snapid;
 }
 
-/* Like ctf_discard(), only discards everything after a particular ID.  */
+/* Like ctf_discard(), only discards everything after a specific snapshot.  */
 int
 ctf_rollback (ctf_dict_t *fp, ctf_snapshot_id_t id)
 {
@@ -380,10 +379,122 @@ ctf_rollback (ctf_dict_t *fp, ctf_snapshot_id_t id)
       ctf_dvd_delete (fp, dvd);
     }
 
+  /* Unconditionally reset all the stored IDs: this ensures safety even if
+     ctf_import was called after some types were added.  */
   fp->ctf_typemax = id.dtd_id;
   fp->ctf_snapshots = id.snapshot_id;
+  fp->ctf_provtypemax = id.provtypemax;
+  fp->ctf_nprovtypes = id.nprovtypes;
+  fp->ctf_idmax = id.idmax;
 
   return 0;
+}
+
+/* Assign an ID to a newly-created type.
+
+   The type ID assignment scheme in libctf divides types into three
+   classes.
+
+   - static types are types read in from an already-existing dict.  They are
+     stored only in the ctf_buf and have type indexes ranging from 1 up to
+     fp->ctf_typemax (usually the same as fp->ctf_stypes, but may be differnt
+     for newly-created children just imported to parents with already-present
+     dynamic types).  Their IDs are derived from their index in the ctf_buf and
+     are not explicitly assigned, though serialization tracks them in order to
+     update type IDs that reference them.
+
+     Type IDs in a child dict start from fp->ctf_header->ctf_parent_typemax
+     (fp->ctf_stypes in the parent).  There is no gap as in CTFv3 and below:
+     the IDs run continuously.
+
+   - dynamic types are added by ctf_add_*() (ultimately, ctf_add_generic) and
+     have DTDs: their type IDs are stored in dtd->dtd_type, and the DTD hashtab
+     is indexed by type ID.
+
+     The simplest form of these types, nonprovisionally-numbered dynamic types,
+     have type IDs stretching from fp->ctf_stypes up to fp->ctf_idmax, and
+     corresponding indexes.  Such types only exist for child dicts and for
+     parent dicts which had types added before any children were imported.
+
+   - As soon as a child is imported, the parent starts allocating provisionally-
+     numbered dynamic types from the top of the type space down, updating
+     ctf_provtypemax and ctf_nprovtypes as it goes, and bumping ctf_typemax:
+     ctf_idmax is no longer bumped.  The child continues to allocate in lower
+     type space starting from the parent's ctf_idmax + 1.  Obviously all
+     references to provisional types can't stick around: so at serialization
+     time we note down the position of every reference to a provisional type ID
+     and all child type IDs, then lay out the type table by going over the
+     nonprovisional types and then the provisional ones and dropping them in
+     place in their serialized buffers, work out what the final type IDs will
+     be, and update all the refs accordingly, changing every type ID that refers
+     to the old type to refer to the new one instead.  (See ctf_serialize.)
+
+     The indexes of provisional types run identically to the indexes of
+     non-provisional types, i.e. straight upwards without breaks or
+     discontinuities, even though this probably overlaps type IDs in the child.
+     Indexes and type IDs are not the same!
+
+   At serialization time, we track references to type IDs in the same dict via
+   the refs system while the type table et al are being built (during
+   preserialization), and update them with the real type IDs at final
+   serialization time; the final type IDs are recorded in the dtd_final_type,
+   and we assert if a future serialization would assign a different ID (which
+   should be impossible).  When child dicts are serialized, references to parent
+   types are updated with the dtd_final_type of that type whenever one is set.
+   It is considered an error to try to serialize a child while its parent has
+   provisional types that have not yet had IDs assigned.
+
+   (The refs system is not employed to track references from child dicts to
+   parents, since forward references are not possible between dicts: the parent
+   dict must have been completely serialized when serializing a child.  We can't
+   be halfway through, which is the case the refs system is there to handle:
+   refs from structure members to types not yet known, etc.)
+
+   Only parents have provisional type IDs!  Child IDs are always simply assigned
+   straight in the child.  This means that the provisional ID space is not
+   sparse, and we don't need to worry about child and parent IDs being
+   interspersed in it.  (Not yet, anyway: if we get multilevel parents this will
+   become a concern).
+
+   Note that you can add types to a parent at any time, even after children have
+   been serialized.  This works fine, except that you cannot use the
+   newly-written dict as a parent for the same children, since they were written
+   out assuming a smaller number of types in the parent.  */
+
+static ctf_id_t
+ctf_assign_id (ctf_dict_t *fp)
+{
+  uint32_t idx;
+
+  /* All type additions increase the max index.  */
+
+  idx = ++fp->ctf_typemax;
+
+  /* Is this a parent with an attached child?  Provisional type.  */
+
+  if (!(fp->ctf_flags & LCTF_CHILD) && (fp->ctf_max_children > 0))
+    {
+      fp->ctf_provtypemax--;
+      fp->ctf_nprovtypes++;
+    }
+  else
+    {
+      /* Children, possibly with an attached parent: make sure the parent keeps
+	 track of the boundary between child types and provisional types.  We do
+	 not attempt to reset this when children with many types are closed: any
+	 case in which we come remotely near to running out of types this way is
+	 problematic enough that it makes more sense to force the caller to
+	 start over with a newly-reopened parent.  */
+
+      fp->ctf_idmax++;
+      if (fp->ctf_parent
+	  && fp->ctf_parent->ctf_max_child_typemax
+	  < (fp->ctf_typemax + fp->ctf_header->cth_parent_typemax))
+	fp->ctf_parent->ctf_max_child_typemax = fp->ctf_typemax
+	  + fp->ctf_header->cth_parent_typemax;
+    }
+
+  return ctf_index_to_type (fp, idx);
 }
 
 /* Note: vlen is the amount of space *allocated* for the vlen.  It may well not
@@ -395,17 +506,35 @@ ctf_add_generic (ctf_dict_t *fp, uint32_t flag, const char *name, int kind,
 {
   ctf_dtdef_t *dtd;
   ctf_id_t type;
+  ctf_dict_t *pfp = fp;
+
+  if (fp->ctf_parent)
+    pfp = fp->ctf_parent;
+
 
   if (flag != CTF_ADD_NONROOT && flag != CTF_ADD_ROOT)
     return (ctf_set_typed_errno (fp, EINVAL));
 
-  if (ctf_index_to_type (fp, fp->ctf_typemax) >= CTF_MAX_TYPE)
+  /* Prohibit addition of types if the provisional range would be hit, or if any
+     attached child would run into the parents' provisional type range.  */
+
+  if (fp->ctf_typemax + fp->ctf_header->cth_parent_typemax
+      >= pfp->ctf_provtypemax)
     return (ctf_set_typed_errno (fp, ECTF_FULL));
 
-  if (ctf_index_to_type (fp, fp->ctf_typemax) == (CTF_MAX_PTYPE - 1))
+  if (!(fp->ctf_flags & LCTF_CHILD)
+      && fp->ctf_max_child_typemax >= pfp->ctf_provtypemax)
     return (ctf_set_typed_errno (fp, ECTF_FULL));
+
+  /* Prohibit addition of types in the middle of serialization.  */
+
+  if (fp->ctf_flags & LCTF_NO_TYPE)
+    return (ctf_set_typed_errno (fp, ECTF_NOTSERIALIZED));
 
   if (fp->ctf_flags & LCTF_NO_STR)
+    return (ctf_set_typed_errno (fp, ECTF_NOPARENT));
+
+  if (fp->ctf_flags & LCTF_CHILD && fp->ctf_parent == NULL)
     return (ctf_set_errno (fp, ECTF_NOPARENT));
 
   /* Prohibit addition of a root-visible type that is already present
@@ -423,7 +552,7 @@ ctf_add_generic (ctf_dict_t *fp, uint32_t flag, const char *name, int kind,
 
   /* Make sure ptrtab always grows to be big enough for all types.  */
   if (ctf_grow_ptrtab (fp) < 0)
-      return CTF_ERR;				/* errno is set for us. */
+    return CTF_ERR;				/* errno is set for us. */
 
   if ((dtd = calloc (1, sizeof (ctf_dtdef_t))) == NULL)
     return (ctf_set_typed_errno (fp, EAGAIN));
@@ -437,8 +566,7 @@ ctf_add_generic (ctf_dict_t *fp, uint32_t flag, const char *name, int kind,
   else
     dtd->dtd_vlen = NULL;
 
-  type = ++fp->ctf_typemax;
-  type = ctf_index_to_type (fp, type);
+  type = ctf_assign_id (fp);
 
   dtd->dtd_data.ctt_name = ctf_str_add (fp, name);
   dtd->dtd_type = type;
@@ -524,13 +652,14 @@ ctf_add_reftype (ctf_dict_t *fp, uint32_t flag, ctf_id_t ref, uint32_t kind)
 {
   ctf_dtdef_t *dtd;
   ctf_id_t type;
-  ctf_dict_t *tmp = fp;
+  ctf_dict_t *typedict = fp;
+  ctf_dict_t *refdict = fp;
   int child = fp->ctf_flags & LCTF_CHILD;
 
   if (ref == CTF_ERR || ref > CTF_MAX_TYPE)
     return (ctf_set_typed_errno (fp, EINVAL));
 
-  if (ref != 0 && ctf_lookup_by_id (&tmp, ref) == NULL)
+  if (ref != 0 && ctf_lookup_by_id (&refdict, ref) == NULL)
     return CTF_ERR;		/* errno is set for us.  */
 
   if ((type = ctf_add_generic (fp, flag, NULL, kind, 0, &dtd)) == CTF_ERR)
@@ -548,8 +677,9 @@ ctf_add_reftype (ctf_dict_t *fp, uint32_t flag, ctf_id_t ref, uint32_t kind)
      addition of this type.  The pptrtab is lazily-updated as needed, so is not
      touched here.  */
 
-  uint32_t type_idx = ctf_type_to_index (fp, type);
-  uint32_t ref_idx = ctf_type_to_index (fp, ref);
+  typedict = ctf_get_dict (fp, type);
+  uint32_t type_idx = ctf_type_to_index (typedict, type);
+  uint32_t ref_idx = ctf_type_to_index (refdict, ref);
 
   if (ctf_type_ischild (fp, ref) == child
       && ref_idx < fp->ctf_typemax)
@@ -1136,6 +1266,9 @@ ctf_add_member_offset (ctf_dict_t *fp, ctf_id_t souid, const char *name,
   if (fp->ctf_flags & LCTF_NO_STR)
     return (ctf_set_errno (fp, ECTF_NOPARENT));
 
+  if (fp->ctf_flags & LCTF_NO_TYPE)
+    return (ctf_set_errno (fp, ECTF_NOTSERIALIZED));
+
   if ((fp->ctf_flags & LCTF_CHILD) && ctf_type_isparent (fp, souid))
     {
       /* Adding a child type to a parent, even via the child, is prohibited.
@@ -1366,6 +1499,9 @@ ctf_add_variable (ctf_dict_t *fp, const char *name, ctf_id_t ref)
   if (fp->ctf_flags & LCTF_NO_STR)
     return (ctf_set_errno (fp, ECTF_NOPARENT));
 
+  if (fp->ctf_flags & LCTF_NO_TYPE)
+    return (ctf_set_errno (fp, ECTF_NOTSERIALIZED));
+
   if (ctf_lookup_variable_here (fp, name) != CTF_ERR)
     return (ctf_set_errno (fp, ECTF_DUPLICATE));
 
@@ -1388,6 +1524,9 @@ ctf_add_funcobjt_sym_forced (ctf_dict_t *fp, int is_function, const char *name, 
 
   if (fp->ctf_flags & LCTF_NO_STR)
     return (ctf_set_errno (fp, ECTF_NOPARENT));
+
+  if (fp->ctf_flags & LCTF_NO_TYPE)
+    return (ctf_set_errno (fp, ECTF_NOTSERIALIZED));
 
   if (ctf_lookup_by_id (&tmp, id) == NULL)
     return -1;				/* errno is set for us.  */
@@ -1540,7 +1679,9 @@ membcmp (const char *name, ctf_id_t type _libctf_unused_, unsigned long offset,
 
    Our OOM handling here is just to not do anything, because this is called deep
    enough in the call stack that doing anything useful is painfully difficult:
-   the worst consequence if we do OOM is a bit of type duplication anyway.  */
+   the worst consequence if we do OOM is a bit of type duplication anyway.
+   The non-imported checks are just paranoia and should never be able to
+   happen, but if they do we don't want a coredump.  */
 
 static void
 ctf_add_type_mapping (ctf_dict_t *src_fp, ctf_id_t src_type,

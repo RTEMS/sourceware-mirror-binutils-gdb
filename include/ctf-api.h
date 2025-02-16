@@ -168,8 +168,14 @@ typedef struct ctf_lblinfo
 
 typedef struct ctf_snapshot_id
 {
-  unsigned long dtd_id;		/* Highest DTD ID at time of snapshot.  */
-  unsigned long snapshot_id;	/* Snapshot id at time of snapshot.  */
+  uint32_t dtd_id;		/* Highest DTD ID at time of snapshot.  */
+  uint32_t snapshot_id;		/* Snapshot id at time of snapshot.  */
+
+  /* Parent provisional-type state at snapshot time.  */
+
+  uint32_t provtypemax;
+  uint32_t nprovtypes;
+  uint32_t idmax;
 } ctf_snapshot_id_t;
 
 #define	CTF_FUNC_VARARG	0x1	/* Function arguments end with varargs.  */
