@@ -2302,7 +2302,11 @@ get_gdb_index_contents_from_cache (objfile *obj, dwarf2_per_bfd *dwarf2_per_bfd)
 {
   const bfd_build_id *build_id = build_id_bfd_get (obj->obfd.get ());
   if (build_id == nullptr)
-    return {};
+    {
+      dwarf_read_debug_printf ("Not using index-cache for %s due to missing build-id",
+			       objfile_name (obj));
+      return {};
+    }
 
   return global_index_cache.lookup_gdb_index (build_id,
 					      &dwarf2_per_bfd->index_cache_res);

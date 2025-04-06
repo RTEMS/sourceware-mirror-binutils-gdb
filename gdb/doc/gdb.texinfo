@@ -23198,6 +23198,8 @@ Indices only work when using DWARF debugging information.
 It is possible for @value{GDBN} to automatically save a copy of this index in a
 cache on disk and retrieve it from there when loading the same binary in the
 future.  This feature can be turned on with @kbd{set index-cache enabled on}.
+Note that the cache will use the ELF build ID to identify the cached indices,
+so files without build ID will not have their index cached.
 The following commands can be used to tweak the behavior of the index cache.
 
 @table @code
