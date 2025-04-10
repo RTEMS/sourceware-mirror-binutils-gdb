@@ -77,6 +77,38 @@ enum windows_continue_flag
 
 DEF_ENUM_FLAGS_TYPE (windows_continue_flag, windows_continue_flags);
 
+/* We want to register windows_thread_info as struct thread_info
+   private data.  thread_info::priv must point to a class that
+   inherits from private_thread_info.  But we can't make
+   windows_thread_info inherit private_thread_info, because
+   windows_thread_info is shared with GDBserver.  So we make a new
+   class that inherits from both private_thread_info,
+   windows_thread_info, and register that one as thread_info::private.
+   This multiple inheritance is benign, because private_thread_info is
+   a java-style interface class with no data.  */
+struct windows_private_thread_info : private_thread_info, windows_thread_info
+{
+  windows_private_thread_info (windows_nat::windows_process_info *proc,
+			       DWORD tid, HANDLE h, CORE_ADDR tlb)
+    : windows_thread_info (proc, tid, h, tlb)
+  {}
+
+  ~windows_private_thread_info () override
+  {}
+};
+
+/* Get the windows_thread_info object associated with THR.  */
+
+static inline windows_thread_info *
+as_windows_thread_info (thread_info *thr)
+{
+  /* Cast to windows_private_thread_info, which inherits from
+     private_thread_info, and is implicitly convertible to
+     windows_thread_info, the return type.  */
+  private_thread_info *priv = thr->priv.get ();
+  return gdb::checked_static_cast<windows_private_thread_info *> (priv);
+}
+
 struct windows_per_inferior : public windows_nat::windows_process_info
 {
   windows_thread_info *find_thread (ptid_t ptid) override;
@@ -90,8 +122,6 @@ struct windows_per_inferior : public windows_nat::windows_process_info
   virtual void invalidate_thread_context (windows_thread_info *th) = 0;
 
   int windows_initialization_done = 0;
-
-  std::vector<std::unique_ptr<windows_thread_info>> thread_list;
 
   /* Counts of things.  */
   int saw_create = 0;
@@ -351,5 +381,70 @@ int amd64_windows_segment_register_p (int regnum);
 /* context register offsets for amd64.  */
 extern const int amd64_mappings[];
 #endif
+
+/* Creates an iterator that works like all_matching_threads_iterator,
+   but that returns windows_thread_info pointers instead of
+   thread_info.  This could be replaced with a std::range::transform
+   when we require C++20.  */
+class all_windows_threads_iterator
+{
+public:
+  typedef all_windows_threads_iterator self_type;
+  typedef windows_thread_info value_type;
+  typedef windows_thread_info *&reference;
+  typedef windows_thread_info **pointer;
+  typedef std::forward_iterator_tag iterator_category;
+  typedef int difference_type;
+
+  explicit all_windows_threads_iterator (all_non_exited_threads_iterator base_iter)
+    : m_base_iter (base_iter)
+  {}
+
+  windows_thread_info * operator* () const { return as_windows_thread_info (&*m_base_iter); }
+
+  all_windows_threads_iterator &operator++ ()
+  {
+    ++m_base_iter;
+    return *this;
+  }
+
+  bool operator== (const all_windows_threads_iterator &other) const
+  { return m_base_iter == other.m_base_iter; }
+
+  bool operator!= (const all_windows_threads_iterator &other) const
+  { return !(*this == other); }
+
+private:
+  all_non_exited_threads_iterator m_base_iter;
+};
+
+/* The range for all_windows_threads, below.  */
+
+class all_windows_threads_range : public all_non_exited_threads_range
+{
+public:
+  all_windows_threads_range (all_non_exited_threads_range base_range)
+    : m_base_range (base_range)
+  {}
+
+  all_windows_threads_iterator begin () const
+  { return all_windows_threads_iterator (m_base_range.begin ()); }
+  all_windows_threads_iterator end () const
+  { return all_windows_threads_iterator (m_base_range.end ()); }
+
+private:
+  all_non_exited_threads_range m_base_range;
+};
+
+/* Return a range that can be used to walk over all non-exited Windows
+   threads of all inferiors, with range-for.  */
+
+static inline all_windows_threads_range
+all_windows_threads ()
+{
+  auto *win_tgt = static_cast<windows_nat_target *> (get_native_target ());
+  return (all_windows_threads_range
+	  (all_non_exited_threads_range (win_tgt, minus_one_ptid)));
+}
 
 #endif /* GDB_WINDOWS_NAT_H */
