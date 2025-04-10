@@ -346,7 +346,7 @@ windows_set_dr (int i, CORE_ADDR addr)
   if (i < 0 || i > 3)
     internal_error (_("Invalid register %d in windows_set_dr.\n"), i);
 
-  for (auto &th : x86_windows_process.thread_list)
+  for (auto *th : all_windows_threads ())
     th->debug_registers_changed = true;
 }
 
@@ -356,7 +356,7 @@ windows_set_dr (int i, CORE_ADDR addr)
 static void
 windows_set_dr7 (unsigned long val)
 {
-  for (auto &th : x86_windows_process.thread_list)
+  for (auto *th : all_windows_threads ())
     th->debug_registers_changed = true;
 }
 
