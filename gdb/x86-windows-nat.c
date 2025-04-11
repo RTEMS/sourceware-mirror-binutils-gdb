@@ -350,8 +350,7 @@ windows_set_dr (int i, CORE_ADDR addr)
   if (i < 0 || i > 3)
     internal_error (_("Invalid register %d in windows_set_dr.\n"), i);
 
-  for (auto *th : all_windows_threads ())
-    th->debug_registers_changed = true;
+  windows_debug_registers_changed_all_threads ();
 }
 
 /* Pass the value VAL to the inferior in the DR7 debug control
@@ -360,8 +359,7 @@ windows_set_dr (int i, CORE_ADDR addr)
 static void
 windows_set_dr7 (unsigned long val)
 {
-  for (auto *th : all_windows_threads ())
-    th->debug_registers_changed = true;
+  windows_debug_registers_changed_all_threads ();
 }
 
 /* Get the value of debug register I from the inferior.  */
