@@ -78,6 +78,10 @@ enum windows_continue_flag
        all-stop mode.  This flag indicates that windows_continue
        should call ContinueDebugEvent even in non-stop mode.  */
     WCONT_CONTINUE_DEBUG_EVENT = 4,
+
+    /* Skip calling ContinueDebugEvent even in all-stop mode.  This is
+       the default in non-stop mode.  */
+    WCONT_DONT_CONTINUE_DEBUG_EVENT = 8,
   };
 
 DEF_ENUM_FLAGS_TYPE (windows_continue_flag, windows_continue_flags);
@@ -258,6 +262,8 @@ struct windows_nat_target : public inf_child_target
     return serial_event_fd (m_wait_event);
   }
 
+  void debug_registers_changed_all_threads ();
+
 protected:
 
   /* Initialize arch-specific data for a new inferior (debug registers,
@@ -303,7 +309,8 @@ private:
   void delete_thread (ptid_t ptid, DWORD exit_code, bool main_thread_p);
   DWORD fake_create_process (const DEBUG_EVENT &current_event);
 
-  void stop_one_thread (windows_thread_info *th);
+  void stop_one_thread (windows_thread_info *th,
+			enum windows_nat::stopping_kind stopping_kind);
 
   DWORD continue_status_for_event_detaching
     (const DEBUG_EVENT &event, size_t *reply_later_events_left = nullptr);
@@ -469,5 +476,7 @@ all_windows_threads ()
   return (all_windows_threads_range
 	  (all_non_exited_threads_range (win_tgt, minus_one_ptid)));
 }
+
+extern void windows_debug_registers_changed_all_threads ();
 
 #endif /* GDB_WINDOWS_NAT_H */

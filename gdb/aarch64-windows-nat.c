@@ -317,8 +317,7 @@ aarch64_notify_debug_reg_change (ptid_t ptid,
     = aarch64_get_debug_reg_state (inferior_ptid.pid ());
   aarch64_windows_process.dr_state = *state;
 
-  for (auto &th : aarch64_windows_process.thread_list)
-    th->debug_registers_changed = true;
+  windows_debug_registers_changed_all_threads ();
 }
 
 INIT_GDB_FILE (aarch64_windows_nat)
