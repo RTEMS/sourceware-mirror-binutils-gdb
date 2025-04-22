@@ -214,6 +214,8 @@ struct windows_nat_target : public inf_child_target
 
   bool thread_alive (ptid_t ptid) override;
 
+  const char *extra_thread_info (thread_info *info) override;
+
   std::string pid_to_str (ptid_t) override;
 
   void interrupt () override;
