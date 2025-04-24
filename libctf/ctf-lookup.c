@@ -405,6 +405,15 @@ ctf_lookup_by_id (ctf_dict_t **fpp, ctf_id_t type, const ctf_type_t **suffix)
       ctf_dtdef_t *dtd;
 
       dtd = ctf_dtd_lookup (fp, ctf_index_to_type (fp, idx));
+
+      /* During a rollback, DTD lookup may return NULL for dynamic types that
+	 otherwise appear to exist.  */
+      if (!dtd)
+	{
+	  ctf_set_errno (*fpp, ECTF_BADID);
+	  return NULL;
+	}
+
       if (suffix)
 	*suffix = dtd->dtd_data;
       return dtd->dtd_buf;
