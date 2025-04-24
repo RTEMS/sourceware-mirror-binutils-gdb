@@ -2226,8 +2226,6 @@ ctf_bufopen (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
 
   fp->ctf_dthash = ctf_dynhash_create (ctf_hash_integer, ctf_hash_eq_integer,
 				       NULL, NULL);
-  fp->ctf_dvhash = ctf_dynhash_create (ctf_hash_string, ctf_hash_eq_string,
-				       NULL, NULL);
   fp->ctf_snapshots = 1;
 
   fp->ctf_objthash = ctf_dynhash_create (ctf_hash_string, ctf_hash_eq_string,
@@ -2235,8 +2233,8 @@ ctf_bufopen (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
   fp->ctf_funchash = ctf_dynhash_create (ctf_hash_string, ctf_hash_eq_string,
 					 free, NULL);
 
-  if (!fp->ctf_dthash || !fp->ctf_dvhash || !fp->ctf_snapshots ||
-      !fp->ctf_objthash || !fp->ctf_funchash)
+  if (!fp->ctf_dthash || !fp->ctf_snapshots || !fp->ctf_objthash
+      || !fp->ctf_funchash)
     {
       err = ENOMEM;
       goto bad;
@@ -2337,7 +2335,6 @@ void
 ctf_dict_close (ctf_dict_t *fp)
 {
   ctf_dtdef_t *dtd, *ntd;
-  ctf_dvdef_t *dvd, *nvd;
   ctf_in_flight_dynsym_t *did, *nid;
   ctf_err_warning_t *err, *nerr;
 
@@ -2378,13 +2375,6 @@ ctf_dict_close (ctf_dict_t *fp)
   ctf_dynhash_destroy (fp->ctf_datasecs);
   ctf_dynhash_destroy (fp->ctf_tags);
   ctf_dynhash_destroy (fp->ctf_names);
-
-  for (dvd = ctf_list_next (&fp->ctf_dvdefs); dvd != NULL; dvd = nvd)
-    {
-      nvd = ctf_list_next (dvd);
-      ctf_dvd_delete (fp, dvd);
-    }
-  ctf_dynhash_destroy (fp->ctf_dvhash);
   ctf_dynhash_destroy (fp->ctf_var_datasecs);
 
   ctf_dynhash_destroy (fp->ctf_symhash_func);
