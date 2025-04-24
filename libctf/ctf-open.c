@@ -2596,7 +2596,7 @@ ctf_import_internal (ctf_dict_t *fp, ctf_dict_t *pfp, int unreffed)
 
   /* Fail if the child has so many types that it overlaps the parent's
      provisional type range.  */
-  if (fp->ctf_idmax + fp->ctf_header->cth_parent_typemax >= pfp->ctf_provtypemax)
+  if (fp->ctf_idmax + fp->ctf_header->cth_parent_ntypes >= pfp->ctf_provtypemax)
     return ctf_set_errno (fp, ECTF_FULL);
 
   if (fp->ctf_header->cth_parent_strlen != 0 &&
@@ -2645,9 +2645,9 @@ ctf_import_internal (ctf_dict_t *fp, ctf_dict_t *pfp, int unreffed)
     }
 
   if (pfp->ctf_max_child_typemax
-      < (fp->ctf_typemax + fp->ctf_header->cth_parent_typemax))
-    pfp->ctf_max_child_typemax = fp->ctf_typemax
-      + fp->ctf_header->cth_parent_typemax;
+      < (fp->ctf_idmax + fp->ctf_header->cth_parent_ntypes))
+    pfp->ctf_max_child_typemax = fp->ctf_idmax
+      + fp->ctf_header->cth_parent_ntypes;
 
   /* We might in time be able to lift this restriction, but it is unlikely to be
      something anyone would want to do, so let's not bother for now.  */
