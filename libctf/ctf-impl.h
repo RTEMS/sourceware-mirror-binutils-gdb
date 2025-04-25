@@ -580,6 +580,7 @@ struct ctf_next
     const ctf_enum_t *ctn_en;
     const ctf_enum64_t *ctn_en64;
     const ctf_var_secinfo_t *ctn_datasec;
+    const ctf_dynset_t *ctn_s;
     ctf_next_hkv_t *ctn_sorted_hkv;
     void **ctn_hash_slot;
   } u;
@@ -757,6 +758,7 @@ extern ctf_id_t ctf_add_reftype (ctf_dict_t *, uint32_t, ctf_id_t,
 extern int ctf_add_funcobjt_sym_forced (ctf_dict_t *, int is_function,
 					const char *, ctf_id_t);
 
+extern int ctf_insert_type_decl_tag (ctf_dict_t *, ctf_id_t, const char *);
 extern int ctf_track_enumerator (ctf_dict_t *, ctf_id_t, const char *);
 
 extern int ctf_dedup_atoms_init (ctf_dict_t *);
