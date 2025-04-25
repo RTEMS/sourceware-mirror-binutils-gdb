@@ -376,6 +376,7 @@ typedef struct ctf_serialize
   unsigned char *cs_buf;	/* CTF buffer in mid-serialization.  */
   size_t cs_buf_size;		/* Length of that buffer.  */
   int cs_is_btf;
+  ctf_btf_mode_t cs_btf_mode;	/* Global mode when last initialized.  */
 } ctf_serialize_t;
 
 /* The ctf_dict is the structure used to represent a CTF dictionary to library
@@ -805,6 +806,8 @@ extern void ctf_str_purge_refs (ctf_dict_t *fp);
 extern void ctf_str_rollback (ctf_dict_t *, ctf_snapshot_id_t);
 extern const ctf_strs_writable_t *ctf_str_write_strtab (ctf_dict_t *);
 
+extern int ctf_serialize_output_format (ctf_dict_t *fp, int force_ctf);
+extern int ctf_serialize_output_dict_is_btf (ctf_dict_t *fp);
 extern int ctf_preserialize (ctf_dict_t *fp, int force_ctf);
 extern void ctf_depreserialize (ctf_dict_t *fp);
 

@@ -1427,7 +1427,7 @@ ctf_link_add_strtab (ctf_dict_t *fp, ctf_link_strtab_string_f *add_string,
 
   /* If emitting BTF, there is no external string table.   */
 
-  if (fp->ctf_serialize.cs_is_btf)
+  if (ctf_serialize_output_dict_is_btf (fp))
     return 0;
 
   while ((str = add_string (&offset, arg)) != NULL)
