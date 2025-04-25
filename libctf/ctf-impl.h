@@ -377,6 +377,7 @@ typedef struct ctf_serialize
   size_t cs_buf_size;		/* Length of that buffer.  */
   int cs_is_btf;
   ctf_btf_mode_t cs_btf_mode;	/* Global mode when last initialized.  */
+  uint32_t cs_old_flags;
 } ctf_serialize_t;
 
 /* The ctf_dict is the structure used to represent a CTF dictionary to library
