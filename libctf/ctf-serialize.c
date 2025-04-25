@@ -1294,8 +1294,69 @@ ctf_emit_type_sect (ctf_dict_t *fp, unsigned char **tptr,
 
 /* Overall serialization.  */
 
+/* Determine the output format.  Returns 0 on successful determination or -1 and
+   an error if an attempt is being made to write out a CTF dict but the library
+   state prohibits it, or a per-dict prohibition is preventing the writeout of a
+   type kind that this dict contains.  */
 
 int
+ctf_serialize_output_format (ctf_dict_t *fp, int force_ctf)
+{
+  int ctf_needed = 0;
+
+
+  if (fp->ctf_flags & LCTF_NO_STR)
+    return (ctf_set_errno (fp, ECTF_NOPARENT));
+
+  /* If CTF is forced for some other reason, recheck everything except the
+     expensive type-section scans, which are only shortcut by force_ctf, not
+     otherwise changed.  */
+
+  if (fp->ctf_serialize.cs_initialized && !force_ctf)
+    return 0;
+
+  /* Complain if we're asked to emit BTF only, but we have types that call for
+     CTFv4 extensions, or we are forced to emit CTF because the caller requested
+     compression.  */
+
+  if (force_ctf)
+    ctf_needed = 1;
+
+  if (ctf_needed && _libctf_btf_mode == LIBCTF_BTM_BTF)
+    goto err_not_btf;
+
+  /* Relatively expensive, so done after cheap checks.  If we are called more
+     than once, and subsequent calls have force_ctf (above), we can be sure that
+     ctf_type_sect_is_btf will return 0 (CTF is needed) on those subsequent
+     calls: so we can skip the entire expensive operation then too.  */
+
+  if (!fp->ctf_serialize.cs_initialized)
+    if (!ctf_type_sect_is_btf (fp, force_ctf))
+      ctf_needed = 1;
+
+  if (ctf_needed && _libctf_btf_mode == LIBCTF_BTM_BTF)
+    goto err_not_btf;
+
+  if (_libctf_btf_mode == LIBCTF_BTM_ALWAYS
+      || (_libctf_btf_mode == LIBCTF_BTM_POSSIBLE && ctf_needed))
+    fp->ctf_serialize.cs_is_btf = 0;
+  else
+    fp->ctf_serialize.cs_is_btf = 1;
+
+  fp->ctf_serialize.cs_initialized = 1;
+
+  return 0;
+
+ err_not_btf:
+  ctf_set_errno (fp, ECTF_NOTBTF);
+  /* TODO: a little more info?  */
+  if (force_ctf)
+    ctf_err_warn (fp, 0, 0, _("Cannot write out dict as BTF: compression requested"));
+  else
+    ctf_err_warn (fp, 0, 0, _("Cannot write out dict as BTF: would lose information"));
+  return -1;
+}
+
 /* Do all aspects of serialization up to strtab writeout, including final type
    ID assignment.  The resulting dict will have the LCTF_PRESERIALIZED flag on
    and must not be modified in any way before serialization.  (This is only
