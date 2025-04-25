@@ -376,6 +376,7 @@ typedef struct ctf_serialize
   unsigned char *cs_buf;	/* CTF buffer in mid-serialization.  */
   size_t cs_buf_size;		/* Length of that buffer.  */
   int cs_is_btf;
+  uint32_t cs_old_flags;
 } ctf_serialize_t;
 
 /* The ctf_dict is the structure used to represent a CTF dictionary to library
