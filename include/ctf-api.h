@@ -619,6 +619,9 @@ extern ctf_id_t ctf_lookup_by_kind (ctf_dict_t *, int kind, const char *);
 
 /* Strip qualifiers and typedefs off a type, returning the base type.
 
+   May error with ECTF_NONREPRESENTABLE if type 0 is seen (rare, but can happen:
+   not only types GCC cannot encode, but also e.g. const void variables).
+
    Most of the time you don't need to call this: the type-querying functions
    will do it for you (as noted below).  */
 
