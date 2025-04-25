@@ -99,7 +99,7 @@ ctf_dump_format_type (ctf_dict_t *fp, ctf_id_t id, int flag)
     {
       ctf_encoding_t ep;
       ctf_arinfo_t ar;
-      int kind, unsliced_kind;
+      int kind;
       ssize_t size, align;
       const char *nonroot_leader = "";
       const char *nonroot_trailer = "";
@@ -140,13 +140,10 @@ ctf_dump_format_type (ctf_dict_t *fp, ctf_id_t id, int flag)
       free (buf);
       buf = NULL;
 
-      unsliced_kind = ctf_type_kind_unsliced (fp, id);
       kind = ctf_type_kind (fp, id);
 
-      /* Report encodings of everything with an encoding other than enums:
-	 base-type enums cannot have a nonzero cte_offset or cte_bits value.
-	 (Slices of them can, but they are of kind CTF_K_SLICE.)  */
-      if (unsliced_kind != CTF_K_ENUM && ctf_type_encoding (fp, id, &ep) == 0)
+      /* Report encodings of everything with an encoding.  */
+      if (ctf_type_encoding (fp, id, &ep) == 0)
 	{
 	  if ((ssize_t) ep.cte_bits != ctf_type_size (fp, id) * CHAR_BIT
 	      && flag & CTF_FT_BITFIELD)
@@ -161,13 +158,8 @@ ctf_dump_format_type (ctf_dict_t *fp, ctf_id_t id, int flag)
 	  if ((ssize_t) ep.cte_bits != ctf_type_size (fp, id) * CHAR_BIT
 	      || ep.cte_offset != 0)
 	    {
-	      const char *slice = "";
-
-	      if (unsliced_kind == CTF_K_SLICE)
-		slice = "slice ";
-
-	      if (asprintf (&bit, " [%s0x%x:0x%x]",
-			    slice, ep.cte_offset, ep.cte_bits) < 0)
+	      if (asprintf (&bit, " [0x%x:0x%x]",
+			    ep.cte_offset, ep.cte_bits) < 0)
 		goto oom;
 	      str = str_append (str, bit);
 	      free (bit);

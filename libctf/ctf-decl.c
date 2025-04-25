@@ -133,12 +133,6 @@ ctf_decl_push (ctf_decl_t *cd, ctf_dict_t *fp, ctf_id_t type)
       prec = CTF_PREC_FUNCTION;
       break;
 
-    case CTF_K_SLICE:
-      /* Slices themselves have no print representation and should not appear in
-	 the decl stack.  */
-      ctf_decl_push (cd, fp, ctf_type_reference (fp, type));
-      return;
-
     case CTF_K_VOLATILE:
     case CTF_K_CONST:
     case CTF_K_RESTRICT:

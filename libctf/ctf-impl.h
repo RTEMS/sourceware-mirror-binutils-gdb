@@ -822,10 +822,7 @@ extern ssize_t ctf_pread (int fd, void *buf, ssize_t count, off_t offset);
 extern char *ctf_str_append (char *, const char *);
 extern char *ctf_str_append_noerr (char *, const char *);
 
-extern ctf_id_t ctf_type_resolve_unsliced (ctf_dict_t *, ctf_id_t);
 extern ctf_id_t ctf_type_resolve_nonrepresentable (ctf_dict_t *, ctf_id_t, int allow_zero);
-extern int ctf_type_kind_unsliced (ctf_dict_t *, ctf_id_t);
-extern int ctf_type_kind_unsliced_tp (ctf_dict_t *, const ctf_type_t *);
 extern int ctf_type_kind_tp (ctf_dict_t *, const ctf_type_t *);
 extern int ctf_type_kind_forwarded_tp (ctf_dict_t *, const ctf_type_t *);
 extern ssize_t ctf_type_align_natural (ctf_dict_t *fp, ctf_id_t prev_type,

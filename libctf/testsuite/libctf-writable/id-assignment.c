@@ -12,10 +12,9 @@ test (int empty_parent, int unserialized_parent)
   ctf_dict_t *parent;
   ctf_dict_t *child;
   ctf_id_t pint = 0, pprovint = 0, pptr = 0, parray = 0, pfunction = 0;
-  ctf_id_t ctype, ctype2, cslice, ctypedef, cfunction, cself;
+  ctf_id_t ctype, ctype2, ctypedef, cfunction, cself;
   ctf_id_t foo;
   ctf_encoding_t encoding = { CTF_INT_SIGNED, 0, (sizeof (char) * 8) - 1 };
-  ctf_encoding_t slice_encoding = { CTF_INT_SIGNED, 1, (sizeof (char) * 8) - 1 };
   ctf_encoding_t out;
   unsigned char *pbuf = NULL, *cbuf = NULL, *pbuf2 = NULL, *cbuf2 = NULL;
   size_t psize, csize;
@@ -142,12 +141,6 @@ test (int empty_parent, int unserialized_parent)
 
       if (ctf_add_typedef (child, CTF_ADD_ROOT, "td", parray) == CTF_ERR)
 	goto child_add_err;
-
-      if ((cslice = ctf_add_slice (child, CTF_ADD_ROOT, pprovint, &slice_encoding)) == CTF_ERR)
-	goto child_add_err;
-	   
-      if (ctf_add_member (child, ctype2, "c", cslice) < 0)
-	goto child_add_memb_err;
 
       if (ctf_add_member (child, ctype2, "pfunc", pfunction) < 0)
 	goto child_add_memb_err;
@@ -361,24 +354,6 @@ test (int empty_parent, int unserialized_parent)
       if ((ctf_type_kind (child, foo)) != CTF_K_INTEGER)
 	{
 	  fprintf (stderr, "parent member pointer final lookup yielded kind %x, not %x\n", ctf_type_kind (child, foo), CTF_K_INTEGER);
-	  exit (1);
-	}
-
-      if (ctf_member_info (child, ctype2, "c", &memb) < 0)
-	goto memb_err;
-
-      if (ctf_type_encoding (child, memb.ctm_type, &out) < 0)
-	goto encoding_err;
-
-      if (memcmp (&out, &slice_encoding, sizeof (out)) != 0)
-	{
-	  fprintf (stderr, "slice encoding differs\n");
-	  exit (1);
-	}
-
-      if (ctf_type_kind (child, memb.ctm_type) != CTF_K_INTEGER)
-	{
-	  fprintf (stderr, "parent member slice final lookup yielded kind %x, not %x\n", ctf_type_kind (child, memb.ctm_type), CTF_K_INTEGER);
 	  exit (1);
 	}
 

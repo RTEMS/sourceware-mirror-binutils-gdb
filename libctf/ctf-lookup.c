@@ -245,12 +245,12 @@ ctf_lookup_by_name_internal (ctf_dict_t *fp, ctf_dict_t *child,
 
 	      if (child)
 		{
-		  ntype = ctf_type_resolve_unsliced (child, type);
+		  ntype = ctf_type_resolve (child, type);
 		  err = ctf_errno (child);
 		}
 	      else
 		{
-		  ntype = ctf_type_resolve_unsliced (fp, type);
+		  ntype = ctf_type_resolve (fp, type);
 		  err = ctf_errno (fp);
 		}
 
@@ -593,7 +593,7 @@ ctf_lookup_enumerator_next (ctf_dict_t *fp, const char *name,
 	  do
 	    i->i.ctn_type = ctf_type_next (i->cu.ctn_fp, &i->ctn_next, NULL, 1);
 	  while (i->i.ctn_type != CTF_ERR
-		 && ((kind = ctf_type_kind_unsliced (i->cu.ctn_fp, i->i.ctn_type))
+		 && ((kind = ctf_type_kind (i->cu.ctn_fp, i->i.ctn_type))
 		     != CTF_K_ENUM && kind != CTF_K_ENUM64));
 
 	  if (i->i.ctn_type == CTF_ERR)
