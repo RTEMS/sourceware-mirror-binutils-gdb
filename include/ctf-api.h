@@ -241,7 +241,6 @@ typedef struct ctf_snapshot_id
   _CTF_ITEM (ECTF_COMPRESS, "Failed to compress CTF data.") \
   _CTF_ITEM (ECTF_ARCREATE, "Error creating CTF archive.") \
   _CTF_ITEM (ECTF_ARNNAME, "Name not found in CTF archive.") \
-  _CTF_ITEM (ECTF_SLICEOVERFLOW, "Overflow of type bitness or offset in slice.") \
   _CTF_ITEM (ECTF_DUMPSECTUNKNOWN, "Unknown section number in dump.") \
   _CTF_ITEM (ECTF_DUMPSECTCHANGED, "Section changed in middle of dump.") \
   _CTF_ITEM (ECTF_NOTYET, "Feature not yet implemented.") \
@@ -619,12 +618,6 @@ extern ctf_id_t ctf_lookup_by_kind (ctf_dict_t *, int kind, const char *);
 
 /* Strip qualifiers and typedefs off a type, returning the base type.
 
-   Stripping also stops when we hit slices (see ctf_add_slice below), so it is
-   possible (given a chain looking like const -> slice -> typedef -> int) to
-   still have a typedef after you're done with this, but in that case it is a
-   typedef of a type with a *different width* (because this slice has not been
-   applied to it).
-
    Most of the time you don't need to call this: the type-querying functions
    will do it for you (as noted below).  */
 
@@ -664,19 +657,17 @@ extern char *ctf_type_name (ctf_dict_t *, ctf_id_t, char *, size_t);
 extern ssize_t ctf_type_size (ctf_dict_t *, ctf_id_t);
 extern ssize_t ctf_type_align (ctf_dict_t *, ctf_id_t);
 
-/* Return the kind of a type (CTF_K_* constant).  Slices are considered to be
-   the kind they are a slice of.  Forwards to incomplete structs, etc, return
-   CTF_K_FORWARD (but deduplication resolves most forwards to their concrete
-   types).
+/* Return the kind of a type (CTF_K_* constant).  Forwards to incomplete
+   structs, etc, return CTF_K_FORWARD (but deduplication resolves most forwards
+   to their concrete types).
 
    CTFv4 note: forwards to enums also return CTF_K_FORWARD, even though they
    are encoded differently.  */
 
 extern int ctf_type_kind (ctf_dict_t *, ctf_id_t);
 
-/* Return the kind of a type (CTF_K_* constant).  Slices are considered to be
-   the kind they are a slice of; forwards are considered to be the kind they are
-   a forward of.  */
+/* Return the kind of a type (CTF_K_* constant).  Forwards are considered to be
+   the kind they are a forward of.  */
 
 extern int ctf_type_kind_forwarded (ctf_dict_t *, ctf_id_t);
 
@@ -687,12 +678,8 @@ extern int ctf_type_kind_forwarded (ctf_dict_t *, ctf_id_t);
 
 extern int ctf_type_conflicting (ctf_dict_t *, ctf_id_t, const char **cuname);
 
-/* Return the type a pointer, typedef, cvr-qual, or slice refers to, or return
-   an ECTF_NOTREF error otherwise.  ctf_type_kind pretends that slices are
-   actually the type they are a slice of: this is usually want you want, but if
-   you want to find out if a type was actually a slice of some (usually-wider)
-   base type, you can call ctf_type_reference on it: a non-error return means
-   it was a slice.  */
+/* Return the type a pointer, typedef or cvr-qual refers to, or return
+   an ECTF_NOTREF error otherwise.  */
 
 extern ctf_id_t ctf_type_reference (ctf_dict_t *, ctf_id_t);
 
@@ -917,9 +904,8 @@ extern ctf_id_t ctf_add_const (ctf_dict_t *, uint32_t, ctf_id_t);
 
 /* enums are created signed by default.  If you want an unsigned enum,
    use ctf_add_enum_encoded() with an encoding of 0 (CTF_INT_SIGNED and
-   everything else off).  This will not create a slice, unlike all other
-   uses of ctf_add_enum_encoded(), and the result is still representable
-   as BTF.  */
+   everything else off).  Calling ctf_add_enum_encoded() with bitfield values
+   currently returns an error: this restriction will be lifted shortly.  */
 
 extern ctf_id_t ctf_add_enum64_encoded (ctf_dict_t *, uint32_t, const char *,
 					const ctf_encoding_t *);
@@ -945,12 +931,6 @@ extern ctf_id_t ctf_add_function (ctf_dict_t *, uint32_t,
 extern ctf_id_t ctf_add_function_linkage (ctf_dict_t *, uint32_t,
 					  ctf_id_t, const char *, int linkage);
 
-/* Add a "slice", which wraps some integral type and changes its encoding
-   (useful for bitfields, etc).  In most respects slices are treated the same
-   kind as the type they wrap: only ctf_type_reference can see the difference,
-   returning the wrapped type.  */
-
-extern ctf_id_t ctf_add_slice (ctf_dict_t *, uint32_t, ctf_id_t, const ctf_encoding_t *);
 extern ctf_id_t ctf_add_pointer (ctf_dict_t *, uint32_t, ctf_id_t);
 extern ctf_id_t ctf_add_type (ctf_dict_t *, ctf_dict_t *, ctf_id_t);
 extern ctf_id_t ctf_add_typedef (ctf_dict_t *, uint32_t, const char *,
@@ -993,11 +973,11 @@ extern int ctf_add_enumerator (ctf_dict_t *, ctf_id_t, const char *, int64_t);
 
 /* Add a member to a struct or union, either at the next available offset (with
    suitable padding for the alignment) or at a specific offset, and possibly
-   with a specific encoding (creating a slice for you).  Offsets need not be
-   unique, and need not be added in ascending order.  ctf_add_member_bitfield
-   with a non-negative bit_width will fail unless the struct was created with
-   CTF_ADD_STRUCT_BITFIELDS.  (A negative bit-width means "not a bitfield", as
-   with ctf_member_info et al.) */
+   with a specific encoding (currently broken due to the removal of slices).
+   Offsets need not be unique, and need not be added in ascending order.
+   ctf_add_member_bitfield with a non-negative bit_width will fail unless the
+   struct was created with CTF_ADD_STRUCT_BITFIELDS.  (A negative bit-width
+   means "not a bitfield", as with ctf_member_info et al.) */
 
 extern int ctf_add_member (ctf_dict_t *, ctf_id_t, const char *, ctf_id_t);
 extern int ctf_add_member_offset (ctf_dict_t *, ctf_id_t, const char *,

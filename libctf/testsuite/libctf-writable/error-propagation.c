@@ -56,7 +56,6 @@ int main (void)
   ctf_id_t void_id;
   ctf_id_t wrong_id;
   ctf_id_t base;
-  ctf_id_t slice;
   ctf_id_t function;
   ctf_id_t ptr;
   ctf_encoding_t long_encoding = { CTF_INT_SIGNED, 0, sizeof (long) };
@@ -138,8 +137,6 @@ int main (void)
   foo.cte_format = 0;
   foo.cte_bits = 4;
   foo.cte_offset = 4;
-  if ((slice = ctf_add_slice (child, CTF_ADD_ROOT, base, &foo)) == CTF_ERR)
-    goto parent_err;
 
   /* Same name as a type: no change in strtab.strlen.  */
   if (ctf_add_variable (parent, "base", base) < 0)
@@ -168,20 +165,6 @@ int main (void)
   memcpy (parent, wrong, sizeof (ctf_dict_t));
   memcpy (wrong, &tmp, sizeof (ctf_dict_t));
 
-  /* This is testing ctf_type_resolve_unsliced(), which is called by the enum
-     functions (which are not themselves buggy).  This type isn't an enum, but
-     that's OK: we're after an error, after all.  */
-
-  desc = "child slice resolution";
-  if ((ctf_enum_value (child, slice, "foo", NULL)) != CTF_ERR)
-    no_prop_err ();
-  check_prop_err (child, parent, ECTF_NONREPRESENTABLE);
-
-  desc = "child slice encoding lookup";
-  if ((ctf_type_encoding (child, slice, &foo)) != CTF_ERR)
-    no_prop_err ();
-  check_prop_err (child, parent, ECTF_NONREPRESENTABLE);
-
   desc = "func info lookup of nonrepresentable function";
   if ((ctf_func_type_info (child, base, &fi)) != CTF_ERR)
     no_prop_err ();
@@ -189,11 +172,6 @@ int main (void)
 
   desc = "func args lookup of nonrepresentable function";
   if ((ctf_func_type_args (child, base, 0, &bar)) != CTF_ERR)
-    no_prop_err ();
-  check_prop_err (child, parent, ECTF_NONREPRESENTABLE);
-
-  desc = "child slice addition";
-  if ((slice = ctf_add_slice (child, CTF_ADD_ROOT, base, &foo)) != CTF_ERR)
     no_prop_err ();
   check_prop_err (child, parent, ECTF_NONREPRESENTABLE);
 

@@ -443,7 +443,7 @@ ctf_enum_next (ctf_dict_t *fp, ctf_id_t type, ctf_next_t **it,
       const ctf_type_t *tp;
       unsigned char *en;
 
-      if ((type = ctf_type_resolve_unsliced (fp, type)) == CTF_ERR)
+      if ((type = ctf_type_resolve (fp, type)) == CTF_ERR)
 	return NULL;			/* errno is set for us.  */
 
       kind = ctf_type_kind (fp, type);
@@ -854,7 +854,7 @@ ctf_datasec_var_next (ctf_dict_t *fp, ctf_id_t datasec, ctf_next_t **it,
       unsigned char *vlen;
       ctf_dict_t *ofp = fp;
 
-      if ((datasec = ctf_type_resolve_unsliced (fp, datasec)) == CTF_ERR)
+      if ((datasec = ctf_type_resolve (fp, datasec)) == CTF_ERR)
 	return CTF_ERR;			/* errno is set for us.  */
 
       if (ctf_type_kind (fp, datasec) != CTF_K_DATASEC)
@@ -950,8 +950,6 @@ ctf_tag_next (ctf_dict_t *fp, const char *tag, ctf_next_t **it)
    against infinite loops, we implement simplified cycle detection and check
    each link against itself, the previous node, and the topmost node.
 
-   Does not drill down through slices to their contained type.
-
    Callers of this function must not presume that a type it returns must have a
    valid ctt_size: forwards do not, and must be separately handled.  */
 
@@ -1012,42 +1010,6 @@ ctf_type_resolve_nonrepresentable (ctf_dict_t *fp, ctf_id_t type, int allow_zero
     }
 
   return CTF_ERR;		/* errno is set for us.  */
-}
-
-/* Like ctf_type_resolve(), but traverse down through slices to their contained
-   type.  */
-
-ctf_id_t
-ctf_type_resolve_unsliced (ctf_dict_t *fp, ctf_id_t type)
-{
-  ctf_dict_t *ofp = fp;
-  const ctf_type_t *tp;
-  ctf_id_t resolved_type;
-
-  if ((type = ctf_type_resolve (fp, type)) == CTF_ERR)
-    return CTF_ERR;
-
-  if ((tp = ctf_lookup_by_id (&fp, type, NULL)) == NULL)
-    return CTF_ERR;		/* errno is set for us.  */
-  resolved_type = type;
-
-  do
-    {
-      type = resolved_type;
-
-      if ((LCTF_KIND (fp, tp)) == CTF_K_SLICE)
-	if ((type = ctf_type_reference (fp, type)) == CTF_ERR)
-	  return (ctf_set_typed_errno (ofp, ctf_errno (fp)));
-
-      if ((resolved_type = ctf_type_resolve (fp, type)) == CTF_ERR)
-	return CTF_ERR;
-
-      if ((tp = ctf_lookup_by_id (&fp, resolved_type, NULL)) == NULL)
-	return CTF_ERR;		/* errno is set for us.  */
-    }
-  while (LCTF_KIND (fp, tp) == CTF_K_SLICE);
-
-  return type;
 }
 
 /* Return the native dict of a given type: if called on a child and the
@@ -1442,7 +1404,7 @@ ctf_type_size (ctf_dict_t *fp, ctf_id_t type)
     case CTF_K_VAR:
       return ctf_type_size (ofp, suffix->ctt_type);
 
-    default: /* including enums of all kinds, slices, etc */
+    default: /* including enums of all kinds, etc */
       return (ctf_get_ctt_size (fp, tp, NULL, NULL));
     }
 }
@@ -1504,7 +1466,7 @@ ctf_type_align_natural (ctf_dict_t *fp, ctf_id_t prev_type,
 /* Resolve the type down to a base type node, and then return the alignment
    needed for the type storage in bytes.
 
-   XXX may need arch-dependent attention.  */
+   TODO may need arch-dependent attention.  */
 
 ssize_t
 ctf_type_align (ctf_dict_t *fp, ctf_id_t type)
@@ -1593,7 +1555,7 @@ ctf_type_align (ctf_dict_t *fp, ctf_id_t type)
       /* Forwards do not have a meaningful alignment.  */
       return (ctf_set_errno (ofp, ECTF_INCOMPLETE));
 
-    default:  /* including enums of all kinds, slices, etc */
+    default:  /* including enums of all kinds, etc */
       return (ctf_get_ctt_size (fp, tp, NULL, NULL));
     }
 }
@@ -1605,38 +1567,13 @@ ctf_type_align (ctf_dict_t *fp, ctf_id_t type)
    use and compatibility.  */
 
 int
-ctf_type_kind_unsliced_tp (ctf_dict_t *fp, const ctf_type_t *tp)
+ctf_type_kind_tp (ctf_dict_t *fp, const ctf_type_t *tp)
 {
   if (LCTF_KIND (fp, tp) == CTF_K_ENUM
       && LCTF_VLEN (fp, tp) == 0)
     return CTF_K_FORWARD;
 
   return (LCTF_KIND (fp, tp));
-}
-
-/* Return the kind (CTF_K_* constant) for the specified type pointer.
-   Slices are considered to be of the same kind as the type sliced.  */
-
-int
-ctf_type_kind_tp (ctf_dict_t *fp, const ctf_type_t *tp)
-{
-  int kind;
-
-  if ((kind = ctf_type_kind_unsliced_tp (fp, tp)) < 0)
-    return -1;			/* errno is set for us.  */
-
-  if (kind == CTF_K_SLICE)
-    {
-      const ctf_slice_t *sp;
-      ssize_t increment;
-
-      ctf_get_ctt_size (fp, tp, NULL, &increment);
-      sp = (const ctf_slice_t *) tp + increment;
-
-      kind = ctf_type_kind_unsliced (fp, sp->cts_type);
-    }
-
-  return kind;
 }
 
 /* Return the kind of this type pointer, except, for forwards, return the kind
@@ -1674,35 +1611,14 @@ ctf_type_kind_forwarded_tp (ctf_dict_t *fp, const ctf_type_t *tp)
    use and compatibility.  */
 
 int
-ctf_type_kind_unsliced (ctf_dict_t *fp, ctf_id_t type)
+ctf_type_kind (ctf_dict_t *fp, ctf_id_t type)
 {
   const ctf_type_t *tp;
 
   if ((tp = ctf_lookup_by_id (&fp, type, NULL)) == NULL)
     return -1;			/* errno is set for us.  */
 
-  return (ctf_type_kind_unsliced_tp (fp, tp));
-}
-
-/* Return the kind (CTF_K_* constant) for the specified type ID.
-   Slices are considered to be of the same kind as the type sliced.  */
-
-int
-ctf_type_kind (ctf_dict_t *fp, ctf_id_t type)
-{
-  int kind;
-
-  if ((kind = ctf_type_kind_unsliced (fp, type)) < 0)
-    return -1;
-
-  if (kind == CTF_K_SLICE)
-    {
-      if ((type = ctf_type_reference (fp, type)) == CTF_ERR)
-	return -1;		/* errno is set for us.  */
-      kind = ctf_type_kind_unsliced (fp, type);
-    }
-
-  return kind;
+  return (ctf_type_kind_tp (fp, tp));
 }
 
 /* Return the kind of this type, except, for forwards, return the kind of thing
@@ -1791,24 +1707,6 @@ ctf_type_reference (ctf_dict_t *fp, ctf_id_t type)
     case CTF_K_FUNC_LINKAGE:
     case CTF_K_VAR:
       return suffix->ctt_type;
-      /* Slices store their type in an unusual place.  */
-    case CTF_K_SLICE:
-      {
-	ctf_dtdef_t *dtd;
-	const ctf_slice_t *sp;
-
-	if ((dtd = ctf_dynamic_type (ofp, type)) == NULL)
-	  {
-	    ssize_t increment;
-
-	    (void) ctf_get_ctt_size (fp, tp, NULL, &increment);
-	    sp = (const ctf_slice_t *) ((uintptr_t) tp + increment);
-	  }
-	else
-	  sp = (const ctf_slice_t *) dtd->dtd_vlen;
-
-	return sp->cts_type;
-      }
     default:
       return (ctf_set_typed_errno (ofp, ECTF_NOTREF));
     }
@@ -2015,24 +1913,6 @@ ctf_type_encoding (ctf_dict_t *fp, ctf_id_t type, ctf_encoding_t *ep)
       ep->cte_offset = 0;
       ep->cte_bits = suffix->ctt_size * CHAR_BIT;
       break;
-    case CTF_K_SLICE:
-      {
-	const ctf_slice_t *slice;
-	ctf_encoding_t underlying_en;
-	ctf_id_t underlying;
-
-	slice = (ctf_slice_t *) vlen;
-	if ((underlying = ctf_type_resolve (ofp, slice->cts_type)) == CTF_ERR)
-	  return -1;
-
-	if (ctf_type_encoding (ofp, underlying, &underlying_en) < 0)
-	  return -1;				/* errno is set for us.  */
-
-	ep->cte_format = underlying_en.cte_format;
-	ep->cte_offset = slice->cts_offset;
-	ep->cte_bits = slice->cts_bits;
-	break;
-      }
     default:
       return (ctf_set_errno (ofp, ECTF_NOTINTFP));
     }
@@ -2384,7 +2264,7 @@ ctf_enum_name (ctf_dict_t *fp, ctf_id_t type, int64_t value)
       return NULL;
     }
 
-  if ((type = ctf_type_resolve_unsliced (fp, type)) == CTF_ERR)
+  if ((type = ctf_type_resolve (fp, type)) == CTF_ERR)
     return NULL;		/* errno is set for us.  */
 
   if ((tp = ctf_lookup_by_id (&fp, type, NULL)) == NULL)
@@ -2441,7 +2321,7 @@ ctf_enum_value (ctf_dict_t *fp, ctf_id_t type, const char *name, int64_t *valp)
   if (fp->ctf_flags & LCTF_NO_STR)
     return (ctf_set_errno (fp, ECTF_NOPARENT));
 
-  if ((type = ctf_type_resolve_unsliced (fp, type)) == CTF_ERR)
+  if ((type = ctf_type_resolve (fp, type)) == CTF_ERR)
     return -1;			/* errno is set for us.  */
 
   if ((tp = ctf_lookup_by_id (&fp, type, NULL)) == NULL)
@@ -2655,7 +2535,7 @@ ctf_type_linkage (ctf_dict_t *fp, ctf_id_t type)
   if ((tp = ctf_lookup_by_id (&fp, type, &suffix)) == NULL)
     return -1;			/* errno is set for us.  */
 
-  kind = ctf_type_kind_unsliced (fp, type);
+  kind = ctf_type_kind (fp, type);
   if (kind != CTF_K_FUNC_LINKAGE && kind != CTF_K_VAR)
     return ctf_set_errno (fp, ECTF_LINKKIND);
 

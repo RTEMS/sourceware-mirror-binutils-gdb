@@ -806,9 +806,6 @@ ctf_type_sect_size (ctf_dict_t *fp)
 	case CTF_K_ARRAY:
 	  type_size += sizeof (ctf_array_t);
 	  break;
-	case CTF_K_SLICE:
-	  type_size += sizeof (ctf_slice_t);
-	  break;
 	case CTF_K_FUNCTION:
 	  type_size += sizeof (uint32_t) * (vlen + (vlen & 1));
 	  break;
@@ -901,20 +898,6 @@ ctf_emit_type_sect (ctf_dict_t *fp, unsigned char **tptr)
 	case CTF_K_TYPEDEF:
 	  if (ctf_type_add_ref (fp, &copied->ctt_type) < 0)
 	    return -1;				/* errno is set for us.  */
-	  break;
-
-	case CTF_K_SLICE:
-	  {
-	    ctf_slice_t *slice = (ctf_slice_t *) t;
-
-	    memcpy (t, dtd->dtd_vlen, sizeof (struct ctf_slice));
-
-	    if (ctf_type_add_ref (fp, &slice->cts_type) < 0)
-	      return -1;			/* errno is set for us. */
-	  }
-
-	  t += sizeof (struct ctf_slice);
-
 	  break;
 
 	case CTF_K_ARRAY:

@@ -668,7 +668,6 @@ ctf_dedup_rhash_type (ctf_dict_t *fp, ctf_dict_t *input, ctf_dict_t **inputs,
     case CTF_K_VOLATILE:
     case CTF_K_CONST:
     case CTF_K_RESTRICT:
-    case CTF_K_SLICE:
       name = NULL;
     }
 
@@ -738,45 +737,6 @@ ctf_dedup_rhash_type (ctf_dict_t *fp, ctf_dict_t *input, ctf_dict_t **inputs,
       citer = hval;
 
       break;
-
-      /* The slices of two types hash identically only if the type they overlay
-	 also has the same encoding.  This is not ideal, but in practice will work
-	 well enough.  We work directly rather than using the CTF API because
-	 we do not want the slice's normal automatically-shine-through
-	 semantics to kick in here.  */
-    case CTF_K_SLICE:
-      {
-	const ctf_slice_t *slice;
-	const ctf_dtdef_t *dtd;
-	ssize_t size;
-	ssize_t increment;
-
-	child_type = ctf_type_reference (input, type);
-	ctf_get_ctt_size (input, tp, &size, &increment);
-	ctf_dedup_sha1_add (&hash, &size, sizeof (ssize_t), "size", depth);
-
-	if ((hval = ctf_dedup_hash_type (fp, input, inputs, input_num,
-					 child_type, flags, depth,
-					 populate_fun)) == NULL)
-	  {
-	    whaterr = N_("error doing slice-referenced type hashing");
-	    goto err;
-	  }
-	ctf_dedup_sha1_add (&hash, hval, strlen (hval) + 1, "sliced type",
-			    depth);
-	citer = hval;
-
-	if ((dtd = ctf_dynamic_type (input, type)) != NULL)
-	  slice = (ctf_slice_t *) dtd->dtd_vlen;
-	else
-	  slice = (ctf_slice_t *) ((uintptr_t) tp + increment);
-
-	ctf_dedup_sha1_add (&hash, &slice->cts_offset,
-			    sizeof (slice->cts_offset), "slice offset", depth);
-	ctf_dedup_sha1_add (&hash, &slice->cts_bits,
-			    sizeof (slice->cts_bits), "slice bits", depth);
-	break;
-      }
 
     case CTF_K_ARRAY:
       {
@@ -1012,9 +972,7 @@ ctf_dedup_rhash_type (ctf_dict_t *fp, ctf_dict_t *input, ctf_dict_t **inputs,
    struct/union hashing in recursive traversals below the TYPE.)
 
    We use the CTF API rather than direct access wherever possible, because types
-   that appear identical through the API should be considered identical, with
-   one exception: slices should only be considered identical to other slices,
-   not to the corresponding unsliced type.
+   that appear identical through the API should be considered identical.
 
    The POPULATE_FUN is a mandatory hook that populates other mappings with each
    type we see (excepting types that are recursively hashed as stubs).  The
@@ -1236,7 +1194,7 @@ ctf_dedup_populate_mappings (ctf_dict_t *fp, ctf_dict_t *input _libctf_unused_,
       int err;
       const void *one_id;
       ctf_next_t *i = NULL;
-      int orig_kind = ctf_type_kind_unsliced (input, type);
+      int orig_kind = ctf_type_kind (input, type);
       int orig_first_tu;
 
       orig_first_tu = CTF_DEDUP_GID_TO_INPUT
@@ -1248,7 +1206,7 @@ ctf_dedup_populate_mappings (ctf_dict_t *fp, ctf_dict_t *input _libctf_unused_,
 	{
 	  ctf_dict_t *foo = inputs[CTF_DEDUP_GID_TO_INPUT (one_id)];
 	  ctf_id_t bar = CTF_DEDUP_GID_TO_TYPE (one_id);
-	  if (ctf_type_kind_unsliced (foo, bar) != orig_kind)
+	  if (ctf_type_kind (foo, bar) != orig_kind)
 	    {
 	      ctf_err_warn (fp, 1, 0, "added wrong kind to output mapping "
 			    "for hash %s named %s: %p/%lx from %s is "
@@ -1257,10 +1215,10 @@ ctf_dedup_populate_mappings (ctf_dict_t *fp, ctf_dict_t *input _libctf_unused_,
 			    decorated_name ? decorated_name : "(unnamed)",
 			    (void *) foo, bar,
 			    ctf_link_input_name (foo),
-			    ctf_type_kind_unsliced (foo, bar),
+			    ctf_type_kind (foo, bar),
 			    (void *) input, type,
 			    ctf_link_input_name (input), orig_kind);
-	      if (!ctf_assert (fp, ctf_type_kind_unsliced (foo, bar)
+	      if (!ctf_assert (fp, ctf_type_kind (foo, bar)
 			       == orig_kind))
 		return -1;
 	    }
@@ -1302,7 +1260,7 @@ ctf_dedup_populate_mappings (ctf_dict_t *fp, ctf_dict_t *input _libctf_unused_,
       && ctf_dynset_insert (type_ids, id) < 0)
     return ctf_set_errno (fp, errno);
 
-  if (ctf_type_kind_unsliced (input, type) == CTF_K_ENUM)
+  if (ctf_type_kind (input, type) == CTF_K_ENUM)
     {
       ctf_next_t *i = NULL;
       const char *enumerator;
@@ -1471,8 +1429,8 @@ ctf_dedup_hash_kind (ctf_dict_t *fp, ctf_dict_t **inputs, const char *hash)
   if (!ctf_assert (fp, id))
     return -1;
 
-  return ctf_type_kind_unsliced (inputs[CTF_DEDUP_GID_TO_INPUT (id)],
-				 CTF_DEDUP_GID_TO_TYPE (id));
+  return ctf_type_kind (inputs[CTF_DEDUP_GID_TO_INPUT (id)],
+			CTF_DEDUP_GID_TO_TYPE (id));
 }
 
 /* Used to keep a count of types: i.e. distinct type hash values.  */
@@ -2144,7 +2102,7 @@ ctf_dedup_rwalk_one_output_mapping (ctf_dict_t *output,
 
   ctf_dprintf ("%lu: Starting walk over type %s, %i/%lx (%p), from %s, "
 	       "kind %i\n", depth, hval, input_num, type, (void *) fp,
-	       ctf_link_input_name (fp), ctf_type_kind_unsliced (fp, type));
+	       ctf_link_input_name (fp), ctf_type_kind (fp, type));
 
   /* Get the single call we do if this type has already been visited out of the
      way.  */
@@ -2195,7 +2153,7 @@ ctf_dedup_rwalk_one_output_mapping (ctf_dict_t *output,
     }									\
   while (0)
 
-  switch (ctf_type_kind_unsliced (fp, type))
+  switch (ctf_type_kind (fp, type))
     {
     case CTF_K_UNKNOWN:
     case CTF_K_FORWARD:
@@ -2210,7 +2168,6 @@ ctf_dedup_rwalk_one_output_mapping (ctf_dict_t *output,
     case CTF_K_CONST:
     case CTF_K_RESTRICT:
     case CTF_K_POINTER:
-    case CTF_K_SLICE:
       CTF_TYPE_WALK (ctf_type_reference (fp, type), err,
 		     N_("error during referenced type walk"));
       break;
@@ -2539,7 +2496,7 @@ ctf_dedup_maybe_synthesize_forward (ctf_dict_t *output, ctf_dict_t *target,
   if (!ctf_dynset_exists (od->cd_conflicting_types, hval, NULL)
       || target->ctf_flags & LCTF_CHILD
       || name[0] == '\0'
-      || (((kind = ctf_type_kind_unsliced (input, id)) != CTF_K_STRUCT
+      || (((kind = ctf_type_kind (input, id)) != CTF_K_STRUCT
 	   && kind != CTF_K_UNION && kind != CTF_K_FORWARD)))
     return 0;
 
@@ -2717,7 +2674,7 @@ ctf_dedup_emit_type (const char *hval, ctf_dict_t *output, ctf_dict_t **inputs,
 		     void *arg)
 {
   ctf_dedup_t *d = &output->ctf_dedup;
-  int kind = ctf_type_kind_unsliced (input, type);
+  int kind = ctf_type_kind (input, type);
   const char *name;
   ctf_dict_t *target = output;
   ctf_dict_t *real_input;
@@ -2984,22 +2941,6 @@ ctf_dedup_emit_type (const char *hval, ctf_dict_t *output, ctf_dict_t **inputs,
 
       if ((new_type = ctf_add_reftype (target, isroot, ref, kind)) == CTF_ERR)
 	goto err_target;			/* errno is set for us.  */
-      break;
-
-    case CTF_K_SLICE:
-      errtype = _("slice");
-
-      if (ctf_type_encoding (input, type, &ep) < 0)
-	goto err_input;				/* errno is set for us.  */
-
-      ref = ctf_type_reference (input, type);
-      if ((ref = ctf_dedup_id_to_target (output, target, inputs, ninputs,
-					 parents, input, input_num,
-					 ref)) == CTF_ERR)
-	goto err_input;
-
-      if ((new_type = ctf_add_slice (target, isroot, ref, &ep)) == CTF_ERR)
-	goto err_target;
       break;
 
     case CTF_K_ARRAY:

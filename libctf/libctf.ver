@@ -143,7 +143,6 @@ LIBCTF_2.0 {
 	ctf_add_type_tag;
 	ctf_add_restrict;
 	ctf_add_section_variable;
-	ctf_add_slice;
 	ctf_add_struct;
 	ctf_add_union;
 	ctf_add_struct_sized;

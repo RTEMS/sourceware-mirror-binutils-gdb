@@ -851,60 +851,6 @@ ctf_add_reftype (ctf_dict_t *fp, uint32_t flag, ctf_id_t ref, uint32_t kind)
 }
 
 ctf_id_t
-ctf_add_slice (ctf_dict_t *fp, uint32_t flag, ctf_id_t ref,
-	       const ctf_encoding_t *ep)
-{
-  ctf_dtdef_t *dtd;
-  ctf_slice_t slice;
-  ctf_id_t resolved_ref = ref;
-  ctf_id_t type;
-  int kind;
-  const ctf_type_t *tp;
-  ctf_dict_t *tmp = fp;
-
-  if (ep == NULL)
-    return (ctf_set_typed_errno (fp, EINVAL));
-
-  if ((ep->cte_bits > 255) || (ep->cte_offset > 255))
-    return (ctf_set_typed_errno (fp, ECTF_SLICEOVERFLOW));
-
-  if (ref == CTF_ERR || ref > CTF_MAX_TYPE)
-    return (ctf_set_typed_errno (fp, EINVAL));
-
-  if (ref != 0 && ((tp = ctf_lookup_by_id (&tmp, ref)) == NULL))
-    return CTF_ERR;		/* errno is set for us.  */
-
-  /* Make sure we ultimately point to an integral type.  We also allow slices to
-     point to the unimplemented type, for now, because the compiler can emit
-     such slices, though they're not very much use.  */
-
-  if ((resolved_ref = ctf_type_resolve_unsliced (fp, ref)) == CTF_ERR)
-    return CTF_ERR;		/* errno is set for us.  */
-  kind = ctf_type_kind_unsliced (fp, resolved_ref);
-
-  if ((kind != CTF_K_INTEGER) && (kind != CTF_K_FLOAT) &&
-      (kind != CTF_K_ENUM) && (kind != CTF_K_BTF_FLOAT)
-      && (ref != 0))
-    return (ctf_set_typed_errno (fp, ECTF_NOTINTFP));
-
-  if ((type = ctf_add_generic (fp, flag, NULL, CTF_K_SLICE,
-			       sizeof (ctf_slice_t), &dtd)) == CTF_ERR)
-    return CTF_ERR;		/* errno is set for us.  */
-
-  memset (&slice, 0, sizeof (ctf_slice_t));
-
-  dtd->dtd_data.ctt_info = CTF_TYPE_INFO (CTF_K_SLICE, flag, 0);
-  dtd->dtd_data.ctt_size = clp2 (P2ROUNDUP (ep->cte_bits, CHAR_BIT)
-				 / CHAR_BIT);
-  slice.cts_type = (uint32_t) ref;
-  slice.cts_bits = ep->cte_bits;
-  slice.cts_offset = ep->cte_offset;
-  memcpy (dtd->dtd_vlen, &slice, sizeof (ctf_slice_t));
-
-  return type;
-}
-
-ctf_id_t
 ctf_add_integer (ctf_dict_t *fp, uint32_t flag,
 		 const char *name, const ctf_encoding_t *ep)
 {
@@ -1391,8 +1337,7 @@ ctf_add_enum_encoded_internal (ctf_dict_t *fp, uint32_t flag, const char *name,
 
   /* First, create the enum if need be, using most of the same machinery as
      ctf_add_enum(), to ensure that we do not allow things past that are not
-     enums or forwards to them.  (This includes other slices: you cannot slice a
-     slice, which would be a useless thing to do anyway.)  */
+     enums or forwards to them.  */
 
   if (name != NULL && flag == CTF_ADD_ROOT)
     type = ctf_lookup_by_rawname (fp, CTF_K_ENUM, name);
@@ -1400,25 +1345,24 @@ ctf_add_enum_encoded_internal (ctf_dict_t *fp, uint32_t flag, const char *name,
   if (type != 0)
     {
       if ((ctf_type_kind (fp, type) != CTF_K_FORWARD) &&
-	  (ctf_type_kind_unsliced (fp, type) != CTF_K_ENUM) &&
-	  (ctf_type_kind_unsliced (fp, type) != CTF_K_ENUM64))
+	  (ctf_type_kind (fp, type) != CTF_K_ENUM) &&
+	  (ctf_type_kind (fp, type) != CTF_K_ENUM64))
 	return (ctf_set_typed_errno (fp, ECTF_NOTINTFP));
     }
   else if ((type = ctf_add_enum_internal (fp, flag, name, kind, is_signed))
 	   == CTF_ERR)
     return CTF_ERR;		/* errno is set for us.  */
 
-  /* If this is just changing the signedness of the enum, we don't need a
-     slice.  */
+  /* If this is just changing the signedness of the enum, things are easy.  */
 
   if ((ep->cte_format & ~CTF_INT_SIGNED) == 0
       && ep->cte_bits == 0
       && ep->cte_offset == 0)
     return type;
 
-  /* Now attach a suitable slice to it.  */
+  /* Other changes to the encoding of enums are not yet implemented.  */
 
-  return ctf_add_slice (fp, flag, type, ep);
+  return (ctf_set_typed_errno (fp, ECTF_NOTYET));
 }
 
 ctf_id_t
@@ -1568,7 +1512,7 @@ ctf_add_enumerator (ctf_dict_t *fp, ctf_id_t enid, const char *name,
   if (name == NULL)
     return (ctf_set_errno (fp, EINVAL));
 
-  if ((enid = ctf_type_resolve_unsliced (fp, enid)) == CTF_ERR)
+  if ((enid = ctf_type_resolve (fp, enid)) == CTF_ERR)
     return -1;					/* errno is set for us.  */
 
   dtd = ctf_dtd_lookup (fp, enid);
@@ -1949,15 +1893,10 @@ ctf_add_member_encoded (ctf_dict_t *fp, ctf_id_t souid, const char *name,
   if ((kind != CTF_K_INTEGER) && (kind != CTF_K_FLOAT) && (kind != CTF_K_ENUM))
     return (ctf_set_errno (fp, ECTF_NOTINTFP));
 
-  /* Create a slice if need be.  */
-
   if (encoding.cte_offset != 0 ||
       encoding.cte_format != 0 ||
       (encoding.cte_bits != 0 && CTF_INFO_KFLAG (soudtd->dtd_data->ctt_info) == 0))
-    {
-      if ((type = ctf_add_slice (fp, CTF_ADD_NONROOT, otype, &encoding)) == CTF_ERR)
-	return -1;			/* errno is set for us.  */
-    }
+    return (ctf_set_errno (fp, ECTF_NOTYET));
   else
     type = otype;
 
@@ -2599,7 +2538,7 @@ ctf_add_type_internal (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type
 	 same kind and (if a struct or union) has the same number of members,
 	 hand it straight back.  */
 
-      if (ctf_type_kind_unsliced (tmp_fp, tmp) == (int) kind)
+      if (ctf_type_kind (tmp_fp, tmp) == (int) kind)
 	{
 	  if (kind == CTF_K_STRUCT || kind == CTF_K_UNION
 	      || kind == CTF_K_ENUM)
@@ -2625,7 +2564,7 @@ ctf_add_type_internal (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type
       && (tmp = ctf_lookup_by_rawname (dst_fp, forward_kind, name)) != 0)
     {
       dst_type = tmp;
-      dst_kind = ctf_type_kind_unsliced (dst_fp, dst_type);
+      dst_kind = ctf_type_kind (dst_fp, dst_type);
     }
 
   /* If an identically named dst_type exists, fail with ECTF_CONFLICT
@@ -2658,11 +2597,11 @@ ctf_add_type_internal (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type
 	}
     }
 
-  /* We take special action for an integer, float, or slice since it is
-     described not only by its name but also its encoding.  For integers,
-     bit-fields exploit this degeneracy.  */
+  /* We take special action for an integer or float since it is described not
+     only by its name but also its encoding.  For integers, bit-fields exploit
+     this degeneracy.  */
 
-  if (kind == CTF_K_INTEGER || kind == CTF_K_FLOAT || kind == CTF_K_SLICE)
+  if (kind == CTF_K_INTEGER || kind == CTF_K_FLOAT)
     {
       if (ctf_type_encoding (src_fp, src_type, &src_en) != 0)
 	return (ctf_set_typed_errno (dst_fp, ctf_errno (src_fp)));
@@ -2681,35 +2620,25 @@ ctf_add_type_internal (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type
 	    {
 	      /* The type that we found in the hash is also root-visible.  If
 		 the two types match then use the existing one; otherwise,
-		 declare a conflict.  Note: slices are not certain to match
-		 even if there is no conflict: we must check the contained type
-		 too.  */
+		 declare a conflict.  */
 
 	      if (memcmp (&src_en, &dst_en, sizeof (ctf_encoding_t)) == 0)
 		{
-		  if (kind != CTF_K_SLICE)
-		    {
-		      ctf_add_type_mapping (src_fp, src_type, dst_fp, dst_type);
-		      return dst_type;
-		    }
+		  ctf_add_type_mapping (src_fp, src_type, dst_fp, dst_type);
+		  return dst_type;
 		}
 	      else
-		  {
-		    return (ctf_set_typed_errno (dst_fp, ECTF_CONFLICT));
-		  }
+		return (ctf_set_typed_errno (dst_fp, ECTF_CONFLICT));
 	    }
 	  else
 	    {
 	      /* We found a non-root-visible type in the hash.  If its encoding
-		 is the same, we can reuse it, unless it is a slice.  */
+		 is the same, we can reuse.  */
 
 	      if (memcmp (&src_en, &dst_en, sizeof (ctf_encoding_t)) == 0)
 		{
-		  if (kind != CTF_K_SLICE)
-		    {
-		      ctf_add_type_mapping (src_fp, src_type, dst_fp, dst_type);
-		      return dst_type;
-		    }
+		  ctf_add_type_mapping (src_fp, src_type, dst_fp, dst_type);
+		  return dst_type;
 		}
 	    }
 	}
@@ -2747,19 +2676,6 @@ ctf_add_type_internal (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type
       /* If we found a match we will have either returned it or declared a
        conflict.  */
       dst_type = ctf_add_float (dst_fp, flag, name, &src_en);
-      break;
-
-    case CTF_K_SLICE:
-      /* We have checked for conflicting encodings: now try to add the
-	 contained type.  */
-      src_type = ctf_type_reference (src_fp, src_type);
-      src_type = ctf_add_type_internal (dst_fp, src_fp, src_type,
-					proc_tracking_fp);
-
-      if (src_type == CTF_ERR)
-	return CTF_ERR;				/* errno is set for us.  */
-
-      dst_type = ctf_add_slice (dst_fp, flag, src_type, &src_en);
       break;
 
     case CTF_K_POINTER:

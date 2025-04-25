@@ -541,7 +541,7 @@ union
 #define CTF_V3_K_VOLATILE 11	/* ctt_type is base type.  */
 #define CTF_V3_K_CONST   12	/* ctt_type is base type.  */
 #define CTF_V3_K_RESTRICT 13	/* ctt_type is base type.  */
-#define CTF_V3_K_SLICE   14	/* Variant data is a ctf_slice_t.  */
+#define CTF_V3_K_SLICE   14	/* Variant data is a ctf_slice_v3_t.  */
 
 #define CTF_V3_K_MAX	14	/* Maximum possible (V3) CTF_K_* value.  */
 
@@ -581,11 +581,10 @@ union
    space, */
 
 #define CTF_K_FLOAT   31	/* Variant data is a CTF_FP_* value.  */
-#define CTF_K_SLICE   30	/* Variant data is a ctf_slice_t.  */
-#define CTF_K_BIG     29	/* Prefix type.
+#define CTF_K_BIG     30	/* Prefix type.
 				   vlen is high 16 bits of type vlen;
 				   size is high 32 bits of type size.  */
-#define CTF_K_CONFLICTING 28	/* Prefix type.  Name is disambiguator for
+#define CTF_K_CONFLICTING 29	/* Prefix type.  Name is disambiguator for
 				   conflicting type (e.g. translation unit
 				   name).
 
@@ -599,9 +598,9 @@ union
 
 /* Values for ctt_type when kind is CTF_K_INTEGER.  The flags, offset in bits,
    and size in bits are encoded as a single word using the following macros.
-   (However, you can also encode the offset and bitness in a slice, or directly
-   in a struct: many clients, e.g. libbpf, do not allow nonzero bit offsets
-   or bits values in base types at all.)  */
+   (However, you can also encode the offset and bitness directly in a struct:
+   many clients, e.g. libbpf, do not allow nonzero bit offsets or bits values in
+   base types at all.)  */
 
 #define CTF_INT_ENCODING(data) (((data) & 0xff000000) >> 24)
 #define CTF_INT_OFFSET(data)   (((data) & 0x00ff0000) >> 16)
@@ -624,8 +623,7 @@ union
 
 /* Values for ctt_type when kind is CTF_K_FLOAT in CTFv3 and below.  The
    encoding, offset in bits, and size in bits are encoded as a single word using
-   the following macros.  (However, you can also encode the offset and bitness
-   in a slice.)  */
+   the following macros.  */
 
 #define CTF_FP_ENCODING(data)  (((data) & 0xff000000) >> 24)
 #define CTF_FP_OFFSET(data)    (((data) & 0x00ff0000) >> 16)
@@ -661,20 +659,20 @@ union
 #define CTF_V3_FP_MAX	12	/* Maximum possible CTF_FP_* value in v3 and
 				   below.  */
 
-/* A slice increases the offset and reduces the bitness of the referenced
+/* (CTFv3 only, not BTF.)
+
+   A slice increases the offset and reduces the bitness of the referenced
    ctt_type, which must be a type which has an encoding (int or enum).  We
    also store the referenced type in here, because it is easier to keep the
    ctt_size correct for the slice than to shuffle the size into here and keep
-   the ctt_type where it is for other types.
+   the ctt_type where it is for other types.  */
 
-   CTFv4 only, not BTF.  */
-
-typedef struct ctf_slice
+typedef struct ctf_slice_v3
 {
   uint32_t cts_type;
   unsigned short cts_offset;
   unsigned short cts_bits;
-} ctf_slice_t;
+} ctf_slice_v3_t;
 
 typedef struct ctf_array_v1
 {

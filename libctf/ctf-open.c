@@ -267,7 +267,7 @@ get_vbytes_old (ctf_dict_t *fp, unsigned short kind, size_t vlen)
     case CTF_V3_K_FLOAT:
       return (sizeof (uint32_t));
     case CTF_V3_K_SLICE:
-      return (sizeof (ctf_slice_t));
+      return (sizeof (ctf_slice_v3_t));
     case CTF_V3_K_ENUM:
       return (sizeof (ctf_enum_t) * vlen);
     case CTF_V3_K_FORWARD:
@@ -343,8 +343,6 @@ get_vbytes_v4 (ctf_dict_t *fp, const ctf_type_t *tp,
     case CTF_K_INTEGER:
     case CTF_K_FLOAT:
       return (sizeof (uint32_t));
-    case CTF_K_SLICE:
-      return (sizeof (ctf_slice_t));
     case CTF_K_ENUM:
       return (sizeof (ctf_enum_t) * vlen);
     case CTF_K_ENUM64:
@@ -950,7 +948,6 @@ init_static_types_names_internal (ctf_dict_t *fp, ctf_header_t *cth, int is_btf,
 	  /* These kinds have no name, so do not need interning into any
 	     hashtables.  */
 	case CTF_K_ARRAY:
-	case CTF_K_SLICE:
 	case CTF_K_VOLATILE:
 	case CTF_K_CONST:
 	case CTF_K_RESTRICT:
@@ -1459,20 +1456,6 @@ flip_types (ctf_dict_t *fp, void *start, size_t len, int to_foreign)
 	    swap_thing (a->cta_contents);
 	    swap_thing (a->cta_index);
 	    swap_thing (a->cta_nelems);
-
-	    break;
-	  }
-
-	case CTF_K_SLICE:
-	  {
-	    /* This has a single ctf_slice_t.  */
-
-	    ctf_slice_t *s = (ctf_slice_t *) t;
-
-	    assert (vbytes == sizeof (ctf_slice_t));
-	    swap_thing (s->cts_type);
-	    swap_thing (s->cts_offset);
-	    swap_thing (s->cts_bits);
 
 	    break;
 	  }
