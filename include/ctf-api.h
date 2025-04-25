@@ -933,6 +933,11 @@ extern char *ctf_dump (ctf_dict_t *, ctf_dump_state_t **state,
 		       ctf_sect_names_t sect, ctf_dump_decorate_f *,
 		       void *arg);
 
+/* Return the size in bytes of a given CTF section, 0 if none, or -1 on
+   error.  */
+
+extern ssize_t ctf_sect_size (ctf_dict_t *, ctf_sect_names_t sect);
+
 /* Error-warning reporting: an 'iterator' that returns errors and warnings from
    the error/warning list, in order of emission.  Errors and warnings are popped
    after return: the caller must free the returned error-text pointer.  */
