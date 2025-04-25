@@ -2358,6 +2358,17 @@ ctf_dict_close (ctf_dict_t *fp)
     return;
 
   fp->ctf_refcnt--;
+
+  /* DTD deletion must happen before the parent is deleted, since deleting the
+     parent erases all its types and strings and makes type and string lookups
+     impossible from then on.  */
+
+  for (dtd = ctf_list_next (&fp->ctf_dtdefs); dtd != NULL; dtd = ntd)
+    {
+      ntd = ctf_list_next (dtd);
+      ctf_dtd_delete (fp, dtd);
+    }
+
   if (fp->ctf_parent)
     {
       fp->ctf_parent->ctf_max_children--;
@@ -2368,13 +2379,7 @@ ctf_dict_close (ctf_dict_t *fp)
   free (fp->ctf_dyn_cu_name);
   free (fp->ctf_dyn_parent_name);
 
-  for (dtd = ctf_list_next (&fp->ctf_dtdefs); dtd != NULL; dtd = ntd)
-    {
-      ntd = ctf_list_next (dtd);
-      ctf_dtd_delete (fp, dtd);
-    }
   ctf_dynhash_destroy (fp->ctf_dthash);
-
   ctf_dynset_destroy (fp->ctf_conflicting_enums);
   ctf_dynhash_destroy (fp->ctf_structs);
   ctf_dynhash_destroy (fp->ctf_unions);
