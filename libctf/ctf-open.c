@@ -1070,7 +1070,7 @@ init_static_types_names_internal (ctf_dict_t *fp, ctf_header_t *cth, int is_btf,
 	      break;
 
 	    if (ctf_insert_type_decl_tag (fp, ctf_index_to_type (fp, id),
-					  name, kind) < 0)
+					  name) < 0)
 	      return ctf_errno (fp);
 
 	    break;
