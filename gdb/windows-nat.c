@@ -3376,6 +3376,15 @@ windows_nat_target::supports_non_stop ()
   return dbg_reply_later_available ();
 }
 
+/* Implementation of the target_ops::always_non_stop_p method.  */
+
+bool
+windows_nat_target::always_non_stop_p ()
+{
+  /* If we can do non-stop, prefer it.  */
+  return supports_non_stop ();
+}
+
 INIT_GDB_FILE (windows_nat)
 {
 #ifdef __CYGWIN__

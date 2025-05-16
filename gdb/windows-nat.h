@@ -256,6 +256,7 @@ struct windows_nat_target : public inf_child_target
   }
 
   bool supports_non_stop () override;
+  bool always_non_stop_p () override;
 
   void async (bool enable) override;
 
