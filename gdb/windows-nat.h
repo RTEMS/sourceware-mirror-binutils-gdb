@@ -73,6 +73,11 @@ enum windows_continue_flag
        call to continue the inferior -- we are either mourning it or
        detaching.  */
     WCONT_LAST_CALL = 2,
+
+    /* By default, windows_continue only calls ContinueDebugEvent in
+       all-stop mode.  This flag indicates that windows_continue
+       should call ContinueDebugEvent even in non-stop mode.  */
+    WCONT_CONTINUE_DEBUG_EVENT = 4,
   };
 
 DEF_ENUM_FLAGS_TYPE (windows_continue_flag, windows_continue_flags);
@@ -112,8 +117,8 @@ as_windows_thread_info (thread_info *thr)
 struct windows_per_inferior : public windows_nat::windows_process_info
 {
   windows_thread_info *find_thread (ptid_t ptid) override;
-  DWORD handle_output_debug_string (const DEBUG_EVENT &current_event,
-				    struct target_waitstatus *ourstatus) override;
+  bool handle_output_debug_string (const DEBUG_EVENT &current_event,
+				   struct target_waitstatus *ourstatus) override;
   void handle_load_dll (const char *dll_name, LPVOID base) override;
   void handle_unload_dll (const DEBUG_EVENT &current_event) override;
   bool handle_access_violation (const EXCEPTION_RECORD *rec) override;
@@ -211,6 +216,10 @@ struct windows_nat_target : public inf_child_target
   void pass_ctrlc () override;
   void stop (ptid_t ptid) override;
 
+  void thread_events (bool enable) override;
+
+  bool any_resumed_thread ();
+
   const char *pid_to_exec_file (int pid) override;
 
   ptid_t get_ada_task_ptid (long lwp, ULONGEST thread) override;
@@ -240,6 +249,8 @@ struct windows_nat_target : public inf_child_target
     return m_is_async;
   }
 
+  bool supports_non_stop () override;
+
   void async (bool enable) override;
 
   int async_wait_fd () override
@@ -259,8 +270,8 @@ protected:
   /* Prepare the thread context for continuing.  */
   virtual void thread_context_continue (windows_thread_info *th,
 					int killed) = 0;
-  /* Set the stepping bit in the thread context.  */
-  virtual void thread_context_step (windows_thread_info *th) = 0;
+  /* Set or clear the stepping bit in the thread context.  */
+  virtual void thread_context_step (windows_thread_info *th, bool enable) = 0;
 
   /* Fetches register number R from the given windows_thread_info,
      and supplies its value to the given regcache.
@@ -291,6 +302,15 @@ private:
 				   bool main_thread_p);
   void delete_thread (ptid_t ptid, DWORD exit_code, bool main_thread_p);
   DWORD fake_create_process (const DEBUG_EVENT &current_event);
+
+  void stop_one_thread (windows_thread_info *th);
+
+  DWORD continue_status_for_event_detaching
+    (const DEBUG_EVENT &event, size_t *reply_later_events_left = nullptr);
+
+  DWORD prepare_resume (windows_thread_info *wth,
+			thread_info *tp,
+			int step, gdb_signal sig);
 
   void continue_one_thread (windows_thread_info *th,
 			    windows_continue_flags cont_flags);
@@ -358,6 +378,9 @@ private:
      already returned an event, and we need to ContinueDebugEvent
      again to restart the inferior.  */
   bool m_continued = false;
+
+  /* Whether target_thread_events is in effect.  */
+  bool m_report_thread_events = false;
 };
 
 /* Check if Windows API call succeeds, and otherwise print error code
