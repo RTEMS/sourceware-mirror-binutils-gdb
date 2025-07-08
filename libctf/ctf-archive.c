@@ -234,8 +234,8 @@ ctf_arc_write_fd (int fd, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
 	  goto err_free;
 	}
 
-      modent->name_offset = htole64 (namesz);
-      modent->ctf_offset = htole64 (off - ctf_startoffs);
+      modent->name = htole64 (namesz);
+      modent->contents = htole64 (off - ctf_startoffs);
       namesz += strlen (names[i]) + 1;
       modent++;
     }
@@ -393,8 +393,7 @@ sort_modent_by_name (const void *one, const void *two, void *n)
   const struct ctf_archive_modent *b = two;
   char *nametbl = n;
 
-  return strcmp (&nametbl[le64toh (a->name_offset)],
-		 &nametbl[le64toh (b->name_offset)]);
+  return strcmp (&nametbl[le64toh (a->name)], &nametbl[le64toh (b->name)]);
 }
 
 /* bsearch_r() function to search for a given name in the sorted array of struct
@@ -406,7 +405,7 @@ search_modent_by_name (const void *key, const void *ent, void *arg)
   const struct ctf_archive_modent *v = ent;
   const char *search_nametbl = arg;
 
-  return strcmp (k, &search_nametbl[le64toh (v->name_offset)]);
+  return strcmp (k, &search_nametbl[le64toh (v->name)]);
 }
 
 /* Make a new struct ctf_archive_internal wrapper for a ctf_archive or a
@@ -660,7 +659,7 @@ ctf_dict_open_internal (const struct ctf_archive *arc,
     }
 
   return ctf_dict_open_by_offset (arc, symsect, strsect,
-				  le64toh (modent->ctf_offset),
+				  le64toh (modent->contents),
 				  little_endian, errp);
 }
 
@@ -852,7 +851,7 @@ ctf_arc_import_parent (const ctf_archive_t *arc, ctf_dict_t *fp, ctf_error_t *er
 
 	  nametbl = (((const char *) arc->ctfi_archive)
 		     + le64toh (arc->ctfi_archive->names));
-	  parent_name = &nametbl[le64toh (modent[0].name_offset)];
+	  parent_name = &nametbl[le64toh (modent[0].name)];
 	}
 
       parent = ctf_dict_open_cached ((ctf_archive_t *) arc, parent_name, &err);
@@ -1260,8 +1259,8 @@ ctf_archive_raw_next (const struct ctf_archive_internal *arc, ctf_next_t **it,
 				     + sizeof (struct ctf_archive));
   nametbl = (const char *) arc->ctfi_archive + le64toh (arc->ctfi_archive->names);
 
-  name_off = le64toh (modent[i->ctn_n].name_offset);
-  contents_off = le64toh (modent[i->ctn_n].ctf_offset);
+  name_off = le64toh (modent[i->ctn_n].name);
+  contents_off = le64toh (modent[i->ctn_n].contents);
 
   local_contents = arc->ctfi_archive + le64toh (arc->ctfi_archive->ctfs) + contents_off;
   if (contents)
@@ -1362,7 +1361,7 @@ ctf_archive_next (const ctf_archive_t *wrapper, ctf_next_t **it, const char **na
 					 + sizeof (struct ctf_archive));
       nametbl = (((const char *) arc) + le64toh (arc->names));
 
-      name_ = &nametbl[le64toh (modent[i->ctn_n].name_offset)];
+      name_ = &nametbl[le64toh (modent[i->ctn_n].name)];
       i->ctn_n++;
     }
   while (skip_parent && strcmp (name_, _CTF_SECTION) == 0);
