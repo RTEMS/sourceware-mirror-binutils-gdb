@@ -870,20 +870,22 @@ struct ctf_archive
 {
   /* Magic number.  (In loaded files, overwritten with the file size
      so ctf_arc_close() knows how much to munmap()).  */
-  uint64_t ctfa_magic;
+  uint64_t magic;
 
   /* CTF data model.  */
-  uint64_t ctfa_model;
+  uint64_t model;
 
   /* Number of CTF dicts in the archive.  */
-  uint64_t ctfa_ndicts;
+  uint64_t ndicts;
 
   /* Offset of the name table.  */
-  uint64_t ctfa_names;
+  uint64_t names;
 
   /* Offset of the CTF table.  Each element starts with a size (a little-
      endian uint64_t) then a ctf_dict_t of that size.  */
-  uint64_t ctfa_ctfs;
+  uint64_t ctfs;
+
+  /* Modent array is off the end.  */
 };
 
 /* An array of ctfa_ndicts of this structure lies at

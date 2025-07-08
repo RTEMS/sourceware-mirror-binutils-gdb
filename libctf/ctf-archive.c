@@ -174,20 +174,20 @@ ctf_arc_write_fd (int fd, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
 
   /* Fill in everything we can, which is everything other than the name
      table offset.  */
-  archdr->ctfa_magic = htole64 (CTFA_MAGIC);
-  archdr->ctfa_ndicts = htole64 (ctf_dict_cnt);
-  archdr->ctfa_ctfs = htole64 (ctf_startoffs);
+  archdr->magic = htole64 (CTFA_MAGIC);
+  archdr->ndicts = htole64 (ctf_dict_cnt);
+  archdr->ctfs = htole64 (ctf_startoffs);
 
   /* We could validate that all CTF files have the same data model, but
      since any reasonable construction process will be building things of
      only one bitness anyway, this is pretty pointless, so just use the
      model of the first CTF file for all of them.  (It *is* valid to
-     create an empty archive: the value of ctfa_model is irrelevant in
+     create an empty archive: the value of model is irrelevant in
      this case, but we must be sure not to dereference uninitialized
      memory.)  */
 
   if (ctf_dict_cnt > 0)
-    archdr->ctfa_model = ctf_dict_model (ctf_dicts[0]);
+    archdr->model = ctf_dict_model (ctf_dicts[0]);
 
   /* Now write out the CTFs: ctf_archive_modent array via the mapping,
      ctfs via write().  The names themselves have not been written yet: we
@@ -196,7 +196,7 @@ ctf_arc_write_fd (int fd, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
 
     The name table is not sorted.  */
 
-  for (i = 0, namesz = 0; i < le64toh (archdr->ctfa_ndicts); i++)
+  for (i = 0, namesz = 0; i < le64toh (archdr->ndicts); i++)
     namesz += strlen (names[i]) + 1;
 
   nametbl = malloc (namesz);
@@ -209,7 +209,7 @@ ctf_arc_write_fd (int fd, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
   for (i = 0, namesz = 0,
        modent = (ctf_archive_modent_t *) ((char *) archdr
 					  + sizeof (struct ctf_archive));
-       i < le64toh (archdr->ctfa_ndicts); i++)
+       i < le64toh (archdr->ndicts); i++)
     {
       off_t off;
 
@@ -237,7 +237,7 @@ ctf_arc_write_fd (int fd, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
 
   ctf_qsort_r ((ctf_archive_modent_t *) ((char *) archdr
 					 + sizeof (struct ctf_archive)),
-	       le64toh (archdr->ctfa_ndicts),
+	       le64toh (archdr->ndicts),
 	       sizeof (struct ctf_archive_modent), sort_modent_by_name,
 	       nametbl);
 
@@ -248,7 +248,7 @@ ctf_arc_write_fd (int fd, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
       errmsg = N_("getting current file position in archive");
       goto err_free;
     }
-  archdr->ctfa_names = htole64 (nameoffs);
+  archdr->names = htole64 (nameoffs);
   np = nametbl;
   while (namesz > 0)
     {
@@ -465,7 +465,7 @@ ctf_arc_bufpreamble (const ctf_sect_t *ctfsect)
       && (le64toh ((*(uint64_t *) ctfsect->cts_data)) == CTFA_MAGIC))
     {
       struct ctf_archive *arc = (struct ctf_archive *) ctfsect->cts_data;
-      return (const ctf_preamble_t *) ((char *) arc + le64toh (arc->ctfa_ctfs)
+      return (const ctf_preamble_t *) ((char *) arc + le64toh (arc->ctfs)
 				       + sizeof (uint64_t));
     }
   else
@@ -539,7 +539,7 @@ ctf_arc_open_internal (const char *filename, ctf_error_t *errp)
       goto err_close;
     }
 
-  if (le64toh (arc->ctfa_magic) != CTFA_MAGIC)
+  if (le64toh (arc->magic) != CTFA_MAGIC)
     {
       errmsg = N_("%s: invalid magic number");
       errno = ECTF_FMT;
@@ -549,7 +549,7 @@ ctf_arc_open_internal (const char *filename, ctf_error_t *errp)
   /* This horrible hack lets us know how much to unmap when the file is
      closed.  (We no longer need the magic number, and the mapping
      is private.)  */
-  arc->ctfa_magic = s.st_size;
+  arc->magic = s.st_size;
   close (fd);
 
   if (errp)
@@ -576,7 +576,7 @@ ctf_arc_close_internal (struct ctf_archive *arc)
     return;
 
   /* See the comment in ctf_arc_open().  */
-  arc_mmap_unmap (arc, arc->ctfa_magic, NULL);
+  arc_mmap_unmap (arc, arc->magic, NULL);
 }
 
 /* Public entry point: close an archive, or CTF file.  */
@@ -637,8 +637,8 @@ ctf_dict_open_internal (const struct ctf_archive *arc,
   modent = (ctf_archive_modent_t *) ((char *) arc
 				     + sizeof (struct ctf_archive));
 
-  search_nametbl = (const char *) arc + le64toh (arc->ctfa_names);
-  modent = bsearch_r (name, modent, le64toh (arc->ctfa_ndicts),
+  search_nametbl = (const char *) arc + le64toh (arc->names);
+  modent = bsearch_r (name, modent, le64toh (arc->ndicts),
 		      sizeof (struct ctf_archive_modent),
 		      search_modent_by_name, (void *) search_nametbl);
 
@@ -754,7 +754,7 @@ ctf_dict_open_cached (ctf_archive_t *arc, const char *name, ctf_error_t *errp)
      allocations in the parent to use provisional IDs, permitting you to
      import children into it even if you modify the parent before you import
      any.  */
-  if (arc->ctfi_is_archive && arc->ctfi_archive->ctfa_ndicts > 1
+  if (arc->ctfi_is_archive && arc->ctfi_archive->ndicts > 1
       && !(fp->ctf_flags & LCTF_CHILD))
     {
       ctf_dprintf ("archived parent: max children bumped.\n");
@@ -785,7 +785,7 @@ ctf_arc_flush_caches (ctf_archive_t *wrapper)
   wrapper->ctfi_crossdict_cache = NULL;
 }
 
-/* Return the ctf_dict_t at the given ctfa_ctfs-relative offset, or NULL if
+/* Return the ctf_dict_t at the given ctfs-relative offset, or NULL if
    none, setting 'err' if non-NULL.  */
 static ctf_dict_t *
 ctf_dict_open_by_offset (const struct ctf_archive *arc,
@@ -800,7 +800,7 @@ ctf_dict_open_by_offset (const struct ctf_archive *arc,
 
   memset (&ctfsect, 0, sizeof (ctf_sect_t));
 
-  offset += le64toh (arc->ctfa_ctfs);
+  offset += le64toh (arc->ctfs);
 
   ctfsect.cts_name = _CTF_SECTION;
   ctfsect.cts_size = le64toh (*((uint64_t *) ((char *) arc + offset)));
@@ -809,7 +809,7 @@ ctf_dict_open_by_offset (const struct ctf_archive *arc,
   fp = ctf_bufopen (&ctfsect, symsect, strsect, errp);
   if (fp)
     {
-      ctf_dict_set_model (fp, le64toh (arc->ctfa_model));
+      ctf_dict_set_model (fp, le64toh (arc->model));
       if (little_endian >= 0)
 	ctf_symsect_endianness (fp, little_endian);
     }
@@ -843,7 +843,7 @@ ctf_arc_import_parent (const ctf_archive_t *arc, ctf_dict_t *fp, ctf_error_t *er
 					     + sizeof (struct ctf_archive));
 
 	  nametbl = (((const char *) arc->ctfi_archive)
-		     + le64toh (arc->ctfi_archive->ctfa_names));
+		     + le64toh (arc->ctfi_archive->names));
 	  parent_name = &nametbl[le64toh (modent[0].name_offset)];
 	}
 
@@ -870,7 +870,7 @@ ctf_archive_count (const ctf_archive_t *wrapper)
   if (!wrapper->ctfi_is_archive)
     return 1;
 
-  return le64toh (wrapper->ctfi_archive->ctfa_ndicts);
+  return le64toh (wrapper->ctfi_archive->ndicts);
 }
 
 /* Look up a symbol in an archive by name or index (if the name is set, a lookup
@@ -1225,7 +1225,7 @@ ctf_archive_raw_next (const struct ctf_archive_internal *arc, ctf_next_t **it,
 	}
       i->cu.ctn_arc = arc;
       i->ctn_iter_fun = (void (*) (void)) ctf_archive_raw_next;
-      i->ctn_size = le64toh (arc->ctfi_archive->ctfa_ndicts);
+      i->ctn_size = le64toh (arc->ctfi_archive->ndicts);
       i->ctn_n = 0;
       *it = i;
     }
@@ -1242,7 +1242,7 @@ ctf_archive_raw_next (const struct ctf_archive_internal *arc, ctf_next_t **it,
       goto end;
     }
 
-  if (i->ctn_n >= le64toh (arc->ctfi_archive->ctfa_ndicts))
+  if (i->ctn_n >= le64toh (arc->ctfi_archive->ndicts))
     {
       err = ECTF_NEXT_END;
       goto end;
@@ -1250,12 +1250,12 @@ ctf_archive_raw_next (const struct ctf_archive_internal *arc, ctf_next_t **it,
 
   modent = (ctf_archive_modent_t *) (arc->ctfi_archive
 				     + sizeof (struct ctf_archive));
-  nametbl = (const char *) arc->ctfi_archive + le64toh (arc->ctfi_archive->ctfa_names);
+  nametbl = (const char *) arc->ctfi_archive + le64toh (arc->ctfi_archive->names);
 
   name_off = le64toh (modent[i->ctn_n].name_offset);
   contents_off = le64toh (modent[i->ctn_n].ctf_offset);
 
-  local_contents = arc->ctfi_archive + le64toh (arc->ctfi_archive->ctfa_ctfs) + contents_off;
+  local_contents = arc->ctfi_archive + le64toh (arc->ctfi_archive->ctfs) + contents_off;
   if (contents)
     *contents = local_contents;
   if (len)
@@ -1344,7 +1344,7 @@ ctf_archive_next (const ctf_archive_t *wrapper, ctf_next_t **it, const char **na
 
   do
     {
-      if ((!wrapper->ctfi_is_archive) || (i->ctn_n >= le64toh (arc->ctfa_ndicts)))
+      if ((!wrapper->ctfi_is_archive) || (i->ctn_n >= le64toh (arc->ndicts)))
 	{
 	  err = ECTF_NEXT_END;
 	  goto end;
@@ -1352,7 +1352,7 @@ ctf_archive_next (const ctf_archive_t *wrapper, ctf_next_t **it, const char **na
 
       modent = (ctf_archive_modent_t *) ((char *) arc
 					 + sizeof (struct ctf_archive));
-      nametbl = (((const char *) arc) + le64toh (arc->ctfa_names));
+      nametbl = (((const char *) arc) + le64toh (arc->names));
 
       name_ = &nametbl[le64toh (modent[i->ctn_n].name_offset)];
       i->ctn_n++;
