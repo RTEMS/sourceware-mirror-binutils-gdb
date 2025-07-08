@@ -888,14 +888,14 @@ struct ctf_archive
   /* Modent array is off the end.  */
 };
 
-/* An array of ctfa_ndicts of this structure lies at
-   ctf_archive[sizeof(struct ctf_archive)] and gives the ctfa_ctfs or
-   ctfa_names-relative offsets of each name or ctf_dict_t.  */
+/* An array of ctfa_ndicts of this structure lies at ctf_archive[sizeof(struct
+   ctf_archive)] and gives the ctfs or names-relative offsets of each name or
+   ctf_dict_t.  */
 
 typedef struct ctf_archive_modent
 {
-  uint64_t name_offset;
-  uint64_t ctf_offset;
+  uint64_t name;
+  uint64_t contents;
 } ctf_archive_modent_t;
 
 #ifdef	__cplusplus
