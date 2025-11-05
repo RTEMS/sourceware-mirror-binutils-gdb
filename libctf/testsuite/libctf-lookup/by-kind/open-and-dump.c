@@ -8,7 +8,7 @@ dump_ctf_errs (ctf_dict_t *fp)
   ctf_next_t *it = NULL;
   char *errtext;
   int is_warning;
-  int err;
+  ctf_error_t err;
 
   /* Dump accumulated errors and warnings.  */
   while ((errtext = ctf_errwarning_next (fp, &it, &is_warning, &err)) != NULL)
@@ -30,7 +30,7 @@ int main (int argc, char *argv[])
   ctf_dict_t *fp;
   ctf_next_t *i = NULL;
   const char *name;
-  int err;
+  ctf_error_t err;
 
   if (argc != 2)
     {
