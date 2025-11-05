@@ -176,7 +176,7 @@ ctf_add_prefix (ctf_dict_t *fp, ctf_dtdef_t *dtd, size_t vbytes)
    type ID 0 is used as a sentinel and a not-found indicator.  */
 
 ctf_dict_t *
-ctf_create (int *errp)
+ctf_create (ctf_error_t *errp)
 {
   static ctf_header_t hdr =
     {
@@ -258,7 +258,7 @@ ctf_create (int *errp)
 }
 
 /* Compatibility: just update the threshold for ctf_discard.  */
-int
+ctf_ret_t
 ctf_update (ctf_dict_t *fp)
 {
   fp->ctf_updateid = ctf_snapshot (fp);
@@ -288,7 +288,7 @@ int
 ctf_insert_type_decl_tag (ctf_dict_t *fp, ctf_id_t type, const char *name)
 {
   ctf_dynset_t *types;
-  int err;
+  ctf_error_t err;
 
   if ((types = ctf_dynhash_lookup (fp->ctf_tags, name)) == NULL)
     {
@@ -435,13 +435,11 @@ ctf_static_type (const ctf_dict_t *fp, ctf_id_t type)
   return ((unsigned long) idx <= fp->ctf_stypes);
 }
 
-/* Discard all of the dynamic type definitions that have been added to the dict
-   since the last call to ctf_update().  We locate such types by scanning the
    dtd list and deleting elements that have indexes greater than that recorded
    in the ctf_update() snapshot, which is set by ctf_update(), above.  We reset
    every piece of type-ID-related state to the value recorded in the
    snapshot.  */
-int
+ctf_ret_t
 ctf_discard (ctf_dict_t *fp)
 {
   return (ctf_rollback (fp, fp->ctf_updateid));
@@ -460,7 +458,7 @@ ctf_snapshot (ctf_dict_t *fp)
 }
 
 /* Like ctf_discard(), only discards everything after a specific snapshot.  */
-int
+ctf_ret_t
 ctf_rollback (ctf_dict_t *fp, ctf_snapshot_id_t id)
 {
   ctf_dtdef_t *dtd, *ntd;
@@ -968,7 +966,7 @@ ctf_add_array (ctf_dict_t *fp, uint32_t flag, const ctf_arinfo_t *arp)
   return dtd->dtd_type;
 }
 
-int
+ctf_ret_t
 ctf_set_array (ctf_dict_t *fp, ctf_id_t type, const ctf_arinfo_t *arp)
 {
   ctf_dict_t *ofp = fp;
@@ -1002,7 +1000,7 @@ ctf_set_array (ctf_dict_t *fp, ctf_id_t type, const ctf_arinfo_t *arp)
 }
 
 /* Set this type as conflicting in compilation unit CUNAME.  */
-int
+ctf_ret_t
 ctf_set_conflicting (ctf_dict_t *fp, ctf_id_t type, const char *cuname)
 {
   ctf_dict_t *ofp = fp;
@@ -1557,7 +1555,7 @@ ctf_add_restrict (ctf_dict_t *fp, uint32_t flag, ctf_id_t ref)
   return (ctf_add_reftype (fp, flag, ref, CTF_K_RESTRICT));
 }
 
-int
+ctf_ret_t
 ctf_add_enumerator (ctf_dict_t *fp, ctf_id_t enid, const char *name,
 		    int64_t value)
 {
@@ -1687,7 +1685,7 @@ ctf_add_enumerator (ctf_dict_t *fp, ctf_id_t enid, const char *name,
   return 0;
 }
 
-int
+ctf_ret_t
 ctf_add_member_bitfield (ctf_dict_t *fp, ctf_id_t souid, const char *name,
 			 ctf_id_t type, unsigned long bit_offset,
 			 int bit_width)
@@ -1934,7 +1932,7 @@ ctf_add_member_bitfield (ctf_dict_t *fp, ctf_id_t souid, const char *name,
   return 0;
 }
 
-int
+ctf_ret_t
 ctf_add_member_encoded (ctf_dict_t *fp, ctf_id_t souid, const char *name,
 			ctf_id_t type, unsigned long bit_offset,
 			const ctf_encoding_t encoding)
@@ -1968,14 +1966,14 @@ ctf_add_member_encoded (ctf_dict_t *fp, ctf_id_t souid, const char *name,
 				  encoding.cte_bits);
 }
 
-int
+ctf_ret_t
 ctf_add_member_offset (ctf_dict_t *fp, ctf_id_t souid, const char *name,
 		       ctf_id_t type, unsigned long bit_offset)
 {
   return ctf_add_member_bitfield (fp, souid, name, type, bit_offset, -1);
 }
 
-int
+ctf_ret_t
 ctf_add_member (ctf_dict_t *fp, ctf_id_t souid, const char *name,
 		ctf_id_t type)
 {
@@ -2252,7 +2250,7 @@ ctf_remove_datasec (ctf_dict_t *fp, ctf_id_t type, const char *name,
    present (already existing symbols are silently overwritten).
 
    Internal use only.  */
-int
+ctf_ret_t
 ctf_add_funcobjt_sym_forced (ctf_dict_t *fp, int is_function, const char *name, ctf_id_t id)
 {
   ctf_dict_t *tmp = fp;
@@ -2282,7 +2280,7 @@ ctf_add_funcobjt_sym_forced (ctf_dict_t *fp, int is_function, const char *name, 
   return 0;
 }
 
-int
+ctf_ret_t
 ctf_add_funcobjt_sym (ctf_dict_t *fp, int is_function, const char *name, ctf_id_t id)
 {
   if (ctf_lookup_by_sym_or_name (fp, 0, name, 0, is_function) != CTF_ERR)
@@ -2293,13 +2291,13 @@ ctf_add_funcobjt_sym (ctf_dict_t *fp, int is_function, const char *name, ctf_id_
   return ctf_add_funcobjt_sym_forced (fp, is_function, name, id);
 }
 
-int
+ctf_ret_t
 ctf_add_objt_sym (ctf_dict_t *fp, const char *name, ctf_id_t id)
 {
   return (ctf_add_funcobjt_sym (fp, 0, name, id));
 }
 
-int
+ctf_ret_t
 ctf_add_func_sym (ctf_dict_t *fp, const char *name, ctf_id_t id)
 {
   return (ctf_add_funcobjt_sym (fp, 1, name, id));
@@ -2348,10 +2346,10 @@ ctf_datasec_sort (ctf_dict_t *fp, ctf_dtdef_t *dtd)
    as well: if the strict-enum flag is turned on, this table must be kept up to
    date with enums added in the interim.  */
 
-int
+ctf_ret_t
 ctf_track_enumerator (ctf_dict_t *fp, ctf_id_t type, const char *cte_name)
 {
-  int err;
+  ctf_error_t err;
 
   if (ctf_dynhash_lookup_type (fp->ctf_names, cte_name) == 0)
     {

@@ -241,7 +241,7 @@ ctf_lookup_by_name_internal (ctf_dict_t *fp, ctf_dict_t *child,
 	  /* Try resolving to its base type and check again.  */
 	  if (ntype == CTF_ERR && ctf_errno (fp) == ECTF_NOTYPE)
 	    {
-	      int err;
+	      ctf_error_t err;
 
 	      if (child)
 		{
@@ -719,7 +719,7 @@ ctf_lookup_symbol_name (ctf_dict_t *fp, unsigned long symidx)
 {
   const ctf_sect_t *sp = &fp->ctf_ext_symtab;
   ctf_link_sym_t sym;
-  int err;
+  ctf_error_t err;
 
   if (fp->ctf_dynsymidx)
     {
@@ -791,7 +791,7 @@ ctf_lookup_symbol_idx (ctf_dict_t *fp, const char *symname, int try_parent,
   const ctf_sect_t *sp = &fp->ctf_ext_symtab;
   ctf_link_sym_t sym;
   void *known_idx;
-  int err;
+  ctf_error_t err;
   ctf_dict_t *cache = fp;
 
   if (fp->ctf_dynsyms)
@@ -937,7 +937,7 @@ ctf_symbol_next (ctf_dict_t *fp, ctf_next_t **it, const char **name,
 {
   ctf_id_t sym = CTF_ERR;
   ctf_next_t *i = *it;
-  int err;
+  ctf_error_t err;
 
   if (fp->ctf_flags & LCTF_NO_STR)
     return (ctf_set_typed_errno (fp, ECTF_NOPARENT));
@@ -1224,7 +1224,7 @@ ctf_lookup_by_sym_or_name (ctf_dict_t *fp, unsigned long symidx,
 {
   const ctf_sect_t *sp = &fp->ctf_ext_symtab;
   ctf_id_t type = 0;
-  int err = 0;
+  ctf_error_t err = 0;
 
   /* Shuffled dynsymidx present?  Use that.  For now, the dynsymidx and
      shuffled-symbol lookup only support dynamically-added symbols, because
