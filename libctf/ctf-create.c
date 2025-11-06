@@ -266,7 +266,7 @@ ctf_update (ctf_dict_t *fp)
 }
 
 ctf_dynhash_t *
-ctf_name_table (ctf_dict_t *fp, int kind)
+ctf_name_table (ctf_dict_t *fp, ctf_kind_t kind)
 {
   switch (kind)
     {
@@ -314,7 +314,7 @@ ctf_insert_type_decl_tag (ctf_dict_t *fp, ctf_id_t type, const char *name)
 }
 
 int
-ctf_dtd_insert (ctf_dict_t *fp, ctf_dtdef_t *dtd, int flag, int kind)
+ctf_dtd_insert (ctf_dict_t *fp, ctf_dtdef_t *dtd, int flag, ctf_kind_t kind)
 {
   const char *name;
   if (ctf_dynhash_insert (fp->ctf_dthash, (void *) (uintptr_t) dtd->dtd_type,
@@ -379,7 +379,7 @@ void
 ctf_dtd_delete (ctf_dict_t *fp, ctf_dtdef_t *dtd)
 {
   const char *name = ctf_type_name_raw (fp, dtd->dtd_type);
-  int name_kind = ctf_type_kind_forwarded (fp, dtd->dtd_type);
+  ctf_kind_t name_kind = ctf_type_kind_forwarded (fp, dtd->dtd_type);
 
   /* Repeated calls should do nothing.  */
   if (name_kind < 0 && ctf_errno (fp) == ECTF_BADID)
@@ -613,9 +613,9 @@ ctf_assign_id (ctf_dict_t *fp)
    or to the first prefix requested by PREFIXES, if nonzero.  */
 
 static ctf_dtdef_t *
-ctf_add_generic (ctf_dict_t *fp, uint32_t flag, const char *name, int kind,
-		 int prefixes, size_t vbytes, size_t vbytes_extra,
-		 ctf_type_t **typep)
+ctf_add_generic (ctf_dict_t *fp, uint32_t flag, const char *name,
+		 ctf_kind_t kind, int prefixes, size_t vbytes,
+		 size_t vbytes_extra, ctf_type_t **typep)
 {
   ctf_dtdef_t *dtd;
   ctf_id_t type;
@@ -768,7 +768,7 @@ clp2 (size_t x)
 
 ctf_id_t
 ctf_add_encoded (ctf_dict_t *fp, uint32_t flag,
-		 const char *name, const ctf_encoding_t *ep, uint32_t kind)
+		 const char *name, const ctf_encoding_t *ep, ctf_kind_t kind)
 {
   ctf_dtdef_t *dtd;
   uint32_t encoding;
@@ -806,7 +806,7 @@ ctf_add_encoded (ctf_dict_t *fp, uint32_t flag,
 }
 
 ctf_id_t
-ctf_add_reftype (ctf_dict_t *fp, uint32_t flag, ctf_id_t ref, uint32_t kind)
+ctf_add_reftype (ctf_dict_t *fp, uint32_t flag, ctf_id_t ref, ctf_kind_t kind)
 {
   ctf_dtdef_t *dtd;
   ctf_dict_t *typedict = fp;
@@ -855,7 +855,7 @@ ctf_add_slice (ctf_dict_t *fp, uint32_t flag, ctf_id_t ref,
   ctf_dtdef_t *dtd;
   ctf_slice_t slice;
   ctf_id_t resolved_ref = ref;
-  int kind;
+  ctf_kind_t kind;
   ctf_dict_t *tmp = fp;
 
   if (ep == NULL)
@@ -1047,8 +1047,8 @@ ctf_add_tag (ctf_dict_t *fp, uint32_t flag, ctf_id_t type, const char *tag,
 {
   ctf_dtdef_t *dtd;
   size_t vlen_size = 0;
-  int kind = is_decl ? CTF_K_DECL_TAG : CTF_K_TYPE_TAG;
-  int ref_kind = ctf_type_kind (fp, type);
+  ctf_kind_t kind = is_decl ? CTF_K_DECL_TAG : CTF_K_TYPE_TAG;
+  ctf_kind_t ref_kind = ctf_type_kind (fp, type);
 
   if (component_idx < -1)
     return (ctf_set_typed_errno (fp, ECTF_BADCOMPONENT));
@@ -1251,7 +1251,7 @@ ctf_add_function_linkage (ctf_dict_t *fp, uint32_t flag,
 
 static ctf_id_t
 ctf_add_sou_sized (ctf_dict_t *fp, uint32_t flag, const char *name,
-		   size_t size, int kind)
+		   size_t size, ctf_kind_t kind)
 {
   ctf_dtdef_t *dtd;
   ctf_type_t *prefix;
@@ -1321,7 +1321,7 @@ ctf_add_union (ctf_dict_t *fp, uint32_t flag, const char *name)
 
 static ctf_id_t
 ctf_add_enum_internal (ctf_dict_t *fp, uint32_t flag, const char *name,
-		       int kind, int is_signed)
+		       ctf_kind_t kind, int is_signed)
 {
   ctf_dtdef_t *dtd;
   ctf_id_t type = 0;
@@ -1383,7 +1383,7 @@ ctf_add_enum64 (ctf_dict_t *fp, uint32_t flag, const char *name)
 
 static ctf_id_t
 ctf_add_enum_encoded_internal (ctf_dict_t *fp, uint32_t flag, const char *name,
-			       int kind, const ctf_encoding_t *ep)
+			       ctf_kind_t kind, const ctf_encoding_t *ep)
 {
   ctf_id_t type = 0;
   int is_signed = ((ep->cte_format & CTF_INT_SIGNED) != 0);
@@ -1436,7 +1436,7 @@ ctf_add_enum64_encoded (ctf_dict_t *fp, uint32_t flag, const char *name,
 
 ctf_id_t
 ctf_add_forward (ctf_dict_t *fp, uint32_t flag, const char *name,
-		 uint32_t kind)
+		 ctf_kind_t kind)
 {
   ctf_dtdef_t *dtd;
   ctf_id_t type = 0;
@@ -1562,7 +1562,8 @@ ctf_add_enumerator (ctf_dict_t *fp, ctf_id_t enid, const char *name,
   ctf_dict_t *ofp = fp;
   ctf_dtdef_t *dtd;
 
-  uint32_t kind, vlen, root, en_name;
+  ctf_kind_t kind;
+  uint32_t vlen, root, en_name;
 
   if (name == NULL)
     return (ctf_set_errno (fp, EINVAL));
@@ -1696,7 +1697,8 @@ ctf_add_member_bitfield (ctf_dict_t *fp, ctf_id_t souid, const char *name,
   ctf_type_t *prefix;
 
   ssize_t msize, ssize;
-  uint32_t kind, kflag;
+  ctf_kind_t kind;
+  uint32_t kflag;
   size_t vlen;
   size_t i;
   int is_incomplete = 0;
@@ -1938,8 +1940,8 @@ ctf_add_member_encoded (ctf_dict_t *fp, ctf_id_t souid, const char *name,
 {
   ctf_dtdef_t *dtd = ctf_dtd_lookup (fp, type);
   ctf_dtdef_t *soudtd = ctf_dtd_lookup (fp, souid);
-  int kind;
-  int otype = type;
+  ctf_kind_t kind;
+  ctf_id_t otype = type;
 
   if (dtd == NULL || soudtd == NULL)
     return (ctf_set_errno (fp, ECTF_BADID));
@@ -2016,7 +2018,8 @@ ctf_add_section_variable (ctf_dict_t *fp, uint32_t flag, const char *datasec,
   ctf_dtdef_t *sec_dtd = NULL;
   ctf_dtdef_t *var_dtd = NULL;
 
-  uint32_t kind, kflag;
+  ctf_kind_t kind;
+  uint32_t kflag;
   size_t vlen;
 
   ctf_linkage_t *l;
@@ -2558,13 +2561,14 @@ ctf_add_type_internal (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type
 		       ctf_dict_t *proc_tracking_fp)
 {
   ctf_id_t dst_type = CTF_ERR;
-  uint32_t dst_kind = CTF_K_UNKNOWN;
+  ctf_kind_t dst_kind = CTF_K_UNKNOWN;
   ctf_dict_t *tmp_fp = dst_fp;
   ctf_id_t tmp;
 
   const char *name;
-  uint32_t kind, forward_kind, flag, bitfields;
-  uint32_t isroot;
+  ctf_kind_t kind, forward_kind;
+  uint32_t isroot, bitfields;
+  int flag;
   size_t vlen;
 
   const ctf_type_t *src_prefix, *src_tp, *dst_prefix;
@@ -2605,7 +2609,7 @@ ctf_add_type_internal (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type
 	 same kind and (if a struct or union) has the same number of members,
 	 hand it straight back.  */
 
-      if (ctf_type_kind_unsliced (tmp_fp, tmp) == (int) kind)
+      if (ctf_type_kind_unsliced (tmp_fp, tmp) == kind)
 	{
 	  if (kind == CTF_K_STRUCT || kind == CTF_K_UNION
 	      || kind == CTF_K_ENUM)
