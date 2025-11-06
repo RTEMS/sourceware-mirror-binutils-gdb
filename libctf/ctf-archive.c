@@ -649,29 +649,32 @@ ctf_dict_open_internal (const struct ctf_archive *arc,
 /* Return the ctf_dict_t with the given name, or NULL if none, setting 'err' if
    non-NULL.  A name of NULL means to open the default file.
 
-   Use the specified string and symbol table sections.
-
    Public entry point.  */
 ctf_dict_t *
-ctf_dict_open_sections (const ctf_archive_t *arc,
-			const ctf_sect_t *symsect,
-			const ctf_sect_t *strsect,
-			const char *name,
-			ctf_error_t *errp)
+ctf_dict_open (const struct ctf_archive_internal *arci, const char *name,
+	       ctf_error_t *errp)
 {
+  const ctf_sect_t *symsect = &arci->ctfi_symsect;
+  const ctf_sect_t *strsect = &arci->ctfi_strsect;
+
   if (errp)
     *errp = 0;
 
-  if (arc->ctfi_is_archive)
+  if (symsect->cts_name == NULL)
+    symsect = NULL;
+  if (strsect->cts_name == NULL)
+    strsect = NULL;
+
+  if (arci->ctfi_is_archive)
     {
       ctf_dict_t *ret;
-      ret = ctf_dict_open_internal (arc->ctfi_archive, symsect, strsect,
-				    name, arc->ctfi_symsect_little_endian,
+      ret = ctf_dict_open_internal (arci->ctfi_archive, symsect, strsect,
+				    name, arci->ctfi_symsect_little_endian,
 				    errp);
       if (ret)
 	{
-	  ret->ctf_archive = (ctf_archive_t *) arc;
-	  if (ctf_arc_import_parent (arc, ret, errp) < 0)
+	  ret->ctf_archive = (ctf_archive_t *) arci;
+	  if (ctf_arc_import_parent (arci, ret, errp) < 0)
 	    {
 	      ctf_dict_close (ret);
 	      return NULL;
@@ -686,29 +689,11 @@ ctf_dict_open_sections (const ctf_archive_t *arc,
 	*errp = ECTF_ARNNAME;
       return NULL;
     }
-  arc->ctfi_dict->ctf_archive = (ctf_archive_t *) arc;
+  arci->ctfi_dict->ctf_archive = (ctf_archive_t *) arci;
 
   /* Bump the refcount so that the user can ctf_dict_close() it.  */
-  arc->ctfi_dict->ctf_refcnt++;
-  return arc->ctfi_dict;
-}
-
-/* Return the ctf_dict_t with the given name, or NULL if none, setting 'err' if
-   non-NULL.  A name of NULL means to open the default file.
-
-   Public entry point.  */
-ctf_dict_t *
-ctf_dict_open (const ctf_archive_t *arc, const char *name, ctf_error_t *errp)
-{
-  const ctf_sect_t *symsect = &arc->ctfi_symsect;
-  const ctf_sect_t *strsect = &arc->ctfi_strsect;
-
-  if (symsect->cts_name == NULL)
-    symsect = NULL;
-  if (strsect->cts_name == NULL)
-    strsect = NULL;
-
-  return ctf_dict_open_sections (arc, symsect, strsect, name, errp);
+  arci->ctfi_dict->ctf_refcnt++;
+  return arci->ctfi_dict;
 }
 
 static void
@@ -827,16 +812,6 @@ ctf_arc_open_by_name (const ctf_archive_t *arc, const char *name,
 		      ctf_error_t *errp)
 {
   return ctf_dict_open (arc, name, errp);
-}
-
-ctf_dict_t *
-ctf_arc_open_by_name_sections (const ctf_archive_t *arc,
-			       const ctf_sect_t *symsect,
-			       const ctf_sect_t *strsect,
-			       const char *name,
-			       ctf_error_t *errp)
-{
-  return ctf_dict_open_sections (arc, symsect, strsect, name, errp);
 }
 
 /* Import the parent into a ctf archive, if this is a child, the parent is not
