@@ -1051,10 +1051,7 @@ ctf_arc_lookup_sym_or_name (ctf_archive_t *wrapper, unsigned long symidx,
       ctf_dict_close (fp);
     }
   if (*local_errp != ECTF_NEXT_END)
-    {
-      ctf_next_destroy (i);
-      return NULL;
-    }
+    return NULL;
 
   /* Don't leak end-of-iteration to the caller.  */
   *local_errp = 0;
@@ -1217,6 +1214,7 @@ ctf_archive_raw_next (const struct ctf_archive_internal *arc, ctf_next_t **it,
   const void *local_contents;
   ctf_archive_modent_t *modent;
   const char *nametbl;
+  ctf_error_t err;
 
   if (!arc->ctfi_is_archive || !arc->ctfi_archive)
     {
@@ -1242,25 +1240,20 @@ ctf_archive_raw_next (const struct ctf_archive_internal *arc, ctf_next_t **it,
 
   if ((void (*) (void)) ctf_archive_raw_next != i->ctn_iter_fun)
     {
-      if (errp)
-	*errp = ECTF_NEXT_WRONGFUN;
-      return NULL;
+      err = ECTF_NEXT_WRONGFUN;
+      goto end;
     }
 
   if (arc != i->cu.ctn_arc)
     {
-      if (errp)
-	*errp = ECTF_NEXT_WRONGFP;
-      return NULL;
+      err = ECTF_NEXT_WRONGFP;
+      goto end;
     }
 
   if (i->ctn_n >= le64toh (arc->ctfi_archive->ctfa_ndicts))
     {
-      ctf_next_destroy (i);
-      *it = NULL;
-      if (errp)
-	*errp = ECTF_NEXT_END;
-      return NULL;
+      err = ECTF_NEXT_END;
+      goto end;
     }
 
   modent = (ctf_archive_modent_t *) (arc->ctfi_archive
@@ -1279,6 +1272,13 @@ ctf_archive_raw_next (const struct ctf_archive_internal *arc, ctf_next_t **it,
   i->ctn_n++;
 
   return &nametbl[name_off];
+
+ end:
+  ctf_next_destroy (i);
+  *it = NULL;
+  if (errp)
+    *errp = err;
+  return NULL;
 }
 
 /* Iterate over all CTF files in an archive, returning each dict in turn as a
@@ -1300,6 +1300,7 @@ ctf_archive_next (const ctf_archive_t *wrapper, ctf_next_t **it, const char **na
   struct ctf_archive_modent *modent;
   const char *nametbl;
   const char *name_;
+  ctf_error_t err;
 
   if (!i)
     {
@@ -1316,16 +1317,14 @@ ctf_archive_next (const ctf_archive_t *wrapper, ctf_next_t **it, const char **na
 
   if ((void (*) (void)) ctf_archive_next != i->ctn_iter_fun)
     {
-      if (errp)
-	*errp = ECTF_NEXT_WRONGFUN;
-      return NULL;
+      err = ECTF_NEXT_WRONGFUN;
+      goto end;
     }
 
   if (wrapper != i->cu.ctn_arc)
     {
-      if (errp)
-	*errp = ECTF_NEXT_WRONGFP;
-      return NULL;
+      err = ECTF_NEXT_WRONGFP;
+      goto end;
     }
 
   /* Iteration is made a bit more complex by the need to handle ctf_dict_t's
@@ -1355,11 +1354,8 @@ ctf_archive_next (const ctf_archive_t *wrapper, ctf_next_t **it, const char **na
     {
       if ((!wrapper->ctfi_is_archive) || (i->ctn_n >= le64toh (arc->ctfa_ndicts)))
 	{
-	  ctf_next_destroy (i);
-	  *it = NULL;
-	  if (errp)
-	    *errp = ECTF_NEXT_END;
-	  return NULL;
+	  err = ECTF_NEXT_END;
+	  goto end;
 	}
 
       modent = (ctf_archive_modent_t *) ((char *) arc
@@ -1376,6 +1372,13 @@ ctf_archive_next (const ctf_archive_t *wrapper, ctf_next_t **it, const char **na
 
   f = ctf_dict_open_cached ((ctf_archive_t *) wrapper, name_, errp);
   return f;
+
+ end:
+  ctf_next_destroy (i);
+  *it = NULL;
+  if (errp)
+    *errp = err;
+  return NULL;
 }
 
 #ifdef HAVE_MMAP
