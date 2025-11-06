@@ -1222,48 +1222,80 @@ ctf_arc_lookup_enumerator_next (ctf_archive_t *arc, const char *name,
   return CTF_ERR;
 }
 
-/* Raw iteration over all CTF files in an archive.  We pass the raw data for all
-   CTF files in turn to the specified callback function.  */
-static int
-ctf_archive_raw_iter_internal (const struct ctf_archive *arc,
-			       ctf_archive_raw_member_f *func, void *data)
-{
-  int rc;
-  size_t i;
-  struct ctf_archive_modent *modent;
-  const char *nametbl;
-
-  modent = (ctf_archive_modent_t *) ((char *) arc
-				     + sizeof (struct ctf_archive));
-  nametbl = (((const char *) arc) + le64toh (arc->ctfa_names));
-
-  for (i = 0; i < le64toh (arc->ctfa_ndicts); i++)
-    {
-      const char *name;
-      char *fp;
-
-      name = &nametbl[le64toh (modent[i].name_offset)];
-      fp = ((char *) arc + le64toh (arc->ctfa_ctfs)
-	    + le64toh (modent[i].ctf_offset));
-
-      if ((rc = func (name, (void *) (fp + sizeof (uint64_t)),
-		      le64toh (*((uint64_t *) fp)), data)) != 0)
-	return rc;
-    }
-  return 0;
-}
-
 /* Raw iteration over all CTF files in an archive: public entry point.
 
    Returns -EINVAL if not supported for this sort of archive.  */
-int
-ctf_archive_raw_iter (const ctf_archive_t *arc,
-		      ctf_archive_raw_member_f * func, void *data)
+const char *
+ctf_archive_raw_next (const struct ctf_archive_internal *arc, ctf_next_t **it,
+		      const void **contents, size_t *len, ctf_error_t *errp)
 {
-  if (arc->ctfi_is_archive)
-    return ctf_archive_raw_iter_internal (arc->ctfi_archive, func, data);
+  ctf_next_t *i = *it;
+  size_t name_off, contents_off;
+  const void *local_contents;
+  ctf_archive_modent_t *modent;
+  const char *nametbl;
 
-  return -EINVAL;			 /* Not supported. */
+  if (!arc->ctfi_is_archive || !arc->ctfi_archive)
+    {
+      if (errp)
+	*errp = EINVAL;
+      return NULL;				/* Not supported.  */
+    }
+
+  if (!i)
+    {
+      if ((i = ctf_next_create()) == NULL)
+	{
+	  if (errp)
+	    *errp = ENOMEM;
+	  return NULL;
+	}
+      i->cu.ctn_arc = arc;
+      i->ctn_iter_fun = (void (*) (void)) ctf_archive_raw_next;
+      i->ctn_size = le64toh (arc->ctfi_archive->ctfa_ndicts);
+      i->ctn_n = 0;
+      *it = i;
+    }
+
+  if ((void (*) (void)) ctf_archive_raw_next != i->ctn_iter_fun)
+    {
+      if (errp)
+	*errp = ECTF_NEXT_WRONGFUN;
+      return NULL;
+    }
+
+  if (arc != i->cu.ctn_arc)
+    {
+      if (errp)
+	*errp = ECTF_NEXT_WRONGFP;
+      return NULL;
+    }
+
+  if (i->ctn_n >= le64toh (arc->ctfi_archive->ctfa_ndicts))
+    {
+      ctf_next_destroy (i);
+      *it = NULL;
+      if (errp)
+	*errp = ECTF_NEXT_END;
+      return NULL;
+    }
+
+  modent = (ctf_archive_modent_t *) (arc->ctfi_archive
+				     + sizeof (struct ctf_archive));
+  nametbl = (const char *) arc->ctfi_archive + le64toh (arc->ctfi_archive->ctfa_names);
+
+  name_off = le64toh (modent[i->ctn_n].name_offset);
+  contents_off = le64toh (modent[i->ctn_n].ctf_offset);
+
+  local_contents = arc->ctfi_archive + le64toh (arc->ctfi_archive->ctfa_ctfs) + contents_off;
+  if (contents)
+    *contents = local_contents;
+  if (len)
+    *len = le64toh (*((uint64_t *) local_contents));
+
+  i->ctn_n++;
+
+  return &nametbl[name_off];
 }
 
 /* Iterate over all CTF files in an archive, returning each dict in turn as a
