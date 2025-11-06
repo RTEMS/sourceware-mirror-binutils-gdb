@@ -561,6 +561,7 @@ struct ctf_archive_internal
 {
   int ctfi_is_archive;
   int ctfi_unmap_on_close;
+  int ctfi_free_on_dict_close;	    /* True if instantiated by ctf_get_arc.  */
   ctf_dict_t *ctfi_dict;
   struct ctf_archive *ctfi_archive;
   ctf_dynhash_t *ctfi_dicts;	  /* Dicts we have opened and cached.  */
@@ -838,6 +839,7 @@ extern void *ctf_set_open_errno (ctf_error_t *, ctf_error_t);
 extern ctf_ret_t ctf_flip_header (void *, int, int);
 extern ctf_error_t ctf_flip (ctf_dict_t *, ctf_header_t *, unsigned char *,
 			     int is_btf, int to_foreign);
+extern void ctf_symsect_endianness (ctf_dict_t *fp, int little_endian);
 
 extern ctf_ret_t ctf_import_unref (ctf_dict_t *fp, ctf_dict_t *pfp);
 
