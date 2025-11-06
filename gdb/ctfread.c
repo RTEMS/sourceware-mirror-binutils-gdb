@@ -329,7 +329,7 @@ ctf_add_member_cb (ctf_dict_t *dict,
   struct ctf_nextfield new_field;
   struct field *fp;
   struct type *t;
-  uint32_t kind;
+  ctf_kind_t kind;
 
   fp = &new_field.field;
   fp->set_name (name);
@@ -414,7 +414,7 @@ new_type_symbol (struct ctf_context *ccp, struct type *type, ctf_id_t tid)
       if (type != nullptr)
 	sym->set_type (type);
 
-      uint32_t kind = ctf_type_kind (dict, tid);
+      ctf_kind_t kind = ctf_type_kind (dict, tid);
       switch (kind)
 	{
 	  case CTF_K_STRUCT:
@@ -422,6 +422,7 @@ new_type_symbol (struct ctf_context *ccp, struct type *type, ctf_id_t tid)
 	  case CTF_K_ENUM:
 	    sym->set_domain (STRUCT_DOMAIN);
 	    break;
+	  default:;
 	}
 
       add_symbol_to_list (sym, ccp->builder->get_global_symbols ());
@@ -439,7 +440,7 @@ read_base_type (struct ctf_context *ccp, ctf_id_t tid)
   ctf_encoding_t cet;
   struct type *type = nullptr;
   const char *name;
-  uint32_t kind;
+  ctf_kind_t kind;
   size_t size;
 
   if (ctf_type_encoding (dict, tid, &cet))
@@ -539,7 +540,7 @@ read_structure_type (struct ctf_context *ccp, ctf_id_t tid)
   struct objfile *of = ccp->of;
   ctf_dict_t *dict = ccp->dict;
   struct type *type;
-  uint32_t kind;
+  ctf_kind_t kind;
 
   type = type_allocator (of, language_c).new_type ();
 
@@ -906,7 +907,7 @@ read_forward_type (struct ctf_context *ccp, ctf_id_t tid)
   struct objfile *of = ccp->of;
   ctf_dict_t *dict = ccp->dict;
   struct type *type;
-  uint32_t kind;
+  ctf_kind_t kind;
 
   type = type_allocator (of, language_c).new_type ();
 
@@ -932,7 +933,7 @@ static struct type *
 read_type_record (struct ctf_context *ccp, ctf_id_t tid)
 {
   ctf_dict_t *dict = ccp->dict;
-  uint32_t kind;
+  ctf_kind_t kind;
   struct type *type = nullptr;
   ctf_id_t btid;
 
@@ -997,7 +998,7 @@ static void
 ctf_add_type_cb (ctf_dict_t *fp, ctf_id_t tid, struct ctf_context *ccp)
 {
   struct type *type;
-  uint32_t kind;
+  ctf_kind_t kind;
 
   /* Check if tid's type has already been defined.  */
   type = get_tid_type (ccp->of, tid);
@@ -1061,7 +1062,7 @@ ctf_add_var_cb (ctf_dict_t *fp, const char *name, ctf_id_t id,
 {
   struct symbol *sym = nullptr;
   struct type *type;
-  uint32_t kind;
+  ctf_kind_t kind;
 
   type = get_tid_type (ccp->of, id);
 
@@ -1183,7 +1184,7 @@ ctf_psymtab_add_stt_entries (ctf_dict_t *dict, ctf_psymtab *pst,
 
   while ((tid = ctf_symbol_next (dict, &i, &tname, functions)) != CTF_ERR)
     {
-      uint32_t kind = ctf_type_kind (dict, tid);
+      ctf_kind_t kind = ctf_type_kind (dict, tid);
       location_class loc_class;
       domain_enum tdomain = functions ? FUNCTION_DOMAIN : VAR_DOMAIN;
 
@@ -1334,7 +1335,7 @@ create_partial_symtab (const char *name,
 static void
 ctf_psymtab_type_cb (ctf_dict_t *fp, ctf_id_t tid, struct ctf_context *ccp)
 {
-  uint32_t kind;
+  ctf_kind_t kind;
   int section = -1;
 
   domain_enum domain = UNDEF_DOMAIN;
@@ -1363,7 +1364,7 @@ ctf_psymtab_type_cb (ctf_dict_t *fp, ctf_id_t tid, struct ctf_context *ccp)
       domain = TYPE_DOMAIN;
       loc_class = LOC_TYPEDEF;
       break;
-    case CTF_K_UNKNOWN:
+    default:
       return;
     }
 
@@ -1384,7 +1385,7 @@ static void
 ctf_psymtab_var_cb (ctf_dict_t *fp, const char *name, ctf_id_t id,
 		    struct ctf_context *ccp)
 {
-  uint32_t kind = ctf_type_kind (ccp->dict, id);
+  ctf_kind_t kind = ctf_type_kind (ccp->dict, id);
 
   ccp->pst->add_psymbol (name, true,
 			 kind == CTF_K_FUNCTION
