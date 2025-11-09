@@ -1031,10 +1031,10 @@ extern ctf_ret_t ctf_add_enumerator (ctf_dict_t *, ctf_id_t, const char *, int64
 /* Add a member to a struct or union, either at the next available offset (with
    suitable padding for the alignment) or at a specific offset, and possibly
    with a specific encoding (creating a slice for you).  Offsets need not be
-   unique, and need not be added in ascending order.  ctf_add_member_bitfield
-   with a non-negative bit_width will fail unless the struct was created with
+   unique, but must be added in ascending order.  ctf_add_member_bitfield with a
+   non-negative bit_width will fail unless the struct was created with
    CTF_ADD_STRUCT_BITFIELDS.  (A negative bit-width means "not a bitfield", as
-   with ctf_member_info et al.) */
+   with ctf_member_info et al.)  */
 
 extern ctf_ret_t ctf_add_member (ctf_dict_t *, ctf_id_t, const char *, ctf_id_t);
 extern ctf_ret_t ctf_add_member_offset (ctf_dict_t *, ctf_id_t, const char *,
