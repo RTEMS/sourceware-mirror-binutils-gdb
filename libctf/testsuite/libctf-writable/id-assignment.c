@@ -106,25 +106,25 @@ test (int empty_parent, int unserialized_parent)
   if ((ctype2 = ctf_add_struct (child, CTF_ADD_ROOT, "foo", 0, 0, 0)) == CTF_ERR)
     goto child_add_err;
 
-  if (ctf_add_member (child, ctype2, "wombat_member", ctype) < 0)
+  if (ctf_add_member (child, ctype2, "wombat_member", ctype, CTF_NEXT_MEMBER) < 0)
     goto child_add_memb_err;
 
   if (!empty_parent)
     {
       /* pint is still valid: nonprovisional type.  */
 
-      if (ctf_add_member (child, ctype2, "a", pint) < 0)
+      if (ctf_add_member (child, ctype2, "a", pint, CTF_NEXT_MEMBER) < 0)
 	goto child_add_memb_err;
 
       /* (pptr is provisional.) */
 
-      if (ctf_add_member (child, ctype2, "b", pptr) < 0)
+      if (ctf_add_member (child, ctype2, "b", pptr, CTF_NEXT_MEMBER) < 0)
 	goto child_add_memb_err;
 
       if ((cself = ctf_add_pointer (child, CTF_ADD_ROOT, ctype2)) == CTF_ERR)
 	goto child_add_err;
 
-      if (ctf_add_member (child, ctype2, "self", cself) < 0)
+      if (ctf_add_member (child, ctype2, "self", cself, CTF_NEXT_MEMBER) < 0)
 	goto child_add_memb_err;
 
       /* Make sure types are distinct.  */
@@ -142,7 +142,7 @@ test (int empty_parent, int unserialized_parent)
       if (ctf_add_typedef (child, CTF_ADD_ROOT, "td", parray) == CTF_ERR)
 	goto child_add_err;
 
-      if (ctf_add_member (child, ctype2, "pfunc", pfunction) < 0)
+      if (ctf_add_member (child, ctype2, "pfunc", pfunction, CTF_NEXT_MEMBER) < 0)
 	goto child_add_memb_err;
 
       func.ctc_argc = 2;
@@ -154,7 +154,7 @@ test (int empty_parent, int unserialized_parent)
       if ((cfunction = ctf_add_function (child, CTF_ADD_ROOT, &func, args)) == CTF_ERR)
 	goto child_add_err;
 
-      if (ctf_add_member (child, ctype2, "cfunc", pfunction) < 0)
+      if (ctf_add_member (child, ctype2, "cfunc", pfunction, CTF_NEXT_MEMBER) < 0)
 	goto child_add_memb_err;
     }
 
