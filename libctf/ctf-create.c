@@ -1684,8 +1684,7 @@ ctf_add_enumerator (ctf_dict_t *fp, ctf_id_t enid, const char *name,
 
 ctf_ret_t
 ctf_add_member_bitfield (ctf_dict_t *fp, ctf_id_t souid, const char *name,
-			 ctf_id_t type, unsigned long bit_offset,
-			 int bit_width)
+			 ctf_id_t type, size_t bit_offset, int bit_width)
 {
   ctf_dict_t *ofp = fp;
   ctf_dict_t *tmp = fp;
@@ -1751,7 +1750,7 @@ ctf_add_member_bitfield (ctf_dict_t *fp, ctf_id_t souid, const char *name,
      are CTF_K_BIG, which means their offsets are all encoded as
      distances from the last field's.  */
 
-  if (bit_offset != (unsigned long) -1)
+  if (bit_offset != (size_t) -1)
     {
       if (bit_offset < dtd->dtd_last_offset)
 	return (ctf_set_errno (ofp, ECTF_DESCENDING));
@@ -1806,7 +1805,7 @@ ctf_add_member_bitfield (ctf_dict_t *fp, ctf_id_t souid, const char *name,
       ssize_t off;
       int added_padding = 0;
 
-      if (bit_offset == (unsigned long) - 1 && vlen != 0)
+      if (bit_offset == (size_t) -1 && vlen != 0)
 	{
 	  /* Possibly-nontrivial natural alignment.  */
 
@@ -1930,17 +1929,10 @@ ctf_add_member_bitfield (ctf_dict_t *fp, ctf_id_t souid, const char *name,
 }
 
 ctf_ret_t
-ctf_add_member_offset (ctf_dict_t *fp, ctf_id_t souid, const char *name,
-		       ctf_id_t type, unsigned long bit_offset)
+ctf_add_member (ctf_dict_t *fp, ctf_id_t souid, const char *name,
+		ctf_id_t type, size_t bit_offset)
 {
   return ctf_add_member_bitfield (fp, souid, name, type, bit_offset, -1);
-}
-
-ctf_ret_t
-ctf_add_member (ctf_dict_t *fp, ctf_id_t souid, const char *name,
-		ctf_id_t type)
-{
-  return ctf_add_member_offset (fp, souid, name, type, (unsigned long) - 1);
 }
 
 /* Add a DATASEC to hang variables off of.  */
@@ -2845,7 +2837,7 @@ ctf_add_type_internal (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type
     case CTF_K_UNION:
       {
 	ctf_next_t *i = NULL;
-	ssize_t offset;
+	size_t offset;
 	const char *membname;
 	ctf_id_t src_membtype;
 	int bit_width;
@@ -2873,7 +2865,8 @@ ctf_add_type_internal (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type
 	      }
 
 	    while ((offset = ctf_member_next (src_fp, src_type, &i,
-					      &membname, NULL, &bit_width, 0)) >= 0)
+					      &membname, NULL, &bit_width,
+					      0)) != CTF_MEMBER_ERR)
 	      {
 		if (membcmp (membname, offset, bit_width, &dst) < 0)
 		  {
@@ -2900,7 +2893,8 @@ ctf_add_type_internal (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type
 	ctf_add_type_mapping (src_fp, src_type, dst_fp, dst_type);
 
 	while ((offset = ctf_member_next (src_fp, src_type, &i, &membname,
-					  &src_membtype, &bit_width, 0)) >= 0)
+					  &src_membtype, &bit_width,
+					  0)) != CTF_MEMBER_ERR)
 	  {
 	    ctf_dict_t *dst = dst_fp;
 	    ctf_id_t dst_membtype = ctf_type_mapping (src_fp, src_membtype, &dst);
