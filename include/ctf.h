@@ -316,14 +316,16 @@ typedef struct ctf_stype_v1
 {
   uint32_t ctt_name;		/* Reference to name in string table.  */
   unsigned short ctt_info;	/* Encoded kind, variant length (see below).  */
-#ifndef __GNUC__
+#if !defined (__GNUC__) || !defined __STDC_VERSION__ || __STDC_VERSION__ < 201112L
   union
   {
     unsigned short _size;	/* Size of entire type in bytes.  */
     unsigned short _type;	/* Reference to another type.  */
   } _u;
 #else
+#ifdef __GNUC__
   __extension__
+#endif
   union
   {
     unsigned short ctt_size;	/* Size of entire type in bytes.  */
@@ -336,14 +338,16 @@ typedef struct ctf_type_v1
 {
   uint32_t ctt_name;		/* Reference to name in string table.  */
   unsigned short ctt_info;	/* Encoded kind, variant length (see below).  */
-#ifndef __GNUC__
+#if !defined (__GNUC__) || !defined __STDC_VERSION__ || __STDC_VERSION__ < 201112L
   union
   {
     unsigned short _size;	/* Always CTF_LSIZE_SENT_V1.  */
     unsigned short _type;	/* Do not use.  */
   } _u;
 #else
+#ifdef __GNUC__
   __extension__
+#endif
   union
   {
     unsigned short ctt_size;	/* Always CTF_LSIZE_SENT_V1.  */
@@ -355,18 +359,20 @@ typedef struct ctf_type_v1
 } ctf_type_v1_t;
 
 
-typedef struct ctf_v2_stype
+typedef struct ctf_stype_v2
 {
   uint32_t ctt_name;		/* Reference to name in string table.  */
   uint32_t ctt_info;		/* Encoded kind, variant length (see below).  */
-#ifndef __GNUC__
+#if !defined (__GNUC__) || !defined __STDC_VERSION__ || __STDC_VERSION__ < 201112L
   union
   {
     uint32_t _size;		/* Size of entire type in bytes.  */
     uint32_t _type;		/* Reference to another type.  */
   } _u;
 #else
+#ifdef __GNUC__
   __extension__
+#endif
   union
   {
     uint32_t ctt_size;		/* Size of entire type in bytes.  */
@@ -379,14 +385,16 @@ typedef struct ctf_type_v2
 {
   uint32_t ctt_name;		/* Reference to name in string table.  */
   uint32_t ctt_info;		/* Encoded kind, variant length (see below).  */
-#ifndef __GNUC__
+#if !defined (__GNUC__) || !defined __STDC_VERSION__ || __STDC_VERSION__ < 201112L
 union
   {
     uint32_t _size;		/* Always CTF_LSIZE_SENT.  */
     uint32_t _type;		/* Do not use.  */
   } _u;
 #else
+#ifdef __GNUC__
   __extension__
+#endif
   union
   {
     uint32_t ctt_size;		/* Always CTF_LSIZE_SENT.  */
@@ -402,14 +410,16 @@ typedef struct ctf_type
 {
   uint32_t ctt_name;		/* Reference to name in string table.  */
   uint32_t ctt_info;		/* Encoded kind, variant length (see below).  */
-#ifndef __GNUC__
+#if !defined (__GNUC__) || !defined __STDC_VERSION__ || __STDC_VERSION__ < 201112L
 union
   {
     uint32_t _size;		/* Always CTF_LSIZE_SENT.  */
     uint32_t _type;		/* Do not use.  */
   } _u;
 #else
+#ifdef __GNUC__
   __extension__
+#endif
   union
   {
     uint32_t ctt_size;		/* Always CTF_LSIZE_SENT.  */
@@ -418,7 +428,7 @@ union
 #endif
 } ctf_type_t;
 
-#ifndef __GNUC__
+#if !defined (__GNUC__) || !defined __STDC_VERSION__ || __STDC_VERSION__ < 201112L
 #define ctt_size _u._size	/* For fundamental types that have a size.  */
 #define ctt_type _u._type	/* For types that reference another type.  */
 #endif
