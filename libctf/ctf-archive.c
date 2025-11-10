@@ -1095,7 +1095,7 @@ ctf_arc_lookup_symbol_name (ctf_archive_t *wrapper, const char *symname,
 
 ctf_id_t
 ctf_arc_lookup_enumerator_next (ctf_archive_t *arc, const char *name,
-				ctf_next_t **it, int64_t *enum_value,
+				ctf_next_t **it, ctf_enum_value_t *enum_value,
 				ctf_dict_t **dict, ctf_error_t *errp)
 {
   ctf_next_t *i = *it;
