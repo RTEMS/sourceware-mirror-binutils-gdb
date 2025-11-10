@@ -187,7 +187,7 @@ ctf_arc_write_fd (int fd, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
      memory.)  */
 
   if (ctf_dict_cnt > 0)
-    archdr->ctfa_model = htole64 (ctf_getmodel (ctf_dicts[0]));
+    archdr->ctfa_model = ctf_dict_model (ctf_dicts[0]);
 
   /* Now write out the CTFs: ctf_archive_modent array via the mapping,
      ctfs via write().  The names themselves have not been written yet: we
@@ -799,7 +799,7 @@ ctf_dict_open_by_offset (const struct ctf_archive *arc,
   fp = ctf_bufopen (&ctfsect, symsect, strsect, errp);
   if (fp)
     {
-      ctf_setmodel (fp, le64toh (arc->ctfa_model));
+      ctf_dict_set_model (fp, le64toh (arc->ctfa_model));
       if (little_endian >= 0)
 	ctf_symsect_endianness (fp, little_endian);
     }
