@@ -1047,35 +1047,22 @@ ctf_type_aname (ctf_dict_t *fp, ctf_id_t type)
 	    case CTF_K_FUNCTION:
 	      {
 		size_t i;
-		ctf_funcinfo_t fi;
-		ctf_id_t *argv = NULL;
+		ctf_id_t ret;
+		size_t nargs;
+		ctf_id_t *argv;
+		ctf_func_type_flags_t flags;
 		const char **arg_names = NULL;
 
-		if (ctf_func_type_info (rfp, cdp->cd_type, &fi) < 0)
+		if ((argv = ctf_func_type (rfp, cdp->cd_type, &ret, &flags, &nargs)) == NULL
+		    && ctf_errno (rfp) != 0)
 		  goto err;		/* errno is set for us.  */
 
-		if ((argv = calloc (fi.ctc_argc, sizeof (ctf_id_t *))) == NULL)
-		  {
-		    ctf_set_errno (rfp, errno);
-		    goto err;
-		  }
-
-		if ((arg_names = calloc (fi.ctc_argc, sizeof (const char *))) == NULL)
-		  {
-		    ctf_set_errno (rfp, errno);
-		    goto err;
-		  }
-
-		if (ctf_func_type_args (rfp, cdp->cd_type,
-					fi.ctc_argc, argv) < 0)
-		  goto err;		/* errno is set for us.  */
-
-		if (ctf_func_type_arg_names (rfp, cdp->cd_type,
-					     fi.ctc_argc, arg_names) < 0)
+		if ((arg_names = ctf_func_arg_names (rfp, cdp->cd_type, NULL)) == NULL
+		    && ctf_errno (rfp) != 0)
 		  goto err;		/* errno is set for us.  */
 
 		ctf_decl_sprintf (&cd, "(*%s) (", name);
-		for (i = 0; i < fi.ctc_argc; i++)
+		for (i = 0; i < nargs; i++)
 		  {
 		    char *arg = ctf_type_aname (rfp, argv[i]);
 
@@ -1086,16 +1073,17 @@ ctf_type_aname (ctf_dict_t *fp, ctf_id_t type)
 				      ? arg_names[i] : "");
 		    free (arg);
 
-		    if ((i < fi.ctc_argc - 1)
-			|| (fi.ctc_flags & CTF_FUNC_VARARG))
+		    if ((i < nargs - 1)
+			|| (flags & CTF_FUNC_VARARG))
 		      ctf_decl_sprintf (&cd, ", ");
 		  }
 
-		if (fi.ctc_flags & CTF_FUNC_VARARG)
+		if (flags & CTF_FUNC_VARARG)
 		  ctf_decl_sprintf (&cd, "...");
 		ctf_decl_sprintf (&cd, ")");
 
 		free (argv);
+		free (arg_names);
 		break;
 
 	      err:
@@ -1750,24 +1738,17 @@ ctf_tag (ctf_dict_t *fp, ctf_id_t tag)
     case CTF_K_FUNC_LINKAGE:
     case CTF_K_FUNCTION:
       {
-	ctf_funcinfo_t fi;
 	ctf_id_t *args;
+	size_t nargs;
 	ctf_id_t argtype;
 
-	if (ctf_func_type_info (fp, ref, &fi) < 0)
+	if ((args = ctf_func_type (fp, ref, NULL, NULL, &nargs)) == NULL
+	    && ctf_errno (fp) != 0)
 	  return CTF_ERR;	/* errno is set for us.  */
 
-	if (component_idx + 1 > (ssize_t) fi.ctc_argc)
+	if (component_idx + 1 > (ssize_t) nargs)
 	  break;
 
-	if ((args = malloc ((component_idx + 1) * sizeof (ctf_id_t))) == NULL)
-	  return (ctf_set_typed_errno (fp, ENOMEM));
-
-	if (ctf_func_type_args (fp, ref, component_idx + 1, args))
-	  {
-	    free (args);
-	    return CTF_ERR;	/* errno is set for us. */
-	  }
 	argtype = args[component_idx];
 	free (args);
 	return argtype;
@@ -2378,109 +2359,123 @@ ctf_struct_bitfield (ctf_dict_t * fp, ctf_id_t type)
   return CTF_INFO_KFLAG (tp->ctt_info);
 }
 
-/* Given a type ID relating to a function type, return info on return types and
-   arg counts for that function.  */
+/* Common code for ctf_func_type_*: arg checking, func arg vararg handling
+   etc.  */
 
-int
-ctf_func_type_info (ctf_dict_t *fp, ctf_id_t type, ctf_funcinfo_t *fip)
+static const ctf_param_t *
+ctf_func_type_common (ctf_dict_t **fp, ctf_id_t type, size_t *nargs,
+		      ctf_func_type_flags_t *flags, const ctf_type_t **suffix)
 {
-  ctf_dict_t *ofp = fp;
-  const ctf_type_t *tp, *suffix;
+  ctf_dict_t *ofp = *fp;
+  const ctf_type_t *tp;
   ctf_kind_t kind;
   unsigned char *vlen;
   const ctf_param_t *args;
 
-  if ((type = ctf_type_resolve (fp, type)) == CTF_ERR)
-    return -1;			/* errno is set for us.  */
+  if ((type = ctf_type_resolve (*fp, type)) == CTF_ERR)
+    return NULL;		/* errno is set for us.  */
 
-  if (ctf_type_kind (fp, type) == CTF_K_FUNC_LINKAGE)
-    type = ctf_type_reference (fp, type);
+  if (ctf_type_kind (*fp, type) == CTF_K_FUNC_LINKAGE)
+    type = ctf_type_reference (*fp, type);
 
-  if ((tp = ctf_lookup_by_id (&fp, type, &suffix)) == NULL)
-    return -1;			/* errno is set for us.  */
+  if ((tp = ctf_lookup_by_id (fp, type, suffix)) == NULL)
+    return NULL;		/* errno is set for us.  */
 
-  kind = LCTF_KIND (fp, tp);
+  kind = LCTF_KIND (*fp, tp);
   if (kind != CTF_K_FUNCTION)
-    return (ctf_set_errno (ofp, ECTF_NOTFUNC));
-
-  fip->ctc_return = suffix->ctt_type;
-  fip->ctc_flags = 0;
-
-  vlen = ctf_vlen (fp, type, tp, &fip->ctc_argc);
+    {
+      ctf_set_errno (ofp, ECTF_NOTFUNC);
+      return NULL;
+    }
+  vlen = ctf_vlen (*fp, type, tp, nargs);
   args = (const ctf_param_t *) vlen;
 
-  if (fip->ctc_argc != 0 && args[fip->ctc_argc - 1].cfp_type == 0)
+  if (*nargs != 0 && args[*nargs - 1].cfp_type == 0)
     {
-      fip->ctc_flags |= CTF_FUNC_VARARG;
-      fip->ctc_argc--;
+      if (flags)
+	*flags |= CTF_FUNC_VARARG;
+      (*nargs)--;
     }
 
-  return 0;
+  return args;
 }
 
-/* Given a type ID relating to a function type, return the arguments for the
-   function.  */
-
-int
-ctf_func_type_args (ctf_dict_t *fp, ctf_id_t type, uint32_t argc, ctf_id_t *argv)
+/* Given a type ID relating to a function type, return an array of arg types,
+   and optionally in the RET argument the return type too.  The optional FLAGS
+   argument may contain CTF_FUNC_* flags; the NARGS arg gives the length of
+   the array.  */
+ctf_id_t *
+ctf_func_type (ctf_dict_t *fp, ctf_id_t type, ctf_id_t *ret_type,
+	       ctf_func_type_flags_t *flags, size_t *nargs)
 {
-  const ctf_type_t *tp;
+  ctf_dict_t *ofp = fp;
+  const ctf_type_t *suffix;
   const ctf_param_t *args;
-  unsigned char *vlen;
-  ctf_funcinfo_t f;
+  ctf_id_t *ret_args = NULL;
+  size_t n_args;
+  size_t i;
 
-  if ((type = ctf_type_resolve (fp, type)) == CTF_ERR)
-    return -1;			/* errno is set for us.  */
+  if (flags)
+    *flags = 0;
 
-  if (ctf_type_kind (fp, type) == CTF_K_FUNC_LINKAGE)
-    type = ctf_type_reference (fp, type);
+  if ((args = ctf_func_type_common (&fp, type, &n_args, flags,
+				    &suffix)) == NULL)
+    return NULL; 		/* errno is set for us.  */
 
-  if (ctf_func_type_info (fp, type, &f) < 0)
-    return -1;			/* errno is set for us.  */
+  if (ret_type)
+    *ret_type = suffix->ctt_type;
 
-  if ((tp = ctf_lookup_by_id (&fp, type, NULL)) == NULL)
-    return -1;			/* errno is set for us.  */
+  if (nargs)
+    *nargs = n_args;
 
-  vlen = ctf_vlen (fp, type, tp, NULL);
-  args = (const ctf_param_t *) vlen;
+  if (n_args > 0
+      && (ret_args = calloc (n_args, sizeof (ctf_id_t))) == NULL)
+    {
+      ctf_set_errno (ofp, ENOMEM);
+      return NULL;
+    }
 
-  for (argc = MIN (argc, f.ctc_argc); argc != 0; argc--)
-    *argv++ = (args++)->cfp_type;
+  for (i = 0; i < n_args; i++)
+    ret_args[i] = args[i].cfp_type;
 
-  return 0;
+  if (ret_args == NULL)
+    ctf_set_errno (ofp, 0);
+
+  return ret_args;
 }
 
 /* Given a type ID relating to a function type, return the argument names for
    the function.  */
-
-int
-ctf_func_type_arg_names (ctf_dict_t *fp, ctf_id_t type, uint32_t argc,
-			 const char **arg_names)
+const char **
+ctf_func_arg_names (ctf_dict_t *fp, ctf_id_t type, size_t *nargs)
 {
-  const ctf_type_t *tp;
+  ctf_dict_t *ofp = fp;
   const ctf_param_t *args;
-  unsigned char *vlen;
-  ctf_funcinfo_t f;
+  const char **ret;
+  size_t n_args;
+  size_t i;
 
-  if ((type = ctf_type_resolve (fp, type)) == CTF_ERR)
-    return -1;			/* errno is set for us.  */
+  if ((args = ctf_func_type_common (&fp, type, &n_args, NULL, NULL)) == NULL)
+    return NULL; 		/* errno is set for us.  */
 
-  if (ctf_type_kind (fp, type) == CTF_K_FUNC_LINKAGE)
-    type = ctf_type_reference (fp, type);
+  if (nargs)
+    *nargs = n_args;
 
-  if (ctf_func_type_info (fp, type, &f) < 0)
-    return -1;			/* errno is set for us.  */
+  ret = NULL;
+  if (n_args > 0 &&
+      (ret = calloc (n_args, sizeof (const char *))) == NULL)
+    {
+      ctf_set_errno (ofp, ENOMEM);
+      return NULL;
+    }
 
-  if ((tp = ctf_lookup_by_id (&fp, type, NULL)) == NULL)
-    return -1;			/* errno is set for us.  */
+  for (i = 0; i < n_args; i++)
+    ret[i] = ctf_strptr (fp, args[i].cfp_name);
 
-  vlen = ctf_vlen (fp, type, tp, NULL);
-  args = (const ctf_param_t *) vlen;
+  if (ret == NULL)
+    ctf_set_errno (ofp, 0);
 
-  for (argc = MIN (argc, f.ctc_argc); argc != 0; argc--)
-    *arg_names++ = ctf_strptr (fp, (args++)->cfp_name);
-
-  return 0;
+  return ret;
 }
 
 /* Get the linkage of a CTF_K_FUNC_LINKAGE or variable.  */
