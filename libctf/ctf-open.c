@@ -2815,9 +2815,6 @@ ctf_import_internal (ctf_dict_t *fp, ctf_dict_t *pfp, int unreffed)
   if (old_parent && !old_unreffed)
     ctf_dict_close (old_parent);
 
-  /* Prevent rolling back past imports.  */
-  fp->ctf_updateid = ctf_snapshot (fp);
-
   fp->ctf_parent->ctf_max_children++;
   return 0;
 }
