@@ -806,14 +806,6 @@ ctf_dict_open_by_offset (const struct ctf_archive *arc,
   return fp;
 }
 
-/* Backward compatibility.  */
-ctf_dict_t *
-ctf_arc_open_by_name (const ctf_archive_t *arc, const char *name,
-		      ctf_error_t *errp)
-{
-  return ctf_dict_open (arc, name, errp);
-}
-
 /* Import the parent into a ctf archive, if this is a child, the parent is not
    already set, and a suitable archive member exists.  No error is raised if
    this is not possible: this is just a best-effort helper operation to give
