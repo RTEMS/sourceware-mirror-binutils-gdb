@@ -487,6 +487,7 @@ struct ctf_dict
 				     Counts down.  Parent only.  */
   uint32_t ctf_nprovtypes;	  /* Number of provisional types (convenience).  */
   uint32_t ctf_max_child_typemax; /* Highest typemax among all imported children.  */
+  const char *ctf_add_conflicting; /* cuname of next-added conflicting type.  */
   const ctf_dmodel_t *ctf_dmodel; /* Data model pointer (see above).  */
   const char *ctf_cu_name;	  /* Compilation unit name (if any).  */
   char *ctf_dyn_cu_name;	  /* Dynamically allocated name of CU.  */
