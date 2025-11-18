@@ -3270,7 +3270,7 @@ ctf_dedup_emit_type (const char *hval, ctf_dict_t *output, ctf_dict_t **inputs,
   int parent_cu_mapped = 0;
   int isroot = 1;
   int is_conflicting;
-  int mark_type_conflicting = 0;
+  const char *conflicting_cuname = NULL;
 
   ctf_next_t *i = NULL;
   ctf_id_t new_type;
@@ -3402,16 +3402,20 @@ ctf_dedup_emit_type (const char *hval, ctf_dict_t *output, ctf_dict_t **inputs,
 
   switch (cu_mapping_phase)
     {
-    case 0: /* Normal link.  Root-visibility explicitly tracked.  */
+    case 0: /* Normal link.  Root-visibility explicitly tracked.
+	       Conflicting cuname is one of the names on some input if
+	       possible, but we do not guarantee which one.  */
       if (ctf_dynhash_lookup (d->cd_nonroot_consistency, hval))
 	{
 	  isroot = 0;
-	  mark_type_conflicting = 1;
+	  conflicting_cuname = ctf_dict_cuname (input);
+	  ctf_type_conflicting (input, type, &conflicting_cuname);
 	}
       break;
     case 1: /* cu-mapped link.  Never root-visible, no explicit conflict
 	       marking.  */
       isroot = 0;
+      conflicting_cuname = "";
       break;
     case 2: /* Final phase of cu-mapped link.  */
       if (is_conflicting && name)
@@ -3422,7 +3426,7 @@ ctf_dedup_emit_type (const char *hval, ctf_dict_t *output, ctf_dict_t **inputs,
 	  if (parent_cu_mapped)
 	    {
 	      isroot = 0;
-	      mark_type_conflicting = 1;
+	      conflicting_cuname = ctf_dict_cuname (input);
 	    }
 	  else
 	    /* Non-root if already present (multiple conflicting types mapped
@@ -3437,7 +3441,7 @@ ctf_dedup_emit_type (const char *hval, ctf_dict_t *output, ctf_dict_t **inputs,
 				 ctf_dict_cuname (target), maybe_dup,
 				 ctf_type_kind (target, maybe_dup));
 		    isroot = 0;
-		    mark_type_conflicting = 1;
+		    conflicting_cuname = ctf_dict_cuname (input);
 		  }
 	      }
 	}
@@ -3446,6 +3450,13 @@ ctf_dedup_emit_type (const char *hval, ctf_dict_t *output, ctf_dict_t **inputs,
       if (!ctf_assert (output, cu_mapping_phase >= 0 && cu_mapping_phase <= 2))
 	return -1;				/* errno is set for us.  */
     }
+
+  /* If this type is meant to be marked conflicting in this dict rather than
+     moved into a child, mark it, and note which CU it came from.  */
+  errtype = _("conflict-marked type");
+  if (conflicting_cuname)
+    if (ctf_type_set_conflicting (target, 0, conflicting_cuname) < 0)
+      goto err_target;
 
   ctf_dprintf ("%i: Emitting type with hash %s (%s), into target %i/%p\n",
 	       depth, hval, name ? name : "", input_num, (void *) target);
@@ -3502,8 +3513,10 @@ ctf_dedup_emit_type (const char *hval, ctf_dict_t *output, ctf_dict_t **inputs,
 		    ctf_dprintf ("%s, kind %i, hval %s: conflicting type marked "
 				 "as non-root because of pre-existing enumerand "
 				 "%s.\n", name, kind, hval, enumerand);
+		    if (ctf_type_set_conflicting (target, 0,
+						  ctf_dict_cuname (input)) < 0)
+		      goto err_target;
 		    isroot = 0;
-		    mark_type_conflicting = 1;
 		  }
 	      }
 	    if (ctf_errno (input) != ECTF_NEXT_END)
@@ -3753,7 +3766,7 @@ ctf_dedup_emit_type (const char *hval, ctf_dict_t *output, ctf_dict_t **inputs,
 		goto err_target;
 	      }
 
-	    if (isroot)
+	    if (!conflicting_cuname)
 	      ctf_dynhash_remove (d->cd_nonroot_consistency, hval);
 	    else
 	      if (ctf_dynhash_cinsert (d->cd_nonroot_consistency, hval, (void *) 1) < 0)
@@ -3865,12 +3878,6 @@ ctf_dedup_emit_type (const char *hval, ctf_dict_t *output, ctf_dict_t **inputs,
 		 "target %p (%s)\n", depth, hval, input_num, type, new_type,
 		 (void *) target, ctf_link_input_name (target));
 
-  /* If this type is meant to be marked conflicting in this dict rather than
-     moved into a child, mark it, and note which CU it came from.  */
-  if (new_type != 0 && mark_type_conflicting)
-    if (ctf_type_set_conflicting (target, new_type, ctf_dict_cuname (input)) < 0)
-      goto err_target;
-
   return 0;
 
  oom_hash:
@@ -3879,12 +3886,14 @@ ctf_dedup_emit_type (const char *hval, ctf_dict_t *output, ctf_dict_t **inputs,
   return ctf_set_errno (output, ENOMEM);
 
  err_input:
+  ctf_type_set_conflicting (target, 0, NULL);
   ctf_err_warn (output, 0, ctf_errno (input),
 		_("%s (%i): while emitting deduplicated %s, error getting "
 		  "input type %lx (named %s)"), ctf_link_input_name (input),
 		input_num, errtype, type, name ? name : "(unnamed)");
   return ctf_set_errno (output, ctf_errno (input));
  err_target:
+  ctf_type_set_conflicting (target, 0, NULL);
   ctf_err_warn (output, 0, ctf_errno (target),
 		_("%s (%i): while emitting deduplicated %s, error emitting "
 		  "target type from input type %lx (named %s)"),
