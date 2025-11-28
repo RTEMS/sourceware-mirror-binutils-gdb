@@ -4805,14 +4805,12 @@ dump_ctf_errs (ctf_dict_t *fp)
 {
   ctf_next_t *it = NULL;
   char *errtext;
-  int is_warning;
   ctf_error_t err;
 
   /* Dump accumulated errors and warnings.  */
-  while ((errtext = ctf_errwarning_next (fp, &it, &is_warning, &err)) != NULL)
+  while ((errtext = ctf_errwarning_next (fp, &it, NULL, &err)) != NULL)
     {
-      non_fatal (_("%s: %s"), is_warning ? _("warning"): _("error"),
-		 errtext);
+      non_fatal ("%s", errtext);
       free (errtext);
     }
   if (err != ECTF_NEXT_END)

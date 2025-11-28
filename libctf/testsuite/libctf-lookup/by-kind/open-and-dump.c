@@ -7,14 +7,12 @@ dump_ctf_errs (ctf_dict_t *fp)
 {
   ctf_next_t *it = NULL;
   char *errtext;
-  int is_warning;
   ctf_error_t err;
 
   /* Dump accumulated errors and warnings.  */
-  while ((errtext = ctf_errwarning_next (fp, &it, &is_warning, &err)) != NULL)
+  while ((errtext = ctf_errwarning_next (fp, &it, NULL, &err)) != NULL)
     {
-      fprintf (stderr, "%s: %s\n", is_warning ? "warning": "error",
-	       errtext);
+      fprintf (stderr, "%s", errtext);
       free (errtext);
     }
   if (err != ECTF_NEXT_END)
@@ -73,7 +71,8 @@ int main (int argc, char *argv[])
   if (err != ECTF_NEXT_END)
     {
       ctf_next_destroy (i);
-      fprintf (stderr, "Iteration failed: %s\n", ctf_errmsg (ctf_errno (fp)));
+      fprintf (stderr, "Iteration failed: %s\n", ctf_errmsg (err));
+      dump_ctf_errs (NULL);
     }
 
   ctf_close (arc);
@@ -82,5 +81,6 @@ int main (int argc, char *argv[])
 
  open_err:
   fprintf (stderr, "%s: cannot open: %s\n", argv[0], ctf_errmsg (err));
+  dump_ctf_errs (NULL);
   return 1;
 }

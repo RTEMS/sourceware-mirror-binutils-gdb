@@ -156,19 +156,19 @@ ctf_arc_write_fd (int fd, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
   ctf_startoffs = headersz;
   if (lseek (fd, ctf_startoffs - 1, SEEK_SET) < 0)
     {
-      errmsg = N_("ctf_arc_write(): cannot extend file while writing");
+      errmsg = N_("cannot seek while extending file");
       goto err;
     }
 
   if (write (fd, &dummy, 1) < 0)
     {
-      errmsg = N_("ctf_arc_write(): cannot extend file while writing");
+      errmsg = N_("cannot extend file");
       goto err;
     }
 
   if ((archdr = arc_mmap_header (fd, headersz)) == NULL)
     {
-      errmsg = N_("ctf_arc_write(): cannot mmap");
+      errmsg = N_("cannot mmap");
       goto err;
     }
 
@@ -202,7 +202,7 @@ ctf_arc_write_fd (int fd, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
   nametbl = malloc (namesz);
   if (nametbl == NULL)
     {
-      errmsg = N_("ctf_arc_write(): error writing named CTF to archive");
+      errmsg = N_("writing named CTF to archive");
       goto err_unmap;
     }
 
@@ -224,7 +224,7 @@ ctf_arc_write_fd (int fd, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
 	}
       if (off < 0)
 	{
-	  errmsg = N_("ctf_arc_write(): cannot write CTF file to archive");
+	  errmsg = N_("writing named CTF to archive");
 	  errno = off * -1;
 	  goto err_free;
 	}
@@ -245,8 +245,7 @@ ctf_arc_write_fd (int fd, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
 
   if ((nameoffs = lseek (fd, 0, SEEK_CUR)) < 0)
     {
-      errmsg = N_("ctf_arc_write(): cannot get current file position "
-		  "in archive");
+      errmsg = N_("getting current file position in archive");
       goto err_free;
     }
   archdr->ctfa_names = htole64 (nameoffs);
@@ -256,7 +255,7 @@ ctf_arc_write_fd (int fd, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
       ssize_t len;
       if ((len = write (fd, np, namesz)) < 0)
 	{
-	  errmsg = N_("ctf_arc_write(): cannot write name table to archive");
+	  errmsg = N_("writing name table to archive");
 	  goto err_free;
 	}
       namesz -= len;
@@ -278,8 +277,8 @@ err:
   /* We report errors into the first file in the archive, if any: if this is a
      zero-file archive, put it in the open-errors stream for lack of anywhere
      else for it to go.  */
-  ctf_err_warn (ctf_dict_cnt > 0 ? ctf_dicts[0] : NULL, 0, errno, "%s",
-		gettext (errmsg));
+  ctf_err (err_locus (ctf_dict_cnt > 0 ? ctf_dicts[0] : NULL), errno, "%s",
+	   gettext (errmsg));
   return errno;
 }
 
@@ -298,8 +297,8 @@ ctf_arc_write (const char *file, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
 
   if ((fd = open (file, O_RDWR | O_CREAT | O_TRUNC | O_CLOEXEC, 0666)) < 0)
     {
-      ctf_err_warn (ctf_dict_cnt > 0 ? ctf_dicts[0] : NULL, 0, errno,
-		    _("ctf_arc_write(): cannot create %s"), file);
+      ctf_err (err_locus (ctf_dict_cnt > 0 ? ctf_dicts[0] : NULL), errno,
+	       _("cannot create %s"), file);
       return errno;
     }
 
@@ -308,8 +307,8 @@ ctf_arc_write (const char *file, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
     goto err_close;
 
   if ((err = close (fd)) < 0)
-    ctf_err_warn (ctf_dict_cnt > 0 ? ctf_dicts[0] : NULL, 0, errno,
-		  _("ctf_arc_write(): cannot close after writing to archive"));
+    ctf_err (err_locus (ctf_dict_cnt > 0 ? ctf_dicts[0] : NULL), errno,
+	     _("cannot close %s after writing"), file);
   goto err;
 
  err_close:
@@ -504,7 +503,7 @@ ctf_arc_bufopen (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
       is_archive = 0;
       if ((fp = ctf_bufopen (ctfsect, symsect, strsect, errp)) == NULL)
 	{
-	  ctf_err_warn (NULL, 0, *errp, _("ctf_arc_bufopen(): cannot open CTF"));
+	  ctf_err (err_locus (NULL), *errp, NULL);
 	  return NULL;
 	}
     }
@@ -525,24 +524,24 @@ ctf_arc_open_internal (const char *filename, ctf_error_t *errp)
   libctf_init_debug();
   if ((fd = open (filename, O_RDONLY)) < 0)
     {
-      errmsg = N_("ctf_arc_open(): cannot open %s");
+      errmsg = N_("cannot open %s");
       goto err;
     }
   if (fstat (fd, &s) < 0)
     {
-      errmsg = N_("ctf_arc_open(): cannot stat %s");
+      errmsg = N_("cannot stat %s");
       goto err_close;
     }
 
   if ((arc = arc_mmap_file (fd, s.st_size)) == NULL)
     {
-      errmsg = N_("ctf_arc_open(): cannot read in %s");
+      errmsg = N_("cannot read in %s");
       goto err_close;
     }
 
   if (le64toh (arc->ctfa_magic) != CTFA_MAGIC)
     {
-      errmsg = N_("ctf_arc_open(): %s: invalid magic number");
+      errmsg = N_("%s: invalid magic number");
       errno = ECTF_FMT;
       goto err_unmap;
     }
@@ -565,7 +564,7 @@ err_close:
 err:
   if (errp)
     *errp = errno;
-  ctf_err_warn (NULL, 0, errno, gettext (errmsg), filename);
+  ctf_err (err_locus (NULL), errno, gettext (errmsg), filename);
   return NULL;
 }
 
@@ -844,9 +843,7 @@ ctf_arc_import_parent (const ctf_archive_t *arc, ctf_dict_t *fp, ctf_error_t *er
       if (parent)
 	{
 	  if (ctf_import (fp, parent) < 0)
-	    ctf_err_warn (NULL, 1, ctf_errno (fp),
-			  "ctf_arc_import_parent: cannot import: %s",
-			  ctf_errmsg (ctf_errno (fp)));
+	    ctf_warn (err_locus (NULL), ctf_errno (fp), NULL);
 	  ctf_dict_close (parent);
 	}
       else if (err != ECTF_ARNNAME)
