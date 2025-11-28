@@ -3791,13 +3791,11 @@ lang_ctf_errs_warnings (ctf_dict_t *fp)
 {
   ctf_next_t *i = NULL;
   char *text;
-  int is_warning;
   ctf_error_t err;
 
-  while ((text = ctf_errwarning_next (fp, &i, &is_warning, &err)) != NULL)
+  while ((text = ctf_errwarning_next (fp, &i, NULL, &err)) != NULL)
     {
-      einfo (_("%s: %s\n"), is_warning ? _("CTF warning"): _("CTF error"),
-	     text);
+      einfo (_("CTF %s\n"), text);
       free (text);
     }
   if (err != ECTF_NEXT_END)
