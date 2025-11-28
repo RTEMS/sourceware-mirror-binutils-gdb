@@ -2140,7 +2140,7 @@ ctf_remove_datasec (ctf_dict_t *fp, ctf_id_t type, const char *name,
 {
   ctf_next_t *i = NULL;
   void *datasec_id;
-  int err;
+  ctf_error_t err;
 
   if (name != NULL && name[0] != '\0' && isroot)
     ctf_dynhash_remove (ctf_name_table (fp, CTF_K_DATASEC), name);
