@@ -923,9 +923,7 @@ ctf_lookup_symbol_idx (ctf_dict_t *fp, const char *symname, int try_parent,
       return (unsigned long) -1;
     }
 oom:
-  ctf_set_errno (fp, ENOMEM);
-  ctf_err_warn (fp, 0, 0, _("cannot allocate memory for symbol "
-			    "lookup hashtab"));
+  ctf_err (err_locus (fp), ENOMEM, _("allocating symbol lookup hashtab"));
   return (unsigned long) -1;
 
 }
@@ -1187,7 +1185,7 @@ ctf_try_lookup_indexed (ctf_dict_t *fp, unsigned long symidx,
 				  &fp->ctf_nfuncidx, hp->cth_funcidx_len))
 	      == NULL)
 	    {
-	      ctf_err_warn (fp, 0, 0, _("cannot sort function symidx"));
+	      ctf_err (err_locus (fp), 0, _("cannot sort function symidx"));
 	      return CTF_ERR;				/* errno is set for us.  */
 	    }
 	}
@@ -1206,7 +1204,7 @@ ctf_try_lookup_indexed (ctf_dict_t *fp, unsigned long symidx,
 				  &fp->ctf_nobjtidx, hp->cth_objtidx_len))
 	      == NULL)
 	    {
-	      ctf_err_warn (fp, 0, 0, _("cannot sort object symidx"));
+	      ctf_err (err_locus (fp), 0, _("cannot sort object symidx"));
 	      return CTF_ERR;				/* errno is set for us. */
 	    }
 	}
