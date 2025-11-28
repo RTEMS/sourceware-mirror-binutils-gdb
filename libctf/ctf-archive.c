@@ -41,11 +41,11 @@ static ctf_dict_t *ctf_dict_open_by_offset (const struct ctf_archive *arc,
 static int sort_modent_by_name (const void *one, const void *two, void *n);
 static void *arc_mmap_header (int fd, size_t headersz);
 static void *arc_mmap_file (int fd, size_t size);
-static int arc_mmap_writeout (int fd, void *header, size_t headersz,
-			      const char **errmsg);
-static int arc_mmap_unmap (void *header, size_t headersz, const char **errmsg);
-static int ctf_arc_import_parent (const ctf_archive_t *arc, ctf_dict_t *fp,
-				  ctf_error_t *errp);
+static ctf_ret_t arc_mmap_writeout (int fd, void *header, size_t headersz,
+				    const char **errmsg);
+static ctf_ret_t arc_mmap_unmap (void *header, size_t headersz, const char **errmsg);
+static ctf_ret_t ctf_arc_import_parent (const ctf_archive_t *arc, ctf_dict_t *fp,
+					ctf_error_t *errp);
 
 /* Flag to indicate "symbol not present" in ctf_archive_internal.ctfi_symdicts
    and ctfi_symnamedicts.  Never initialized.  */
@@ -810,7 +810,7 @@ ctf_dict_open_by_offset (const struct ctf_archive *arc,
    already set, and a suitable archive member exists.  No error is raised if
    this is not possible: this is just a best-effort helper operation to give
    people useful dicts to start with.  */
-static int
+static ctf_ret_t
 ctf_arc_import_parent (const ctf_archive_t *arc, ctf_dict_t *fp, ctf_error_t *errp)
 {
   if ((fp->ctf_flags & LCTF_CHILD) && !fp->ctf_parent)
@@ -1389,8 +1389,8 @@ static void *arc_mmap_file (int fd, size_t size)
 }
 
 /* Persist the header to disk.  */
-static int arc_mmap_writeout (int fd _libctf_unused_, void *header,
-			      size_t headersz, const char **errmsg)
+static ctf_ret_t arc_mmap_writeout (int fd _libctf_unused_, void *header,
+				    size_t headersz, const char **errmsg)
 {
     if (msync (header, headersz, MS_ASYNC) < 0)
     {
@@ -1403,7 +1403,7 @@ static int arc_mmap_writeout (int fd _libctf_unused_, void *header,
 }
 
 /* Unmap the region.  */
-static int arc_mmap_unmap (void *header, size_t headersz, const char **errmsg)
+static ctf_ret_t arc_mmap_unmap (void *header, size_t headersz, const char **errmsg)
 {
   if (munmap (header, headersz) < 0)
     {
@@ -1442,8 +1442,8 @@ static void *arc_mmap_file (int fd, size_t size)
 }
 
 /* Persist the header to disk.  */
-static int arc_mmap_writeout (int fd, void *header, size_t headersz,
-			      const char **errmsg)
+static ctf_ret_t arc_mmap_writeout (int fd, void *header, size_t headersz,
+				    const char **errmsg)
 {
   ssize_t len;
   char *data = (char *) header;
@@ -1478,8 +1478,8 @@ static int arc_mmap_writeout (int fd, void *header, size_t headersz,
 }
 
 /* Unmap the region.  */
-static int arc_mmap_unmap (void *header, size_t headersz _libctf_unused_,
-			   const char **errmsg _libctf_unused_)
+static ctf_ret_t arc_mmap_unmap (void *header, size_t headersz _libctf_unused_,
+				 const char **errmsg _libctf_unused_)
 {
   free (header);
   return 0;
