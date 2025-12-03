@@ -608,14 +608,16 @@ ctf_add_generic (ctf_dict_t *fp, const char *name, ctf_kind_t kind,
   if (fp->ctf_typemax + fp->ctf_header->cth_parent_ntypes + 1
       >= pfp->ctf_provtypemax)
     {
-      ctf_set_errno (fp, ECTF_FULL);
+      ctf_err (err_locus (fp), ECTF_FULL, _("cannot add type named %s of kind %i"),
+	       name ? name : _("unnamed"), kind);
       return NULL;
     }
 
   if (!(fp->ctf_flags & LCTF_CHILD)
       && fp->ctf_max_child_typemax >= pfp->ctf_provtypemax)
     {
-      ctf_set_errno (fp, ECTF_FULL);
+      ctf_err (err_locus (fp), ECTF_FULL, _("cannot add type named %s of kind %i"),
+	       name ? name : _("unnamed"), kind);
       return NULL;
     }
 
@@ -754,7 +756,8 @@ ctf_add_encoded (ctf_dict_t *fp, const char *name, const ctf_encoding_t *ep,
     return (ctf_set_typed_errno (fp, EINVAL));
 
   if (name == NULL || name[0] == '\0')
-    return (ctf_set_typed_errno (fp, ECTF_NONAME));
+    return ctf_typed_err (err_locus (fp), ECTF_NONAME,
+			  _("type name cannot be empty"));
 
   if (!ctf_assert (fp, kind == CTF_K_INTEGER || kind == CTF_K_FLOAT
 		   || kind == CTF_K_BTF_FLOAT))
@@ -838,7 +841,8 @@ ctf_add_slice (ctf_dict_t *fp, ctf_id_t ref, const ctf_encoding_t *ep)
   if ((kind != CTF_K_INTEGER) && (kind != CTF_K_FLOAT) &&
       (kind != CTF_K_ENUM) && (kind != CTF_K_BTF_FLOAT)
       && (ref != 0))
-    return (ctf_set_typed_errno (fp, ECTF_NOTINTFP));
+    return ctf_typed_err (type_err_locus (fp, ref), ECTF_WRONGKIND,
+			  _("cannot slice non-integral type kind %i"), kind);
 
   if ((dtd = ctf_add_generic (fp, NULL, CTF_K_SLICE, 0, sizeof (ctf_slice_t),
 			      0, NULL)) == NULL)
@@ -1121,7 +1125,8 @@ ctf_add_tag (ctf_dict_t *fp, ctf_id_t type, const char *tag, int is_decl,
     }
 
   if (tag == NULL || tag[0] == '\0')
-    return (ctf_set_typed_errno (fp, ECTF_NONAME));
+    return ctf_typed_err (err_locus (fp), ECTF_NONAME,
+			  _("tag name cannot be empty"));
 
   if ((dtd = ctf_add_generic (fp, tag, kind, 0, vlen_size, 0, NULL)) == NULL)
     return CTF_ERR;		/* errno is set for us.  */
@@ -1271,7 +1276,7 @@ ctf_add_struct (ctf_dict_t *fp, const char *name,
   if (struct_union_unknown != CTF_K_UNKNOWN
       && struct_union_unknown != CTF_K_STRUCT
       && struct_union_unknown != CTF_K_UNION)
-    return ctf_typed_err (err_locus (fp), ECTF_NOTSOU,
+    return ctf_typed_err (err_locus (fp), ECTF_WRONGKIND,
 			  _("struct %s kind must be one of CTF_K_STRUCT, UNION or UNKNOWN, not %i"),
 			  name ? name : "(unnamed)",
 			  struct_union_unknown);
@@ -1282,7 +1287,7 @@ ctf_add_struct (ctf_dict_t *fp, const char *name,
 
   if (bitfield != CTF_STRUCT_NORMAL
       && bitfield != CTF_STRUCT_BITFIELD)
-    return ctf_typed_err (err_locus (fp), ECTF_NOTSOU,
+    return ctf_typed_err (err_locus (fp), ECTF_WRONGKIND,
 			  _("struct %s bitfieldness must be one of CTF_STRUCT_NORMAL or CTF_STRUCT_BITFIELD, not %i"),
 			  name ? name : "(unnamed)", bitfield);
 
@@ -1331,7 +1336,7 @@ ctf_add_enum (ctf_dict_t *fp, const char *name, ctf_kind_t enum_64_unknown,
     kind = CTF_K_ENUM64;
 
   if (kind != CTF_K_ENUM && kind != CTF_K_ENUM64)
-    return ctf_typed_err (err_locus (fp), ECTF_NOTENUM,
+    return ctf_typed_err (err_locus (fp), ECTF_WRONGKIND,
 			  _("enum %s kind must be one of CTF_K_ENUM, ENUM64 or UNKNOWN, not %i"),
 			  name ? name : "(unnamed)", enum_64_unknown);
 
@@ -1396,10 +1401,13 @@ ctf_add_forward (ctf_dict_t *fp, const char *name, ctf_kind_t kind)
   ctf_id_t type = 0;
 
   if (!ctf_forwardable_kind (kind))
-    return (ctf_set_typed_errno (fp, ECTF_NOTSUE));
+    return ctf_typed_err (err_locus (fp), ECTF_WRONGKIND,
+			  _("cannot add forward named %s to kind %i"), name,
+			  kind);
 
   if (name == NULL || name[0] == '\0')
-    return (ctf_set_typed_errno (fp, ECTF_NONAME));
+    return ctf_typed_err (err_locus (fp), ECTF_NONAME,
+			  _("type name cannot be empty"));
 
   if (fp->ctf_flags & LCTF_NO_STR)
     return (ctf_set_errno (fp, ECTF_NOPARENT));
@@ -1471,7 +1479,8 @@ ctf_add_typedef (ctf_dict_t *fp, const char *name, ctf_id_t ref)
     return (ctf_set_typed_errno (fp, EINVAL));
 
   if (name == NULL || name[0] == '\0')
-    return (ctf_set_typed_errno (fp, ECTF_NONAME));
+    return ctf_typed_err (err_locus (fp), ECTF_NONAME,
+			  _("type name cannot be empty"));
 
   if (ref != 0 && ctf_lookup_by_id (&tmp, ref, NULL) == NULL)
     return CTF_ERR;		/* errno is set for us.  */
@@ -1490,7 +1499,7 @@ ctf_id_t
 ctf_add_qualifier (ctf_dict_t *fp, ctf_kind_t cvr_qual, ctf_id_t ref)
 {
   if (cvr_qual != CTF_K_CONST && cvr_qual != CTF_K_VOLATILE && cvr_qual != CTF_K_RESTRICT)
-    return ctf_typed_err (err_locus (fp), ECTF_NOTQUAL,
+    return ctf_typed_err (type_err_locus (fp, ref), ECTF_WRONGKIND,
 			  _("kind %i is not CTF_K_CONST, CTF_K_VOLATILE or CTF_K_RESTRICT"),
 			  cvr_qual);
 
@@ -1542,10 +1551,10 @@ ctf_add_enumerator (ctf_dict_t *fp, ctf_id_t enid, const char *name,
     }
 
   if ((kind != CTF_K_ENUM) && (kind != CTF_K_ENUM64))
-    return (ctf_set_errno (ofp, ECTF_NOTENUM));
+    return ctf_err (type_err_locus (ofp, enid), ECTF_WRONGKIND, NULL);
 
   if (vlen == CTF_MAX_VLEN)
-    return (ctf_set_errno (ofp, ECTF_DTFULL));
+    return ctf_err (type_err_locus (ofp, enid), ECTF_FULL, NULL);
 
   if (kind == CTF_K_ENUM)
     {
@@ -1684,13 +1693,15 @@ ctf_add_member_bitfield (ctf_dict_t *fp, ctf_id_t souid, const char *name,
   vlen = LCTF_VLEN (fp, prefix);
 
   if (kind != CTF_K_STRUCT && kind != CTF_K_UNION)
-    return (ctf_set_errno (ofp, ECTF_NOTSOU));
+    return ctf_err (type_err_locus (ofp, souid), ECTF_WRONGKIND,
+		    _("not a struct or union"));
 
   if (!kflag && bit_width > -1)
-    return (ctf_set_errno (ofp, ECTF_NOTBITSOU));
+    return ctf_err (type_err_locus (ofp, souid), ECTF_WRONGKIND,
+		    _("not a bitfield-capable struct or union"));
 
   if (vlen == CTF_MAX_VLEN)
-    return (ctf_set_errno (ofp, ECTF_DTFULL));
+    return ctf_err (type_err_locus (ofp, souid), ECTF_FULL, NULL);
 
   /* Figure out the offset of this field: all structures in DTDs
      are CTF_K_BIG, which means their offsets are all encoded as
@@ -1929,7 +1940,8 @@ ctf_add_section_variable (ctf_dict_t *fp, const char *datasec,
     return (ctf_set_typed_errno (fp, ECTF_NOPARENT));
 
   if (name == NULL || name[0] == '\0')
-    return (ctf_set_typed_errno (fp, ECTF_NONAME));
+    return ctf_typed_err (err_locus (fp), ECTF_NONAME,
+			  _("datasec name cannot be empty"));
 
   if (linkage < 0 || linkage > 2)		/* Min/max of ctf_linkages_t.  */
     return (ctf_set_typed_errno (fp, ECTF_LINKAGE));
@@ -1984,14 +1996,8 @@ ctf_add_section_variable (ctf_dict_t *fp, const char *datasec,
 
   if (vlen == CTF_MAX_RAW_VLEN)
     {
-      ctf_set_typed_errno (fp, ECTF_DTFULL);
-      goto err;
-    }
-
-  /* DATASECs do not support CTF_K_BIG (yet).  */
-  if (vlen == CTF_MAX_RAW_VLEN)
-    {
-      ctf_set_typed_errno (fp, ECTF_DTFULL);
+      ctf_err (type_err_locus (fp, type), ECTF_FULL,
+	       _("datasec %s (%lx) overflow"), name, (long) datasec_id);
       goto err;
     }
 
