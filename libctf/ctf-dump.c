@@ -755,8 +755,9 @@ ctf_dump_vars (ctf_dict_t *fp, ctf_dump_state_t *arg)
       if (ctf_variable_datasec (fp, type) != CTF_ERR)
 	continue;
 
-      if (ctf_errno (fp) != ECTF_NODATASEC)
+      if (ctf_errno (fp) != ECTF_NOTYPE)
 	goto no_datasec_err;
+      ctf_errwarning_remove (fp, ECTF_NOTYPE);
 
       if (ctf_dump_var (fp, type, 0, 0, state) < 0)
 	goto no_datasec_err;
