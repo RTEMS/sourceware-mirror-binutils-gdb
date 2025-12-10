@@ -223,6 +223,15 @@ typedef struct ctf_err_locus
   const char *func;
 } ctf_err_locus_t;
 
+/* List structure for storing decl tags in values of the ctf_decl_tag_map.  */
+
+typedef struct ctf_decl_tag_mapping
+{
+  ctf_list_t decl_tag_list;
+  ctf_id_t decl_tag;
+  int64_t component_idx;
+} ctf_decl_tag_mapping_t;
+
 /* Atoms associate strings with a list of the CTF items that reference that
    string, so that ctf_serialize() can instantiate all the strings using the
    ctf_str_atoms and then reassociate them with the real string later.
@@ -456,6 +465,7 @@ struct ctf_dict
 				       enumeration constants.  */
   ctf_lookup_t ctf_lookups[6];	    /* Pointers to nametabs for name lookup.  */
   ctf_dynhash_t *ctf_var_datasecs;  /* Variable -> datasec mappings.  */
+  ctf_dynhash_t *ctf_decl_tag_map;  /* Decl -> decl tag mappings.  */
   ctf_strs_t ctf_str[2];	    /* Array of string table base and bounds.  */
   ctf_strs_writable_t *ctf_dynstrtab; /* Dynamically allocated string table, if any. */
   ctf_dynhash_t *ctf_str_atoms;	  /* Hash table of ctf_str_atoms_t.  */
@@ -664,6 +674,7 @@ struct ctf_next
     const ctf_dynset_t *ctn_s;
     ctf_next_hkv_t *ctn_sorted_hkv;
     void **ctn_hash_slot;
+    void *ctn_p;
   } u;
 
   /* This union is of various sorts of entity we can iterate over: currently
@@ -832,6 +843,8 @@ extern ctf_ret_t ctf_add_funcobjt_sym_forced (ctf_dict_t *, int is_function,
 					      const char *, ctf_id_t);
 
 extern int ctf_insert_type_decl_tag (ctf_dict_t *, ctf_id_t, const char *);
+extern int ctf_insert_decl_tag_rmap (ctf_dict_t *fp, ctf_id_t tag_type,
+				     ctf_id_t decl_type, int component_idx);
 extern ctf_ret_t ctf_track_enumerator (ctf_dict_t *, ctf_id_t, const char *);
 extern ctf_bool_t ctf_enum_unsigned (ctf_dict_t *, ctf_id_t);
 

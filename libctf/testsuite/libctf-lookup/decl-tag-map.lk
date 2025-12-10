@@ -1,0 +1,10 @@
+# lookup: decl-tag-map.c
+# source: decl-tag-map-ctf.c
+struct  qux has tag btf_decl_tag \("dtag4_outer"\) with idx -1
+struct  baz has tag btf_decl_tag \("dtag3"\) with idx -1
+int multi has tag btf_decl_tag \("multi1"\) with idx -1
+int multi has tag btf_decl_tag \("multi2"\) with idx -1
+int multi has tag btf_decl_tag \("multi3"\) with idx -1
+int foo has tag btf_decl_tag \("dtag"\) with idx -1
+int \(\*\) \(int b\) test_func_attr has tag btf_decl_tag \("dtag6"\) with idx 0
+int \(\*\) \(int a\) test_func has tag btf_decl_tag \("dtag5"\) with idx -1
