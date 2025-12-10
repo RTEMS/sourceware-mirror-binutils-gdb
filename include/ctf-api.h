@@ -900,6 +900,11 @@ extern ctf_id_t ctf_tag (ctf_dict_t *, ctf_id_t tag);
 extern ctf_id_t ctf_decl_tag (ctf_dict_t *, ctf_id_t decl_tag,
 			      int64_t *component_idx);
 
+/* Return the decl tags that point to this declaration (if any).  */
+
+extern ctf_id_t ctf_decl_tag_next (ctf_dict_t *, ctf_id_t decl,
+				   int64_t *component_idx, ctf_next_t **it);
+
 /* Iterators.  */
 
 /* ctf_member_next is a _next-style iterator that can additionally traverse into

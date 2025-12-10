@@ -630,14 +630,31 @@ ctf_dump_var (ctf_dict_t *fp, ctf_id_t type,
 {
   char *str;
   char *typestr;
+  char *decl_tag_name;
   int linkage;
   ctf_dump_state_t *state = arg;
   ctf_id_t otype = type;
-
-  /* UPTODO check for a decl tag.  */
+  ctf_id_t dtag_type;
+  int64_t dtag_comp_idx;
+  ctf_next_t *it = NULL;
 
   if (asprintf (&str, "  %lx: 0x%lx: ", offset, type) < 0)
     return (ctf_set_errno (fp, errno));
+
+  while (((dtag_type = ctf_decl_tag_next (fp, type, &dtag_comp_idx, &it))
+	  != CTF_ERR)
+	 && ((decl_tag_name = ctf_type_aname (fp, dtag_type)) != NULL))
+    {
+      if (asprintf (&typestr, "\n\t[%s (%ld)] ", decl_tag_name, dtag_comp_idx)
+	  < 0)
+	return (ctf_set_errno (fp, errno));
+      else
+	{
+	  str = str_append (str, typestr);
+	  free (typestr);
+	  free (decl_tag_name);
+	}
+    }
 
   /* Specialized var dumper: only dump the linkage, not the type kind or
      anything related.  */
