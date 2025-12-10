@@ -338,7 +338,8 @@ typedef int ctf_func_type_flags_t;
   _CTF_ITEM (ECTF_LINKKIND, "only functions and variables have linkage") \
   _CTF_ITEM (ECTF_KIND_PROHIBITED, "writeout of suppressed kind attempted") \
   _CTF_ITEM (ECTF_NOTBTF, "cannot write out this dict as BTF") \
-  _CTF_ITEM (ECTF_TOOLARGE, "prefix required for correct representation")
+  _CTF_ITEM (ECTF_TOOLARGE, "prefix required for correct representation") \
+  _CTF_ITEM (ECTF_NODECLTAG, "declaration has no associated decl tag")
 
 #define	ECTF_BASE	1000	/* Base value for libctf errnos.  */
 
@@ -360,7 +361,7 @@ _CTF_ERRORS
   };
 #endif
 
-#define ECTF_NERR (ECTF_TOOLARGE - ECTF_BASE + 1) /* Count of CTF errors.  */
+#define ECTF_NERR (ECTF_NODECLTAG - ECTF_BASE + 1) /* Count of CTF errors.  */
 
 /* The CTF data model is inferred to be the caller's data model or the data
    model of the given object, unless ctf_setmodel is explicitly called.  */
@@ -899,6 +900,10 @@ extern ctf_id_t ctf_tag (ctf_dict_t *, ctf_id_t tag);
 
 extern ctf_id_t ctf_decl_tag (ctf_dict_t *, ctf_id_t decl_tag,
 			      int64_t *component_idx);
+
+/* Return the decl tag that points to this declaration.  */
+extern ctf_id_t ctf_decl_tag_next (ctf_dict_t *, ctf_id_t decl,
+				   int64_t *component_idx, ctf_next_t **it);
 
 /* Iterators.  */
 
