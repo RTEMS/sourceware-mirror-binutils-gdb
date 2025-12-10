@@ -632,16 +632,47 @@ ctf_dump_var (ctf_dict_t *fp, ctf_id_t type,
 	      unsigned long offset,
 	      size_t size, void *arg)
 {
-  char *str;
+  char *str = NULL;
   char *typestr;
+  char *decl_tag_name;
   int linkage;
   ctf_dump_state_t *state = arg;
   ctf_id_t otype = type;
-
-  /* UPTODO check for a decl tag.  */
+  ctf_id_t dtag_type;
+  int64_t dtag_comp_idx;
+  ctf_next_t *it = NULL;
 
   if (asprintf (&str, "  %lx: 0x%lx: ", offset, type) < 0)
     return (ctf_set_errno (fp, errno));
+
+  while ((dtag_type = ctf_decl_tag_next (fp, type, &dtag_comp_idx, &it))
+	  != CTF_ERR)
+    {
+      if ((decl_tag_name = ctf_type_aname (fp, dtag_type)) == NULL)
+	{
+	  ctf_next_destroy (it);
+	  goto err;
+	}
+
+      if (asprintf (&typestr, "\n\t[%s (%ld)] ", decl_tag_name,
+		    dtag_comp_idx) < 0)
+	{
+	  free (decl_tag_name);
+	  ctf_next_destroy (it);
+	  goto err_no;
+	}
+
+      str = str_append (str, typestr);
+      free (typestr);
+      free (decl_tag_name);
+    }
+  if (ctf_errno (fp) != ECTF_NEXT_END)
+    {
+      ctf_warn (type_err_locus (fp, type), ctf_errno (fp),
+		_("cannot iterate over decl tags for variable %s/%lx"),
+		ctf_type_name_raw (fp, type), type);
+      goto err;
+    }
 
   /* Specialized var dumper: only dump the linkage, not the type kind or
      anything related.  */
@@ -687,8 +718,11 @@ ctf_dump_var (ctf_dict_t *fp, ctf_id_t type,
 
   ctf_dump_append (fp, state, str);
   return 0;
-err_no:
-  ctf_warn (type_err_locus (fp, type), errno,
+ err_no:
+  ctf_set_errno (fp, errno);
+ err:
+  free (str);
+  ctf_warn (type_err_locus (fp, type), 0,
 	    _("cannot print name dumping var"));
   return -1;
 }
