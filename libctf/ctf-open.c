@@ -31,6 +31,8 @@ ctf_ret_t
 ctf_import_internal (ctf_dict_t *fp, ctf_dict_t *pfp, int is_btf,
 		     ctf_import_flags_t flags);
 
+static void free_decl_tag_map (void *decl);
+
 static const ctf_dmodel_t _libctf_models[] = {
   {"ILP32", CTF_MODEL_ILP32, 4, 1, 2, 4, 4},
   {"LP64", CTF_MODEL_LP64, 8, 1, 2, 4, 8},
@@ -817,6 +819,12 @@ init_static_types (ctf_dict_t *fp, ctf_header_t *cth, ctf_dict_t *parent,
       == NULL)
     return ENOMEM;
 
+  if ((fp->ctf_decl_tag_map
+       = ctf_dynhash_create (ctf_hash_integer, ctf_hash_eq_integer, NULL,
+			     free_decl_tag_map))
+      == NULL)
+    return ENOMEM;
+
   if ((fp->ctf_conflicting_enums
        = ctf_dynset_create (htab_hash_string, htab_eq_string, NULL)) == NULL)
     return ENOMEM;
@@ -1128,6 +1136,22 @@ init_static_types_names (ctf_dict_t *fp, ctf_header_t *cth, int child_types,
 					  name) < 0)
 	      return ctf_errno (fp);
 
+	    if (kind == CTF_K_DECL_TAG)
+	      {
+		int64_t component_idx;
+		ctf_id_t decl_tagged;
+
+                /* Should never happen.  */
+		decl_tagged = ctf_decl_tag (fp, id, &component_idx);
+
+		if (!ctf_assert (fp, decl_tagged != CTF_ERR))
+		  return ctf_errno (fp);
+
+		if (ctf_insert_decl_tag_rmap (fp, id, decl_tagged,
+					      component_idx) < 0)
+		  return ctf_errno (fp);
+	      }
+
 	    break;
 	  }
 
@@ -1216,8 +1240,8 @@ init_static_types_names (ctf_dict_t *fp, ctf_header_t *cth, int child_types,
   if (err != ECTF_NEXT_END)
     return err;
 
-  /* In the final pass, we traverse all datasecs and remember the variables in
-     each, so we can rapidly map from variable back to datasec.  */
+  /* Traverse all datasecs and remember the variables in each, so we an rapidly
+     map from variable back to datasec.  */
 
   ctf_dprintf ("Getting variable datasec membership\n");
 
@@ -2581,6 +2605,23 @@ bad:
   return NULL;
 }
 
+/* Free a value of the ctf_decl_tag_map.  */
+static void
+free_decl_tag_map (void *decl)
+{
+  ctf_list_t *map_list = decl;
+  ctf_decl_tag_mapping_t *mapping, *next;
+
+  for (mapping = ctf_list_next (map_list); mapping;
+       mapping = next)
+    {
+      next = ctf_list_next (mapping);
+      ctf_list_delete (map_list, mapping);
+      free (mapping);
+    }
+  free (map_list);
+}
+
 /* Close the specified CTF dict and free associated data structures.  Note that
    ctf_dict_close() is a reference counted operation: if the specified file is
    the parent of other active dict, its reference count will be greater than one
@@ -2649,6 +2690,7 @@ ctf_dict_close (ctf_dict_t *fp)
   ctf_dynhash_destroy (fp->ctf_tags);
   ctf_dynhash_destroy (fp->ctf_names);
   ctf_dynhash_destroy (fp->ctf_var_datasecs);
+  ctf_dynhash_destroy (fp->ctf_decl_tag_map);
 
   ctf_dynhash_destroy (fp->ctf_symhash_func);
   ctf_dynhash_destroy (fp->ctf_symhash_objt);

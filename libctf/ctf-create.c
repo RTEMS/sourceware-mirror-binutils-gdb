@@ -313,13 +313,51 @@ ctf_insert_type_decl_tag (ctf_dict_t *fp, ctf_id_t type, const char *name)
       err *= -1;
       return (ctf_set_errno (fp, err));
     }
+
   return 0;
+}
+
+/* Insert a reverse-mapping from decl_tag TAG_TYPE to component COMPONENT_IDX of
+   decl DECL_TYPE.  */
+int
+ctf_insert_decl_tag_rmap (ctf_dict_t *fp, ctf_id_t tag_type, ctf_id_t decl_type,
+			  int component_idx)
+{
+  void *decl_tag_list = NULL;
+  ctf_decl_tag_mapping_t *mapping = NULL;
+
+  if ((mapping = malloc (sizeof (ctf_decl_tag_mapping_t))) == NULL)
+    return (ctf_set_errno (fp, ENOMEM));
+
+  mapping->component_idx = component_idx;
+  mapping->decl_tag = tag_type;
+
+  if ((decl_tag_list = ctf_dynhash_lookup (fp->ctf_decl_tag_map,
+					   (void *) decl_type)) == NULL)
+    {
+      if ((decl_tag_list = (ctf_list_t *) malloc (sizeof (ctf_list_t))) == NULL)
+	goto oom;
+
+      if (ctf_dynhash_insert (fp->ctf_decl_tag_map, (void *) decl_type,
+			      (void *) decl_tag_list) != 0)
+	goto oom;
+    }
+
+  ctf_list_append (decl_tag_list, (void *) mapping);
+
+  return 0;
+
+ oom:
+  free (decl_tag_list);
+  free (mapping);
+  return (ctf_set_errno (fp, ENOMEM));
 }
 
 static int
 ctf_dtd_insert (ctf_dict_t *fp, ctf_dtdef_t *dtd, int conflicting, ctf_kind_t kind)
 {
   const char *name;
+
   if (ctf_dynhash_insert (fp->ctf_dthash, (void *) (uintptr_t) dtd->dtd_type,
 			  dtd) < 0)
     return ctf_set_errno (fp, ENOMEM);
@@ -348,11 +386,22 @@ ctf_dtd_insert (ctf_dict_t *fp, ctf_dtdef_t *dtd, int conflicting, ctf_kind_t ki
   return 0;
 }
 
+/* Removing a decl requires removing it from all tag map elements.  */
+static void
+ctf_remove_decl (ctf_dict_t *fp, ctf_id_t type,
+		 const char *name _libctf_unused_, int isroot _libctf_unused_)
+{
+  ctf_dynhash_remove (fp->ctf_decl_tag_map, (void *) type);
+}
+
 static void
 ctf_remove_type_decl_tag (ctf_dict_t *fp, ctf_id_t type, const char *name,
 			  int isroot _libctf_unused_)
 {
   ctf_dynset_t *types;
+  ctf_next_t *it = NULL;
+  ctf_error_t err;
+  void *v;
 
   if ((types = ctf_dynhash_lookup (fp->ctf_tags, name)) == NULL)
     return;
@@ -360,6 +409,33 @@ ctf_remove_type_decl_tag (ctf_dict_t *fp, ctf_id_t type, const char *name,
   ctf_dynset_remove (types, (void *) (uintptr_t) type);
   if (ctf_dynset_elements (types) == 0)
     ctf_dynhash_remove (fp->ctf_tags, name);
+
+  /* Sweep across every entry in the decl tag rmap and eliminate elements
+     referencing this tag.  Expensive, but only needed on rollback.  */
+
+  while ((err = ctf_dynhash_next (fp->ctf_decl_tag_map, &it, NULL, &v)) == 0)
+    {
+      ctf_list_t *map_list = v;
+      ctf_decl_tag_mapping_t *mapping, *next;
+
+      for (mapping = ctf_list_next (map_list); mapping;
+	   mapping = next)
+	{
+	  next = ctf_list_next (mapping);
+
+          if (mapping->decl_tag == type)
+	    {
+	      ctf_list_delete (map_list, mapping);
+	      free (mapping);
+	    }
+	}
+
+      if (ctf_list_empty_p (map_list))
+	ctf_dynhash_next_remove (&it);
+    }
+  if (err != ECTF_NEXT_END)
+    ctf_err (type_err_locus (fp, type), ctf_errno (fp),
+	     _("iteration error rolling back addition of tag %s"), name);
 }
 
 /* DTD removal is more complicated than insertion, because where ctf_dtd_insert
@@ -374,6 +450,7 @@ static const ctf_remover_f ctf_dtd_removers[CTF_K_MAX] =
   {
     [CTF_K_VAR] = ctf_remove_variable,
     [CTF_K_DATASEC] = ctf_remove_datasec,
+    [CTF_K_FUNC_LINKAGE] = ctf_remove_decl,
     [CTF_K_TYPE_TAG] = ctf_remove_type_decl_tag,
     [CTF_K_DECL_TAG] = ctf_remove_type_decl_tag
   };
@@ -1054,6 +1131,7 @@ ctf_add_tag (ctf_dict_t *fp, ctf_id_t type, const char *tag, int is_decl,
   size_t vlen_size = 0;
   ctf_kind_t kind = is_decl ? CTF_K_DECL_TAG : CTF_K_TYPE_TAG;
   ctf_kind_t ref_kind = ctf_type_kind (fp, type);
+  ctf_snapshot_id_t err_snap;
 
   if (component_idx < -1)
     return (ctf_set_typed_errno (fp, ECTF_BADCOMPONENT));
@@ -1127,16 +1205,19 @@ ctf_add_tag (ctf_dict_t *fp, ctf_id_t type, const char *tag, int is_decl,
     return ctf_typed_err (err_locus (fp), ECTF_NONAME,
 			  _("tag name cannot be empty"));
 
+  err_snap = ctf_snapshot (fp);
+
   if ((dtd = ctf_add_generic (fp, tag, kind, 0, vlen_size, 0, NULL)) == NULL)
     return CTF_ERR;		/* errno is set for us.  */
 
   dtd->dtd_data->ctt_info = CTF_TYPE_INFO (kind, 0, 0);
   dtd->dtd_data->ctt_type = (uint32_t) type;
 
-  if (is_decl)
+  if (is_decl && ctf_insert_decl_tag_rmap (fp, dtd->dtd_type, type,
+					   component_idx) < 0)
     {
-      ctf_decl_tag_t *vlen = (ctf_decl_tag_t *) dtd->dtd_vlen;
-      vlen->cdt_component_idx = component_idx;
+      ctf_rollback (fp, err_snap);
+      return -1;				/* errno is set for us.  */
     }
 
   return dtd->dtd_type;
@@ -2108,6 +2189,8 @@ ctf_remove_variable (ctf_dict_t *fp, ctf_id_t type, const char *name,
 	    }
 	}
     }
+
+  ctf_remove_decl (fp, type, name, isroot);
 }
 
 static void

@@ -1030,8 +1030,6 @@ ctf_type_aname (ctf_dict_t *fp, ctf_id_t type)
 	    case CTF_K_TYPE_TAG:
 	      ctf_decl_sprintf (&cd, "%s", name);
 	      break;
-	    /* UPTODO: decl tags... I guess we print them when we print the
-	       associated variable, somehow?  For now, just this...  */
 	    case CTF_K_DECL_TAG:
 	      ctf_decl_sprintf (&cd, "btf_decl_tag (\"%s\")", name);
 	      break;
@@ -1601,6 +1599,69 @@ ctf_decl_tag (ctf_dict_t *fp, ctf_id_t decl_tag, int64_t *component_idx)
   *component_idx = cdt->cdt_component_idx;
 
   return suffix->ctt_type;
+}
+
+/* Return the decl tag(s) that point to this declaration in a *_next style
+   iterator.  */
+
+ctf_id_t
+ctf_decl_tag_next (ctf_dict_t *fp, ctf_id_t decl, int64_t *component_idx,
+		   ctf_next_t **it)
+{
+  ctf_next_t *i = *it;
+  ctf_decl_tag_mapping_t *mapping;
+
+  if (!i)
+    {
+      ctf_list_t *l;
+
+      /* Check that the provided decl really is a declaration.  */
+
+      if ((ctf_type_kind (fp, decl) != CTF_K_VAR)
+	  && (ctf_type_kind (fp, decl) != CTF_K_FUNC_LINKAGE))
+	return ctf_typed_err (type_err_locus (fp, decl),
+			      ECTF_WRONGKIND, NULL);
+
+      /* Lookup in the map.  */
+      if ((l = ctf_dynhash_lookup (fp->ctf_decl_tag_map,
+				   (void *) decl)) == NULL)
+	goto err;
+
+      if ((i = ctf_next_create ()) == NULL)
+	return ctf_set_errno (fp, ENOMEM);
+
+      i->cu.ctn_fp = fp;
+      i->ctn_iter_fun = (void (*) (void)) ctf_decl_tag_next;
+      i->u.ctn_p = ctf_list_prev (l);
+
+      *it = i;
+      goto ret;
+    }
+
+  if ((void (*) (void)) ctf_decl_tag_next != i->ctn_iter_fun)
+    return (ctf_set_typed_errno (fp, ECTF_NEXT_WRONGFUN));
+
+  if (fp != i->cu.ctn_fp)
+    return (ctf_set_typed_errno (fp, ECTF_NEXT_WRONGFP));
+
+  i->u.ctn_p = ctf_list_prev ((ctf_decl_tag_mapping_t *) i->u.ctn_p);
+
+  if (i->u.ctn_p == NULL)
+    goto end_iter;
+
+ret:
+  mapping = (ctf_decl_tag_mapping_t *) i->u.ctn_p;
+  if (component_idx)
+    *component_idx = mapping->component_idx;
+  return mapping->decl_tag;
+
+err:
+  return (ctf_set_typed_errno (fp, ECTF_NODECLTAG));
+
+end_iter:
+  ctf_next_destroy (i);
+  *it = NULL;
+  return (ctf_set_typed_errno (fp, ECTF_NEXT_END));
 }
 
 /* Return the type ID of the type to which a given type tag is attached, or of
