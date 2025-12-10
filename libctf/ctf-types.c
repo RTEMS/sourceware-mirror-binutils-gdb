@@ -1030,8 +1030,6 @@ ctf_type_aname (ctf_dict_t *fp, ctf_id_t type)
 	    case CTF_K_TYPE_TAG:
 	      ctf_decl_sprintf (&cd, "%s", name);
 	      break;
-	    /* UPTODO: decl tags... I guess we print them when we print the
-	       associated variable, somehow?  For now, just this...  */
 	    case CTF_K_DECL_TAG:
 	      ctf_decl_sprintf (&cd, "btf_decl_tag (\"%s\")", name);
 	      break;
@@ -1601,6 +1599,103 @@ ctf_decl_tag (ctf_dict_t *fp, ctf_id_t decl_tag, int64_t *component_idx)
   *component_idx = cdt->cdt_component_idx;
 
   return suffix->ctt_type;
+}
+
+/* Return the decl tag(s) that point to this declaration in a *_next style
+   iterator.  */
+
+ctf_id_t
+ctf_decl_tag_next (ctf_dict_t *fp, ctf_id_t decl, int64_t *component_idx,
+		   ctf_next_t **it)
+{
+  ctf_dict_t *ofp = fp;
+  ctf_next_t *i = *it;
+  ctf_decl_tag_mapping_t *mapping;
+
+  if (!i)
+    {
+      ctf_list_t *l;
+      ctf_kind_t kind;
+      ctf_dict_t *final_fp = ofp;
+
+      /* Check that the provided decl really is a declaration.  */
+
+      kind = ctf_type_kind (fp, decl);
+
+      if (kind != CTF_K_STRUCT && kind != CTF_K_UNION && kind != CTF_K_TYPEDEF
+	  && kind != CTF_K_VAR && kind != CTF_K_FUNC_LINKAGE
+	  && kind != CTF_K_FUNCTION)
+	return ctf_typed_err (type_err_locus (ofp, decl),
+			      ECTF_WRONGKIND, NULL);
+
+      if ((fp = ctf_get_dict (ofp, decl)) == NULL)
+	return ctf_typed_err (type_err_locus (ofp, decl),
+			      ECTF_NOPARENT, NULL);
+
+      /* Lookup in the map.  */
+      l = ctf_dynhash_lookup (ofp->ctf_decl_tag_map, (void *) decl);
+
+      if (ofp != fp && l == NULL)
+	{
+	  final_fp = fp;
+	  l = ctf_dynhash_lookup (fp->ctf_decl_tag_map, (void *) decl);
+	}
+
+      if (!l)
+	return ctf_set_typed_errno (ofp, ECTF_NEXT_END);
+
+      if ((i = ctf_next_create ()) == NULL)
+	return ctf_set_typed_errno (ofp, ENOMEM);
+
+      i->i.ctn_type = decl;
+      i->ctn_iter_fun = (void (*) (void)) ctf_decl_tag_next;
+      i->u.ctn_p = ctf_list_prev (l);
+      i->cu.ctn_fp = final_fp;
+
+      *it = i;
+      goto ret;
+    }
+
+  if ((void (*) (void)) ctf_decl_tag_next != i->ctn_iter_fun)
+    return (ctf_set_typed_errno (ofp, ECTF_NEXT_WRONGFUN));
+
+  if (fp != i->cu.ctn_fp && (!fp->ctf_parent
+			     || (fp->ctf_parent && fp->ctf_parent != i->cu.ctn_fp)))
+    return (ctf_set_typed_errno (ofp, ECTF_NEXT_WRONGFP));
+
+  if (decl != i->i.ctn_type)
+    return (ctf_typed_err (type_err_locus (ofp, decl), ECTF_NEXT_WRONGFP,
+			   _("decl tag changed in mid_iteration, from %lx to %lx"),
+			   i->i.ctn_type, decl));
+
+  i->u.ctn_p = ctf_list_prev ((ctf_decl_tag_mapping_t *) i->u.ctn_p);
+
+  /* Check the parent's mappings, if any.  */
+
+  if (i->u.ctn_p == NULL && i->cu.ctn_fp->ctf_parent)
+    {
+      ctf_list_t *l;
+
+      i->cu.ctn_fp = i->cu.ctn_fp->ctf_parent;
+      l = ctf_dynhash_lookup (i->cu.ctn_fp->ctf_decl_tag_map,
+			      (void *) i->i.ctn_type);
+
+      if (l != NULL)
+	i->u.ctn_p = ctf_list_prev (l);
+    }
+  if (i->u.ctn_p == NULL)
+    goto end_iter;
+
+ret:
+  mapping = (ctf_decl_tag_mapping_t *) i->u.ctn_p;
+  if (component_idx)
+    *component_idx = mapping->component_idx;
+  return mapping->decl_tag;
+
+end_iter:
+  ctf_next_destroy (i);
+  *it = NULL;
+  return (ctf_set_typed_errno (ofp, ECTF_NEXT_END));
 }
 
 /* Return the type ID of the type to which a given type tag is attached, or of
