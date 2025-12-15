@@ -1855,7 +1855,7 @@ ctf_bufopen (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
     }
 
   memset (hp, 0, sizeof (ctf_header_t));
-  memcpy (hp, fliphp, hdrsz);
+  memcpy (hp, fliphp, hdrsz);			/* Aligns the header.  */
   free (fliphp);
 
   if (format < CTF_VERSION_3)
@@ -1979,6 +1979,10 @@ ctf_bufopen (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
       goto validation_fail;
     }
 
+  /* Check for alignment.  Note that even after this check, the *dict as a
+     whole* may be arbitrarily aligned (commonplace in members of archives
+     beyond the first): we fix that up below.  */
+
   if (_libctf_unlikely_
       ((hp->cth_objt_off & 2)
        || (hp->cth_func_off & 2) || (hp->cth_objtidx_off & 2)
@@ -2067,8 +2071,8 @@ ctf_bufopen (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
 
   /* Once everything is determined to be valid, attempt to decompress the CTF
      data buffer if it is compressed, or copy it into new storage if it is not
-     compressed but needs endian-flipping.  Otherwise we just put the data
-     section's buffer pointer into ctf_buf, below.  */
+     compressed but needs endian-flipping or alignment.  Otherwise we just put
+     the data section's buffer pointer into ctf_buf, below.  */
 
   /* Note: if this is a v1 -- v3 buffer, it will be reallocated and expanded by
      upgrade_types(), invoked by init_static_types().  */
@@ -2129,7 +2133,9 @@ ctf_bufopen (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
 	  goto bad;
 	}
 
-      if (foreign_endian)
+      if (foreign_endian
+	  || (LCTF_ALIGN_OFFS ((uintptr_t) ctfsect->cts_data, 8)
+	      != (uintptr_t) ctfsect->cts_data))
 	{
 	  if ((fp->ctf_base = malloc (fp->ctf_size + sizeof (ctf_btf_header_t)))
 	      == NULL)
