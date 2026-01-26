@@ -6041,6 +6041,20 @@ dwarf2_cu::section () const
     return *this->per_cu->section ();
 }
 
+/* See cu.h.
+
+   This function is defined in this file (instead of cu.c) because it needs
+   to see the definition of struct dwo_unit.  */
+
+sect_offset
+dwarf2_cu::section_offset () const
+{
+  if (this->dwo_unit != nullptr)
+    return this->dwo_unit->sect_off;
+  else
+    return this->per_cu->sect_off ();
+}
+
 void
 dwarf2_cu::setup_type_unit_groups (struct die_info *die)
 {
@@ -17161,7 +17175,19 @@ dwarf2_fetch_die_loc_cu_off (cu_offset offset_in_cu, dwarf2_per_cu *per_cu,
 			     dwarf2_per_objfile *per_objfile,
 			     gdb::function_view<CORE_ADDR ()> get_frame_pc)
 {
-  sect_offset sect_off = per_cu->sect_off () + to_underlying (offset_in_cu);
+  /* For split DWARF, the section offset of PER_CU is the offset of the
+     skeleton CU in the main file, but OFFSET_IN_CU is relative to the start
+     of the CU in the .dwo file.  We need to use the section offset of the unit
+     in the .dwo file in that case.  */
+  dwarf2_cu *cu = per_objfile->get_cu (per_cu);
+  if (cu == nullptr)
+    cu = load_cu (per_cu, per_objfile, false);
+
+  /* We know this can't be a dummy CU, since we're executing something from
+     it.  */
+  gdb_assert (cu != nullptr);
+
+  sect_offset sect_off = cu->section_offset () + to_underlying (offset_in_cu);
 
   return dwarf2_fetch_die_loc_sect_off (sect_off, per_cu, per_objfile,
 					get_frame_pc);
