@@ -279,7 +279,9 @@ typedef struct ctf_header
 
 /* All of these flags bar CTF_F_COMPRESS and CTF_F_IDXSORTED are bug-workaround
    flags and are valid only in format v3: in v2 and below they cannot occur and
-   in v4 and later, they will be recycled for other purposes.  */
+   in v4 and later, they will be recycled for other purposes.  CTF_F_COMPRESS
+   is only valid in CTFv3 and below: CTFv4 relies on external compression (such
+   as ELF compresed sections).  */
 
 #define CTF_F_COMPRESS	0x1		/* Data buffer is compressed by libctf.  */
 #define CTF_F_NEWFUNCINFO 0x2		/* New v3 func info section format.  */
@@ -289,7 +291,7 @@ typedef struct ctf_header
 #define CTF_F_MAX_3 (CTF_F_COMPRESS | CTF_F_NEWFUNCINFO | CTF_F_IDXSORTED	\
 		     | CTF_F_DYNSTR | CTF_F_ARRNELEMS)
 
-#define CTF_F_MAX (CTF_F_COMPRESS | CTF_F_IDXSORTED)
+#define CTF_F_MAX (CTF_F_IDXSORTED)
 
   /* CTFv3 and below: variable entries.  */
 typedef struct ctf_varent_v3
