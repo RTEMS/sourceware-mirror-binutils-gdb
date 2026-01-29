@@ -209,7 +209,7 @@ ctf_create (ctf_error_t *errp)
   cts.cts_size = sizeof (hdr);
   cts.cts_entsize = 1;
 
-  if ((fp = ctf_bufopen_internal (&cts, NULL, NULL, 1, errp)) == NULL)
+  if ((fp = ctf_bufopen_len (&cts, NULL, NULL, NULL, 1, errp)) == NULL)
     goto err;
 
   /* These hashes will have been initialized with a starting size of zero,
