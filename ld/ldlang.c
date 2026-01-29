@@ -175,12 +175,6 @@ static int lang_sizing_iteration = 0;
 #define outside_symbol_address(q) \
   ((q)->value + outside_section_address (q->section))
 
-/* CTF sections smaller than this are not compressed: compression of
-   dictionaries this small doesn't gain much, and this lets consumers mmap the
-   sections directly out of the ELF file and use them with no decompression
-   overhead if they want to.  */
-#define CTF_COMPRESSION_THRESHOLD 4096
-
 void *
 stat_alloc (size_t size)
 {
@@ -4121,7 +4115,6 @@ lang_write_ctf (int late)
   size_t output_size;
   asection *btf_sect, *ctf_sect;
   asection *output_sect;
-  size_t compression_threshold = CTF_COMPRESSION_THRESHOLD;
   unsigned char *contents = NULL;
   int really_btf;
   int err = 0;
@@ -4162,15 +4155,13 @@ lang_write_ctf (int late)
 
   if (is_pure_btf < 0)
     err = 1;
-  else if (is_pure_btf)
-    compression_threshold = (size_t) -1;
 
   /* Finally serialize, taking note of whether what we actually generated was
      CTF in the end.  Errors are handled below, if this section is actually
      output.  */
   if (!err)
     contents = ctf_link_write (ctf_output, &output_size,
-			       compression_threshold, &really_btf);
+			       (unsigned long) -1, &really_btf);
 
   /* Emit CTF or BTF, whichever was used and is needed.  We decide which to
      emit to based on the decision taken by section removal, above, not
