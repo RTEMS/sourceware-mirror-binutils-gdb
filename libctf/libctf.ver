@@ -151,6 +151,7 @@ LIBCTF_2.0 {
 
 	ctf_link_add;
 	ctf_link_add_cu_mapping;
+	ctf_link_set_default_parent_cuname;
 	ctf_link_set_memb_name_changer;
 	ctf_link_set_variable_filter;
 	ctf_link;

@@ -3849,6 +3849,9 @@ ldlang_open_ctf (void)
 	  continue;
 	}
 
+      /* Set the cuname suitably for this entry.  */
+      ctf_link_set_default_parent_cuname (file->the_ctf, file->filename);
+
       /* Prevent the contents of this section from being written.  */
 
       /* One of these sections must exist if ctf_bfdopen() succeeded.  */
@@ -3962,19 +3965,28 @@ lang_merge_ctf (void)
 
   LANG_FOR_EACH_INPUT_STATEMENT (file)
     {
+      char *cuname_prefix = NULL;
+
       if (!file->the_ctf)
 	continue;
 
+      if (file->the_bfd->my_archive)
+	cuname_prefix = xasprintf ("%s:",
+				   bfd_get_filename (file->the_bfd->my_archive));
+
       /* Takes ownership of file->the_ctf.  */
-      if (ctf_link_add (ctf_output, file->the_ctf, file->filename) < 0)
+      if (ctf_link_add (ctf_output, file->the_ctf, file->filename,
+			cuname_prefix) < 0)
 	{
 	  einfo (_("%P: warning: CTF section in %pB cannot be linked: `%s'\n"),
 		 file->the_bfd, ctf_errmsg (ctf_errno (ctf_output)));
 	  ctf_close (file->the_ctf);
+	  free (cuname_prefix);
 	  file->the_ctf = NULL;
 	  ld_stop_phase (PHASE_CTF);
 	  continue;
 	}
+      free (cuname_prefix);
     }
 
   if (!config.ctf_share_duplicated)
