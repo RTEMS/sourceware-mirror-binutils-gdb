@@ -225,7 +225,6 @@ typedef struct ctf_header
   ctf_btf_header_t btf;		/* Leading component is BTF. */
   ctf_preamble_t cth_preamble;
   uint32_t cth_cu_name;		/* Ref to CU name (may be 0).  */
-  uint32_t cth_parent_name;	/* Ref to basename of parent.  */
   uint32_t cth_parent_strlen;	/* cth_strlen of parent (may be 0).  */
   uint32_t cth_parent_ntypes;	/* Number of types in parent (may be 0).  */
   uint32_t cth_objt_off;	/* Offset of object section.  */

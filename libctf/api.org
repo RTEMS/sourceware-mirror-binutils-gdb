@@ -120,6 +120,8 @@ ctf_label_f
 ctf_label_topmost, ctf_label_info, ctf_label_iter, ctf_label_next (last never
 implemented, prototype only)
 
+ctf_dict_set_parent_name
+
 ** Errors
 
 *** Additions (so far)

@@ -520,9 +520,6 @@ ctf_dump_header (ctf_dict_t *fp, ctf_dump_state_t *state)
       ctf_dump_append (fp, state, str);
     }
 
-  if (ctf_dump_header_strfield (fp, state, "Parent name", hp->cth_parent_name) < 0)
-    goto err;
-
   if (ctf_dump_header_strfield (fp, state, "Compilation unit name",
 				hp->cth_cu_name) < 0)
     goto err;

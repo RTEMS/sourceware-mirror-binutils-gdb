@@ -30,7 +30,6 @@ LIBCTF_2.0 {
 	ctf_dict_cuname;
 	ctf_dict_set_cuname;
 	ctf_dict_parent_name;
-	ctf_dict_set_parent_name;
 	ctf_dict_parent;
 	ctf_type_isparent;
 

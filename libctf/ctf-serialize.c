@@ -1542,9 +1542,6 @@ ctf_preserialize (ctf_dict_t *fp, int force_ctf)
 
   if (!fp->ctf_serialize.cs_is_btf)
     {
-      if ((fp->ctf_flags & LCTF_CHILD) && (fp->ctf_parent_name != NULL))
-	ctf_str_add_no_dedup_ref (fp, fp->ctf_parent_name,
-				  &hdrp->cth_parent_name);
       if (fp->ctf_cu_name != NULL)
 	ctf_str_add_no_dedup_ref (fp, fp->ctf_cu_name, &hdrp->cth_cu_name);
 

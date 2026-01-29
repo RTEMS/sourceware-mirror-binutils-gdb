@@ -552,10 +552,10 @@ extern const char *ctf_dict_parent_name (ctf_dict_t *);
 extern ctf_bool_t ctf_type_isparent (const ctf_dict_t *, ctf_id_t);
 extern ctf_ret_t ctf_import (ctf_dict_t *child, ctf_dict_t *parent);
 
-/* Set these names (used when creating dicts).  */
+/* Set the cuname (used when creating dicts).  (The parent name is obsolescent
+   and cannot be set.)  */
 
 extern ctf_ret_t ctf_dict_set_cuname (ctf_dict_t *, const char *);
-extern ctf_ret_t ctf_dict_set_parent_name (ctf_dict_t *, const char *);
 
 /* Set and get the CTF data model (see above).  */
 

@@ -3324,7 +3324,7 @@ ctf_dedup_emit_type (const char *hval, ctf_dict_t *output, ctf_dict_t **inputs,
 	    ctf_dict_set_cuname (target, ctf_dict_cuname (input));
 	  else
 	    ctf_dict_set_cuname (target, "unnamed-CU");
-	  ctf_dict_set_parent_name (target, _CTF_SECTION);
+	  target->ctf_parent_name = _CTF_SECTION;
 
 	  input->ctf_dedup.cd_output = target;
 	  input->ctf_link_in_out = target;
