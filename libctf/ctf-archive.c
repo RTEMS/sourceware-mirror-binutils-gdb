@@ -601,6 +601,7 @@ ctf_arc_close (ctf_archive_t *arc)
     }
   else
     ctf_dict_close (arc->ctfi_dict);
+  free (arc->ctfi_default_parent_cuname);
   free (arc->ctfi_symdicts);
   free (arc->ctfi_symnamedicts);
   ctf_dynhash_destroy (arc->ctfi_dicts);
@@ -612,6 +613,16 @@ ctf_arc_close (ctf_archive_t *arc)
   if (arc->ctfi_bfd_close)
     arc->ctfi_bfd_close (arc);
   free (arc);
+}
+
+/* Default the parent dict's cuname, if currently unset.  Used by linkers
+   to set the parent cuname without needing to open the dict.
+
+   (Not yet hooked up.)  */
+void
+ctf_link_set_default_parent_cuname (ctf_archive_t *arc, const char *cuname)
+{
+  arc->ctfi_default_parent_cuname = xstrdup (cuname);
 }
 
 /* Return the ctf_dict_t with the given name, or NULL if none, setting 'err' if
