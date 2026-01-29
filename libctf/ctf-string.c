@@ -288,7 +288,6 @@ ctf_str_free_atoms (ctf_dict_t *fp)
 #define CTF_STR_ADD_REF		0x1
 #define CTF_STR_PROVISIONAL	0x2
 #define CTF_STR_COPY		0x4
-#define CTF_STR_NO_DEDUP	0x8
 
 /* Add a string to the atoms table, copying the passed-in string if
    necessary.  Return the atom added. Return NULL only when out of memory
@@ -313,7 +312,7 @@ ctf_str_add_ref_internal (ctf_dict_t *fp, const char *str,
 
   atom = ctf_dynhash_lookup (fp->ctf_str_atoms, str);
 
-  if (!atom && fp->ctf_parent && !(flags & CTF_STR_NO_DEDUP))
+  if (!atom && fp->ctf_parent)
     {
       lookup_fp = fp->ctf_parent;
       atom = ctf_dynhash_lookup (lookup_fp->ctf_str_atoms, str);
@@ -325,9 +324,6 @@ ctf_str_add_ref_internal (ctf_dict_t *fp, const char *str,
 
   if (atom)
     {
-      if (flags & CTF_STR_NO_DEDUP)
-	atom->csa_flags |= CTF_STR_ATOM_NO_DEDUP;
-
       if (atom->csa_offset < get_prov_offset (fp)
 	  || (!fp->ctf_serialize.cs_is_btf && atom->csa_external_offset))
 	{
@@ -377,9 +373,6 @@ ctf_str_add_ref_internal (ctf_dict_t *fp, const char *str,
   if ((atom = malloc (sizeof (struct ctf_str_atom))) == NULL)
     goto oom;
   memset (atom, 0, sizeof (struct ctf_str_atom));
-
-  if (flags & CTF_STR_NO_DEDUP)
-    atom->csa_flags |= CTF_STR_ATOM_NO_DEDUP;
 
   /* Special case: there is always only one "", and it is always in the parent
      if there is a parent/child relationship in force (even though it is
@@ -502,15 +495,6 @@ ctf_str_add_ref (ctf_dict_t *fp, const char *str, uint32_t *ref)
 {
   return ctf_str_add_flagged (fp, str, ref,
 			      CTF_STR_ADD_REF | CTF_STR_PROVISIONAL);
-}
-
-/* Like ctf_str_add_ref(), but prevent this string from being deduplicated.  */
-uint32_t
-ctf_str_add_no_dedup_ref (ctf_dict_t *fp, const char *str, uint32_t *ref)
-{
-  return ctf_str_add_flagged (fp, str, ref,
-			      CTF_STR_ADD_REF | CTF_STR_PROVISIONAL
-			      | CTF_STR_NO_DEDUP);
 }
 
 /* Add an external strtab reference at OFFSET.  Returns zero if the addition

@@ -85,8 +85,8 @@ main (int argc, char *argv[])
 
   /* Link them together.  */
 
-  if (ctf_link_add (fp, arc1, "a") < 0 ||
-      ctf_link_add (fp, arc2, "b") < 0)
+  if (ctf_link_add (fp, arc1, "a", NULL) < 0 ||
+      ctf_link_add (fp, arc2, "b", NULL) < 0)
     goto link_err;
 
   if (ctf_link (fp, 0) < 0)
