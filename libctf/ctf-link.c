@@ -309,7 +309,7 @@ ctf_create_per_cu (ctf_dict_t *fp, ctf_dict_t *input, const char *cu_name)
 
       ctf_dict_set_cuname (cu_fp, cu_name);
 
-      ctf_dict_set_parent_name (cu_fp, _CTF_SECTION);
+      cu_fp->ctf_parent_name = _CTF_SECTION;
       cu_fp->ctf_link_in_out = fp;
       fp->ctf_link_in_out = cu_fp;
 
@@ -1821,17 +1821,6 @@ ctf_accumulate_archive_names (void *key, void *value, void *arg_)
   arg->files[(arg->i) - 1] = fp;
 }
 
-/* Change the name of the parent CTF section, if the name transformer has got to
-   it.  */
-static void
-ctf_change_parent_name (void *key _libctf_unused_, void *value, void *arg)
-{
-  ctf_dict_t *fp = (ctf_dict_t *) value;
-  const char *name = (const char *) arg;
-
-  ctf_dict_set_parent_name (fp, name);
-}
-
 /* Write out a CTF archive (if there are per-CU CTF files) or a CTF file
    (otherwise) into a new dynamically-allocated string, and return it.
    Members with sizes above THRESHOLD are compressed.
@@ -1901,11 +1890,11 @@ ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
       transformed_name = fp->ctf_link_memb_name_changer (fp, _CTF_SECTION,
 							 nc_arg);
 
-      if (transformed_name != NULL)
+      if (transformed_name != NULL
+	  && ctf_dict_set_cuname (fp, transformed_name) < 0)
 	{
-	  arg.names[0] = transformed_name;
-	  ctf_dynhash_iter (fp->ctf_link_outputs, ctf_change_parent_name,
-			    transformed_name);
+	  errloc = "cuname transformation";
+	  goto err;
 	}
     }
 
