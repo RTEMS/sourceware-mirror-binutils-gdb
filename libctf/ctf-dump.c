@@ -145,10 +145,14 @@ ctf_dump_format_type (ctf_dict_t *fp, ctf_id_t id, int flag)
 
       kind = ctf_type_kind (fp, id);
 
-      /* Report encodings of everything with an encoding.  */
-      if (ctf_type_encoding (fp, id, &ep) == 0)
+      /* Report bitfield encodings of everything that can meaningfully have one
+	 (no, CTFv3, this does not include floats, but in future it might
+	 include enums).  */
+      if ((kind != CTF_K_FLOAT && kind != CTF_K_BTF_FLOAT)
+	  && ctf_type_encoding (fp, id, &ep) == 0)
 	{
 	  if ((ssize_t) ep.cte_bits != ctf_type_size (fp, id) * CHAR_BIT
+	      && (ssize_t) ep.cte_bits != 0
 	      && flag & CTF_FT_BITFIELD)
 	    {
 	      if (asprintf (&bit, ":%i", ep.cte_bits) < 0)
