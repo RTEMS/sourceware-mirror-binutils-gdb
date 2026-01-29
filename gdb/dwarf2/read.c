@@ -97,6 +97,7 @@
 #include "dwarf2/error.h"
 #include "gdbsupport/unordered_set.h"
 #include "extract-store-integer.h"
+#include "cli/cli-style.h"
 
 /* When == 1, print basic high level tracing messages.
    When > 1, be more verbose.
@@ -1267,9 +1268,10 @@ dwarf2_per_bfd::locate_sections (asection *sectp,
     {
       bfd_size_type size = sectp->size;
       warning (_("Discarding section %s which has an invalid size (%s) "
-		 "[in module %s]"),
+		 "[in module %ps]"),
 	       bfd_section_name (sectp), phex_nz (size),
-	       this->filename ());
+	       styled_string (file_name_style.style (),
+			      this->filename ()));
     }
   else if (names.info.matches (sectp->name))
     {
@@ -7094,7 +7096,9 @@ cutu_reader::locate_dwo_sections (objfile *objfile, dwo_file &dwo_file)
 	      else
 		{
 		  warning (_("Multiple .debug_macro.dwo sections found in "
-			     "%s, ignoring them."), dwo_file.dbfd->filename);
+			     "%ps, ignoring them."),
+			   styled_string (file_name_style.style (),
+					  dwo_file.dbfd->filename));
 
 		  dwo_sections.macro = dwarf2_section_info {};
 		  complained_about_macro_already = true;
@@ -7477,9 +7481,11 @@ cutu_reader::lookup_dwo_cutu (dwarf2_cu *cu, const char *dwo_name,
 				lbasename (dwp_file->name));
 
     warning (_("Could not find DWO %s %s(%s)%s referenced by %s at offset %s"
-	       " [in module %s]"),
+	       " [in module %ps]"),
 	     kind, dwo_name, hex_string (signature), dwp_text.c_str (), kind,
-	     sect_offset_str (cu->per_cu->sect_off ()), objfile_name (objfile));
+	     sect_offset_str (cu->per_cu->sect_off ()),
+	     styled_string (file_name_style.style (),
+			    objfile_name (objfile)));
   }
   return NULL;
 }

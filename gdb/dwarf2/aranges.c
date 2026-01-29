@@ -82,10 +82,11 @@ read_addrmap_from_aranges (dwarf2_per_objfile *per_objfile,
       const uint8_t offset_size = dwarf5_is_dwarf64 ? 8 : 4;
       if (addr + entry_length > section->buffer + section->size)
 	{
-	  warn->warn (_("Section .debug_aranges in %s entry at offset %s "
+	  warn->warn (_("Section .debug_aranges in %ps entry at offset %s "
 			"length %s exceeds section length %s, "
 			"ignoring .debug_aranges."),
-		      objfile_name (objfile),
+		      styled_string (file_name_style.style (),
+				     objfile_name (objfile)),
 		      plongest (entry_addr - section->buffer),
 		      plongest (bytes_read + entry_length),
 		      pulongest (section->size));
@@ -98,9 +99,10 @@ read_addrmap_from_aranges (dwarf2_per_objfile *per_objfile,
       if (version != 2)
 	{
 	  warn->warn
-	    (_("Section .debug_aranges in %s entry at offset %s "
+	    (_("Section .debug_aranges in %ps entry at offset %s "
 	       "has unsupported version %d, ignoring .debug_aranges."),
-	     objfile_name (objfile),
+	     styled_string (file_name_style.style (),
+			    objfile_name (objfile)),
 	     plongest (entry_addr - section->buffer), version);
 	  return false;
 	}
@@ -112,10 +114,11 @@ read_addrmap_from_aranges (dwarf2_per_objfile *per_objfile,
 	= debug_info_offset_to_per_cu.find (sect_offset (debug_info_offset));
       if (per_cu_it == debug_info_offset_to_per_cu.cend ())
 	{
-	  warn->warn (_("Section .debug_aranges in %s entry at offset %s "
+	  warn->warn (_("Section .debug_aranges in %ps entry at offset %s "
 			"debug_info_offset %s does not exists, "
 			"ignoring .debug_aranges."),
-		      objfile_name (objfile),
+		      styled_string (file_name_style.style (),
+				     objfile_name (objfile)),
 		      plongest (entry_addr - section->buffer),
 		      pulongest (debug_info_offset));
 	  return false;
@@ -124,9 +127,10 @@ read_addrmap_from_aranges (dwarf2_per_objfile *per_objfile,
 	= debug_info_offset_seen.insert (sect_offset (debug_info_offset));
       if (!insertpair.second)
 	{
-	  warn->warn (_("Section .debug_aranges in %s has duplicate "
+	  warn->warn (_("Section .debug_aranges in %ps has duplicate "
 			"debug_info_offset %s, ignoring .debug_aranges."),
-		      objfile_name (objfile),
+		      styled_string (file_name_style.style (),
+				     objfile_name (objfile)),
 		      sect_offset_str (sect_offset (debug_info_offset)));
 	  return false;
 	}
@@ -136,9 +140,10 @@ read_addrmap_from_aranges (dwarf2_per_objfile *per_objfile,
       if (address_size < 1 || address_size > 8)
 	{
 	  warn->warn
-	    (_("Section .debug_aranges in %s entry at offset %s "
+	    (_("Section .debug_aranges in %ps entry at offset %s "
 	       "address_size %u is invalid, ignoring .debug_aranges."),
-	     objfile_name (objfile),
+	     styled_string (file_name_style.style (),
+			    objfile_name (objfile)),
 	     plongest (entry_addr - section->buffer), address_size);
 	  return false;
 	}
@@ -146,10 +151,11 @@ read_addrmap_from_aranges (dwarf2_per_objfile *per_objfile,
       const uint8_t segment_selector_size = *addr++;
       if (segment_selector_size != 0)
 	{
-	  warn->warn (_("Section .debug_aranges in %s entry at offset %s "
+	  warn->warn (_("Section .debug_aranges in %ps entry at offset %s "
 			"segment_selector_size %u is not supported, "
 			"ignoring .debug_aranges."),
-		      objfile_name (objfile),
+		      styled_string (file_name_style.style (),
+				     objfile_name (objfile)),
 		      plongest (entry_addr - section->buffer),
 		      segment_selector_size);
 	  return false;
@@ -168,10 +174,11 @@ read_addrmap_from_aranges (dwarf2_per_objfile *per_objfile,
 	{
 	  if (addr + 2 * address_size > entry_end)
 	    {
-	      warn->warn (_("Section .debug_aranges in %s entry at offset %s "
+	      warn->warn (_("Section .debug_aranges in %ps entry at offset %s "
 			    "address list is not properly terminated, "
 			    "ignoring .debug_aranges."),
-			  objfile_name (objfile),
+			  styled_string (file_name_style.style (),
+					 objfile_name (objfile)),
 			  plongest (entry_addr - section->buffer));
 	      return false;
 	    }

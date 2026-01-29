@@ -33,6 +33,7 @@
 #include "record.h"
 #include "extract-store-integer.h"
 #include "producer.h"
+#include "cli/cli-style.h"
 
 #include "complaints.h"
 #include "dwarf2/frame.h"
@@ -2157,8 +2158,10 @@ dwarf2_build_frame_info (struct objfile *objfile)
 
 	  catch (const gdb_exception_error &e)
 	    {
-	      warning (_("skipping .eh_frame info of %s: %s"),
-		       objfile_name (objfile), e.what ());
+	      warning (_("skipping .eh_frame info of %ps: %s"),
+		       styled_string (file_name_style.style (),
+				      objfile_name (objfile)),
+		       e.what ());
 
 	      fde_table.clear ();
 	      /* The cie_table is discarded below.  */
@@ -2186,8 +2189,10 @@ dwarf2_build_frame_info (struct objfile *objfile)
 	}
       catch (const gdb_exception_error &e)
 	{
-	  warning (_("skipping .debug_frame info of %s: %s"),
-		   objfile_name (objfile), e.what ());
+	  warning (_("skipping .debug_frame info of %ps: %s"),
+		   styled_string (file_name_style.style (),
+				  objfile_name (objfile)),
+		   e.what ());
 
 	  fde_table.resize (num_old_fde_entries);
 	}
