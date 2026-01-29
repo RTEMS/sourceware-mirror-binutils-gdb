@@ -3832,6 +3832,15 @@ ldlang_open_ctf (void)
     {
       asection *sect;
 
+      /* Skip various things which aren't files that can contain CTF at all,
+	 like files added by -R, the files representing archives, etc: none
+	 of these have a BFD.  Dynamic archives with CTF also don't get it
+	 sucked in.  */
+
+      if (file->the_bfd == NULL || ((file->the_bfd->flags) & DYNAMIC) != 0
+	  || !bfd_check_format (file->the_bfd, bfd_object))
+	continue;
+
       /* Incoming files from the compiler have a single ctf_dict_t in them
 	 (which is presented to us by the libctf API in a ctf_archive_t
 	 wrapper): files derived from a previous relocatable link have a CTF
