@@ -1650,10 +1650,6 @@ ctf_dict_t *ctf_simple_open (const char *ctfsect, size_t ctfsect_size,
   return ctf_bufopen (ctfsectp, symsectp, strsectp, errp);
 }
 
-ctf_dict_t *
-ctf_bufopen_internal (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
-		      const ctf_sect_t *strsect, int fresh, ctf_error_t *errp);
-
 /* Decode the specified CTF or BTF buffer and optional symbol table, and create
    a new CTF dict representing the type information.  This code can be used
    directly by users, or it can be used as the engine for ctf_fdopen() or
@@ -1663,12 +1659,34 @@ ctf_dict_t *
 ctf_bufopen (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
 	     const ctf_sect_t *strsect, ctf_error_t *errp)
 {
-  return ctf_bufopen_internal (ctfsect, symsect, strsect, 0, errp);
+  return ctf_bufopen_len (ctfsect, symsect, strsect, NULL, 0, errp);
 }
 
+/* Get the length of a CTF buffer, without returning it.  The length includes
+   the size of the preamble and header.  The length is largely unvalidated,
+   though will not be larger than the section size.  */
+
+ssize_t
+ctf_buflen (const ctf_sect_t *ctfsect, ctf_error_t *errp)
+{
+  ssize_t len;
+
+  ctf_bufopen_len (ctfsect, NULL, NULL, &len, 0, errp);
+  return len;
+}
+
+/* Internal workings of ctf_bufopen and ctf_buflen.
+
+   The return value is somewhat strange.  If LEN is non-null, it is set to -1
+   on error, and the return value of the function itself is always NULL;
+   if LEN is NULL, the dict is returned in ctf_dict_t, or NULL on error.
+
+   If FRESH, this is a newly-created dictionary.  */
+
 ctf_dict_t *
-ctf_bufopen_internal (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
-		      const ctf_sect_t *strsect, int fresh, ctf_error_t *errp)
+ctf_bufopen_len (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
+		 const ctf_sect_t *strsect, ssize_t *len, int fresh,
+		 ctf_error_t *errp)
 {
   const ctf_preamble_v3_t *pp;
   const ctf_btf_preamble_t *bp;
@@ -1704,6 +1722,10 @@ ctf_bufopen_internal (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
 	       ctfsect ? ctfsect->cts_size : 0,
 	       symsect ? symsect->cts_size : 0,
 	       strsect ? strsect->cts_size : 0);
+
+  /* Prepare for possible error.  */
+  if (len)
+    *len = -1;
 
   if ((ctfsect == NULL) || ((symsect != NULL) && (strsect == NULL)))
     return (ctf_set_open_errno (errp, EINVAL));
@@ -1850,6 +1872,37 @@ ctf_bufopen_internal (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
 	  free (fliphp);
 	  return (ctf_set_open_errno (errp, ECTF_INTERNAL));
 	}
+    }
+
+  /* If we are being asked for the dict length, we can now tell what it is:
+     return it.  We should never be asked this question for v3 and below,
+     since we only need it for new-format archives: if we are, error.  */
+
+  if (len)
+    {
+      ctf_header_t *hp = (ctf_header_t *) fliphp;
+
+      if (format != IS_BTF && format != IS_CTF)
+	{
+	  ctf_err (err_locus (NULL), ECTF_INTERNAL,
+		   _("attempt to determine compressed length of pre-v4 dict"));
+	    return (ctf_set_open_errno (errp, ECTF_INTERNAL));
+	}
+
+      if (format == IS_CTF && (hp->cth_flags & CTF_F_COMPRESS))
+	{
+	  ctf_err (err_locus (NULL), ECTF_INTERNAL,
+		   _("v4 dicts may not use inline compression"));
+	    return (ctf_set_open_errno (errp, ECTF_INTERNAL));
+	}
+
+      *len = sizeof (ctf_btf_header_t) + hp->btf.bth_str_off + hp->btf.bth_str_len;
+
+      if (*len > (ssize_t) ctfsect->cts_size)
+	*len = ctfsect->cts_size;
+
+      free (fliphp);
+      return NULL;				/* Not an error in this case.  */
     }
 
   if ((hp = malloc (sizeof (ctf_header_t))) == NULL)

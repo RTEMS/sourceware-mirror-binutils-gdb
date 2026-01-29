@@ -852,10 +852,11 @@ extern ssize_t ctf_buflen (const ctf_sect_t *ctfsect, ctf_error_t *errp);
 extern ctf_ret_t ctf_flip_header (void *, int, int);
 extern ctf_error_t ctf_flip (ctf_dict_t *, ctf_header_t *, unsigned char *,
 			     int is_btf, int to_foreign);
-extern ctf_dict_t *ctf_bufopen_internal (const ctf_sect_t *ctfsect,
-					 const ctf_sect_t *symsect,
-					 const ctf_sect_t *strsect,
-					 int fresh, ctf_error_t *errp);
+extern ctf_dict_t *ctf_bufopen_len (const ctf_sect_t *ctfsect,
+				    const ctf_sect_t *symsect,
+				    const ctf_sect_t *strsect,
+				    ssize_t *len, int fresh,
+				    ctf_error_t *errp);
 extern void ctf_symsect_endianness (ctf_dict_t *fp, int little_endian);
 
 extern ctf_ret_t ctf_import_unref (ctf_dict_t *fp, ctf_dict_t *pfp);
