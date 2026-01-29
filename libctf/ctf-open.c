@@ -533,12 +533,6 @@ ctf_set_base (ctf_dict_t *fp, const ctf_header_t *hp, unsigned char *base)
   fp->ctf_str[CTF_STRTAB_0].cts_strs = (const char *) fp->ctf_buf
     + hp->btf.bth_str_off;
   fp->ctf_str[CTF_STRTAB_0].cts_len = hp->btf.bth_str_len;
-
-  if (hp->cth_cu_name != 0)
-    fp->ctf_cu_name = ctf_strptr (fp, hp->cth_cu_name);
-
-  if (fp->ctf_cu_name)
-    ctf_dprintf ("ctf_set_base: CU name %s\n", fp->ctf_cu_name);
 }
 
 static ctf_error_t
@@ -828,6 +822,19 @@ init_static_types_names_internal (ctf_dict_t *fp, ctf_header_t *cth, int fresh,
   tend = (ctf_type_t *) ((uintptr_t) tbuf + cth->btf.bth_type_len);
 
   assert (!(fp->ctf_flags & LCTF_NO_STR));
+
+  /* Note: archive members will already have a cuname at this point, set from
+     the archive member name, but it may well be an object file name in /tmp or
+     something like that: return to the name the compiler told us, if any.  */
+  if (cth->cth_cu_name != 0)
+    {
+      free (fp->ctf_dyn_cu_name);
+      fp->ctf_dyn_cu_name = NULL;
+      fp->ctf_cu_name = ctf_strptr (fp, cth->cth_cu_name);
+    }
+
+  if (fp->ctf_cu_name)
+    ctf_dprintf ("CU name %s\n", fp->ctf_cu_name);
 
   xp = &fp->ctf_txlate[1];
 

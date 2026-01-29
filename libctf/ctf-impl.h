@@ -240,7 +240,6 @@ typedef struct ctf_err_locus
 
 #define CTF_STR_ATOM_FREEABLE	0x1
 #define CTF_STR_ATOM_IN_PARENT	0x2
-#define CTF_STR_ATOM_NO_DEDUP	0x4
 
 typedef struct ctf_str_atom
 {
@@ -578,6 +577,7 @@ struct ctf_archive_internal
   ctf_dict_t *ctfi_dict;
   struct ctf_archive *ctfi_archive;
   ctf_dynhash_t *ctfi_dicts;	  /* Dicts we have opened and cached.  */
+  char *ctfi_default_parent_cuname; /* Default the parent dict's cuname.  */
   ctf_dict_t *ctfi_crossdict_cache; /* Cross-dict caching.  */
   ctf_dict_t **ctfi_symdicts;	  /* Array of index -> ctf_dict_t *.  */
   ctf_dynhash_t *ctfi_symnamedicts; /* Hash of name -> ctf_dict_t *.  */
@@ -848,6 +848,7 @@ extern struct ctf_archive *ctf_arc_open_internal (const char *, ctf_error_t *);
 extern void ctf_arc_close_internal (struct ctf_archive *);
 extern const ctf_preamble_t *ctf_arc_bufpreamble (const ctf_sect_t *);
 extern void *ctf_set_open_errno (ctf_error_t *, ctf_error_t);
+extern ssize_t ctf_buflen (const ctf_sect_t *ctfsect, ctf_error_t *errp);
 extern ctf_ret_t ctf_flip_header (void *, int, int);
 extern ctf_error_t ctf_flip (ctf_dict_t *, ctf_header_t *, unsigned char *,
 			     int is_btf, int to_foreign);

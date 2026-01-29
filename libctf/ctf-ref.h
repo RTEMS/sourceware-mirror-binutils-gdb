@@ -33,8 +33,6 @@ typedef struct ctf_ref
 } ctf_ref_t;
 
 extern uint32_t ctf_str_add_ref (ctf_dict_t *, const char *, uint32_t *ref);
-extern uint32_t ctf_str_add_no_dedup_ref (ctf_dict_t *, const char *,
-					  uint32_t *ref);
 
 extern ctf_ref_t *ctf_create_ref (ctf_dict_t *, ctf_list_t *, uint32_t *ref);
 extern void ctf_purge_ref_list (ctf_dict_t *, ctf_list_t *);

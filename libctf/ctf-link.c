@@ -72,6 +72,7 @@ typedef struct ctf_link_input
   char *clin_filename;
   ctf_archive_t *clin_arc;
   ctf_dict_t *clin_fp;
+  char *cuname_prefix;
   int n;
 } ctf_link_input_t;
 
@@ -82,6 +83,7 @@ ctf_link_input_close (void *input)
   if (i->clin_arc)
     ctf_arc_close (i->clin_arc);
   free (i->clin_filename);
+  free (i->cuname_prefix);
   free (i);
 }
 
@@ -89,11 +91,12 @@ ctf_link_input_close (void *input)
    in the middle of an ongoing link.  */
 static ctf_ret_t
 ctf_link_add_internal (ctf_dict_t *fp, ctf_archive_t *ctf,
-		       ctf_dict_t *fp_input, const char *name)
+		       ctf_dict_t *fp_input, const char *name,
+		       const char *cuname_prefix)
 {
   int existing = 0;
   ctf_link_input_t *input;
-  char *filename, *keyname;
+  char *filename, *keyname, *prefix = NULL;
 
   /* Existing: return it, or (if a different dict with the same name
      is already there) make up a new unique name.  Always use the actual name
@@ -110,32 +113,38 @@ ctf_link_add_internal (ctf_dict_t *fp, ctf_archive_t *ctf,
   if ((filename = strdup (name)) == NULL)
     goto oom;
 
-  if ((input = calloc (1, sizeof (ctf_link_input_t))) == NULL)
+  if (cuname_prefix && ((prefix = strdup (cuname_prefix)) == NULL))
     goto oom1;
+
+  if ((input = calloc (1, sizeof (ctf_link_input_t))) == NULL)
+    goto oom2;
 
   input->clin_arc = ctf;
   input->clin_fp = fp_input;
   input->clin_filename = filename;
+  input->cuname_prefix = prefix;
   input->n = ctf_dynhash_elements (fp->ctf_link_inputs);
 
   if (existing)
     {
       if (asprintf (&keyname, "%s#%li", name, (long int)
 		    ctf_dynhash_elements (fp->ctf_link_inputs)) < 0)
-	goto oom2;
+	goto oom3;
     }
   else if ((keyname = strdup (name)) == NULL)
-    goto oom2;
+    goto oom3;
 
   if (ctf_dynhash_insert (fp->ctf_link_inputs, keyname, input) < 0)
-    goto oom3;
+    goto oom4;
 
   return 0;
 
- oom3:
+ oom4:
   free (keyname);
- oom2:
+ oom3:
   free (input);
+ oom2:
+  free (prefix);
  oom1:
   free (filename);
  oom:
@@ -151,6 +160,9 @@ ctf_link_add_internal (ctf_dict_t *fp, ctf_archive_t *ctf,
    cu-mapped inputs briefly (compensating for the memory usage of the
    smushed-together cu-mapped verion).
 
+   The CUNAME_PREFIX, if set, prefixes all input cunames with a given string
+   (used for archives).
+
    Passed in CTF args are owned by the dictionary and will be freed by it.
 
    The order of calls to this function influences the order of types in the
@@ -161,7 +173,8 @@ ctf_link_add_internal (ctf_dict_t *fp, ctf_archive_t *ctf,
    derived from NAME.  */
 
 ctf_ret_t
-ctf_link_add (ctf_dict_t *fp, ctf_archive_t *ctf, const char *name)
+ctf_link_add (ctf_dict_t *fp, ctf_archive_t *ctf, const char *name,
+	      const char *cuname_prefix)
 {
   if (!name)
     return (ctf_set_errno (fp, EINVAL));
@@ -185,7 +198,7 @@ ctf_link_add (ctf_dict_t *fp, ctf_archive_t *ctf, const char *name)
     return (ctf_set_errno (fp, ECTF_NEEDSBFD));
 #endif
 
-  return ctf_link_add_internal (fp, ctf, NULL, name);
+  return ctf_link_add_internal (fp, ctf, NULL, name, cuname_prefix);
 }
 
 /* Lazily open a CTF archive for linking, if not already open.
@@ -549,8 +562,9 @@ ctf_link_deduplicating_count_inputs (ctf_dict_t *fp, ctf_dynhash_t *cu_names,
 	  return -1;				/* errno is set for us.  */
 	}
 
-      /* If this is an unnamed, zero-archive dict, propagate the input name into the
-	 dict itself, for the sake of deduplicator child dict naming.  */
+      /* If this is an unnamed, single-dict archive, propagate the input name
+	 into the dict itself, for the sake of deduplicator child dict
+	 naming.  */
 
       if (one_input->clin_arc
 	  && ctf_archive_count (one_input->clin_arc) == 1
@@ -588,6 +602,8 @@ ctf_link_deduplicating_close_inputs (ctf_dict_t *fp, ctf_dynhash_t *cu_names,
 /* Allocate and populate an inputs array big enough for a given set of inputs:
    either a specific set of CU names (those from that set found in the
    ctf_link_inputs), or the entire ctf_link_inputs (if cu_names is not set).
+   The cunames are optionally prefixed with the cuname_prefix at the same time.
+
    The number of inputs (from ctf_link_deduplicating_count_inputs, above) is
    passed in NINPUTS: an array of uint32_t containing parent pointers
    (corresponding to those members of the inputs that have parents) is allocated
@@ -635,7 +651,7 @@ ctf_link_deduplicating_open_inputs (ctf_dict_t *fp, ctf_dynhash_t *cu_names,
 					 ctf_link_sort_inputs, &sort_arg)) == 0)
     {
       const char *one_name = (const char *) name;
-      const char *arc_name;
+      const char *member_name;
       ctf_link_input_t *one_input;
       ctf_dict_t *one_fp;
       ctf_next_t *j = NULL;
@@ -665,15 +681,32 @@ ctf_link_deduplicating_open_inputs (ctf_dict_t *fp, ctf_dynhash_t *cu_names,
       if (one_input->clin_filename)
 	ctf_dprintf ("Opening %s\n", one_input->clin_filename);
 
-      /* We disregard the input archive name: either it is the parent (which we can get
-	 via ctf_dict_parent), or we want to put everything into one TU sharing the
-	 cuname anyway (if this is a CU-mapped link), or this is the final phase of a
-	 relink with CU-mapping off (i.e. ld -r) in which case the cuname is correctly
-	 set regardless.  */
+      /* We augument the input cuname with the prefix, if provided, but
+	 otherwise disregard it: either it is the parent (which we can get via
+	 ctf_dict_parent), or we want to put everything into one CU sharing the
+	 cuname anyway (if this is a CU-mapped link), or this is the final phase
+	 of a relink with CU-mapping off (i.e. ld -r) in which case the cuname
+	 is correctly set regardless.  */
 
-      while ((one_fp = ctf_archive_next (one_input->clin_arc, &j, &arc_name,
+      while ((one_fp = ctf_archive_next (one_input->clin_arc, &j, &member_name,
 					 0, &err)) != NULL)
 	{
+	  /* Augment the cuname with a prefix, if desired.  */
+
+	  if (one_input->cuname_prefix)
+	    {
+	      char *new_prefix;
+	      char *new_cuname;
+
+	      new_prefix = strdup (one_input->cuname_prefix);
+	      new_cuname = ctf_str_append (new_cuname, ctf_dict_cuname (one_fp));
+	      if (!new_prefix || new_cuname)
+		goto oom;
+	      if (ctf_dict_set_cuname (one_fp, new_cuname) < 0)
+		goto oom;
+	      free (new_cuname);
+	    }
+
 	  /* ctf_archive_next either auto-imports the parent, or this *is* the parent.
 	     In both cases, we can set the parent up if it's not already set.
 
@@ -688,7 +721,7 @@ ctf_link_deduplicating_open_inputs (ctf_dict_t *fp, ctf_dynhash_t *cu_names,
 	      ctf_next_destroy (j);
 	      ctf_err (err_locus (fp), ECTF_NOPARENT,
 		       _("archive member %s in CU %s is child with no parent"),
-		       arc_name, one_name);
+		       member_name, one_name);
 	      goto reported_err;
 	    }
 
@@ -1037,12 +1070,12 @@ ctf_link_deduplicating_per_cu (ctf_dict_t *fp)
 		 auto-closed on removal.  The new input needs its cuname changed
 		 to out_name, which is doable only because the cuname is a
 		 dynamic property which can be changed even in readonly
-		 dicts. */
+		 dicts.  */
 
 	      ctf_dict_set_cuname (only_input->clin_fp, out_name);
 	      if (ctf_link_add_internal (fp, only_input->clin_arc,
 					 only_input->clin_fp,
-					 out_name) < 0)
+					 out_name, only_input->cuname_prefix) < 0)
 		{
 		  ctf_err (err_locus (fp), 0, _("cannot add intermediate files to link"));
 		  goto err_open_inputs;
@@ -1139,7 +1172,7 @@ ctf_link_deduplicating_per_cu (ctf_dict_t *fp)
 	}
 
       if (ctf_link_add_internal (fp, in_arc, NULL,
-				 ctf_dict_cuname (outputs[0])) < 0)
+				 ctf_dict_cuname (outputs[0]), NULL) < 0)
 	{
 	  ctf_err (err_locus (fp), 0, _("cannot add intermediate files to link"));
 	  goto err_outputs;

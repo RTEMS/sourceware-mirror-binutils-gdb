@@ -1172,15 +1172,23 @@ extern ctf_ret_t ctf_write_suppress_kind (ctf_dict_t *fp, ctf_kind_t kind,
    optional.  */
 
 /* Add a CTF archive to the link with a given NAME (usually the name of the
-   containing object file).  The dict added to is usually a new dict created
-   with ctf_create which will be filled with types corresponding to the shared
-   dict in the output (conflicting types in child dicts in the output archive
-   are stored in internal space inside this dict, but are not easily visible
-   until after ctf_link_write below).
+   containing object file); the CUNAME_PREFIX, if set, prefixes all input
+   cunames with a given string (used for archives).  The dict added to is
+   usually a new dict created with ctf_create which will be filled with types
+   corresponding to the shared dict in the output (conflicting types in child
+   dicts in the output archive are stored in internal space inside this dict,
+   but are not easily visible until after ctf_link_write below).
 
    The NAME need not be unique (but usually is).  */
 
-extern ctf_ret_t ctf_link_add (ctf_dict_t *, ctf_archive_t *, const char *name);
+extern ctf_ret_t ctf_link_add (ctf_dict_t *, ctf_archive_t *, const char *name,
+			       const char *cuname_prefix);
+
+/* Set the cuname for the parent dict in an archive, without opening it,
+   if and only if it is currently unset.  An efficiency hack for linkers.  */
+
+extern void ctf_link_set_default_parent_cuname (ctf_archive_t *arc,
+						const char *cuname);
 
 /* Do the deduplicating link, filling the dict with types.  The FLAGS are the
    CTF_LINK_* flags above.  */

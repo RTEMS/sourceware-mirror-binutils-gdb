@@ -4201,8 +4201,7 @@ ctf_dedup_strings (ctf_dict_t *fp)
 	    continue;
 
 	  if ((!fp->ctf_serialize.cs_is_btf && atom->csa_external_offset)
-	      || atom->csa_str[0] == '\0'
-	      || atom->csa_flags & CTF_STR_ATOM_NO_DEDUP)
+	      || atom->csa_str[0] == '\0')
 	    continue;
 
 	  if (ctf_dynhash_lookup_kv (str_counts, atom->csa_str, NULL, &v))
@@ -4251,8 +4250,7 @@ ctf_dedup_strings (ctf_dict_t *fp)
 	      continue;
 
 	  if ((!fp->ctf_serialize.cs_is_btf && atom->csa_external_offset)
-	      || atom->csa_str[0] == '\0'
-	      || atom->csa_flags & CTF_STR_ATOM_NO_DEDUP)
+	      || atom->csa_str[0] == '\0')
 	    continue;
 
 	  if ((uintptr_t) ctf_dynhash_lookup (str_counts, atom->csa_str) <= 1)

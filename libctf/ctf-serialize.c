@@ -1374,7 +1374,7 @@ ctf_serialize_output_format (ctf_dict_t *fp, int force_ctf)
 ctf_ret_t
 ctf_preserialize (ctf_dict_t *fp, int force_ctf)
 {
-  ctf_header_t hdr, *hdrp;
+  ctf_header_t hdr;
   ctf_dtdef_t *dtd;
   int sym_functions = 0;
   size_t hdr_len;
@@ -1538,15 +1538,15 @@ ctf_preserialize (ctf_dict_t *fp, int force_ctf)
   memcpy (buf, &hdr, hdr_len);
   t = (unsigned char *) buf + hdr_len + hdr.cth_objt_off;
 
-  hdrp = (ctf_header_t *) buf;
-
   if (!fp->ctf_serialize.cs_is_btf)
     {
+      ctf_header_t *hdrp = (ctf_header_t *) buf;
+
       if (fp->ctf_cu_name != NULL)
-	ctf_str_add_no_dedup_ref (fp, fp->ctf_cu_name, &hdrp->cth_cu_name);
+	ctf_str_add_ref (fp, fp->ctf_cu_name, &hdrp->cth_cu_name);
 
       if (ctf_emit_symtypetab_sects (fp, &symstate, &t, objt_size, func_size,
-				     objtidx_size, funcidx_size) < 0)
+				   objtidx_size, funcidx_size) < 0)
 	goto err;
     }
   assert (t == (unsigned char *) buf + sizeof (ctf_btf_header_t)
