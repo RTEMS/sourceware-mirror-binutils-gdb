@@ -182,6 +182,9 @@ gdb_test_multiple "hbreak *$main_lo" $test {
     -re "No hardware breakpoint support.*$gdb_prompt $" {
 	unsupported "$test (no support)"
     }
+    -re "Cannot insert hardware breakpoint.*$gdb_prompt $" {
+	unsupported "$test (no support)"
+    }
     -re "$gdb_prompt $" {
 	pass "$test (support)"
 	set supports_hbreak 1
@@ -215,7 +218,7 @@ proc test_single_step { always_inserted auto_hw } {
 
     set test "step in ro region"
     gdb_test_multiple "si" $test {
-	-re "Could not insert hardware breakpoints.*$gdb_prompt $" {
+	-re "Cannot insert hardware breakpoint.*$gdb_prompt $" {
 	    if {!$hw_step && $auto_hw == "on" && !$supports_hbreak} {
 		unsupported "$test (cannot insert hw break)"
 	    } else {
