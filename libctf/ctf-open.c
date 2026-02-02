@@ -2405,9 +2405,12 @@ ctf_dict_close (ctf_dict_t *fp)
 
   fp->ctf_refcnt--;
 
-  if (fp->ctf_archive && fp->ctf_archive->ctfi_free_on_dict_close)
+  /* This drops the refcount if the archive is otherwise in use, or frees it.
+     Constituent dicts in single-member archives are freed only once all their
+     users are gone.  */
+  if (fp->ctf_archive)
     {
-      free (fp->ctf_archive);
+      ctf_arc_close (fp->ctf_archive);
       fp->ctf_archive = NULL;
     }
 
@@ -2479,8 +2482,6 @@ ctf_dict_close (ctf_dict_t *fp)
 
   if (fp->ctf_ext_strtab.cts_name != _CTF_NULLSTR)
     free ((char *) fp->ctf_ext_strtab.cts_name);
-  else if (fp->ctf_data_mmapped)
-    ctf_munmap (fp->ctf_data_mmapped, fp->ctf_data_mmapped_len);
 
   free (fp->ctf_dynbase);
 
@@ -2518,36 +2519,45 @@ ctf_close (ctf_archive_t *arc)
   ctf_arc_close (arc);
 }
 
-/* Get the CTF archive from which this ctf_dict_t is derived.  If it's not, make
-   one.  If FREEABLE is set, return an archive it is safe for the user to free,
-   or NULL.  If unset, will only return NULL on out-of-memory errors.  */
+/* Get the CTF archive from which this ctf_dict_t is derived, or a new synthetic
+   one if not opened from an archive.  Calling this bumps a refcount: the
+   archive should be closed when you're done with it.
+
+   If CTF_DICT_ARC_ORIGINAL is set in FLAGS, the actual original archive is
+   handed back (no refcount bumping: NULL returned if the dict was not derived
+   from an archive).  This means you can use it to get back the original archive
+   from which a dict was opened in order to finally close that archive without
+   needing to lug the archive around everywhere along with the dict.  (Calling
+   without this set, the common case, would bump the archive refcount in this
+   case, so closing the archive would never free it.)
+
+   Even this is safe if other dicts are opened from this archive -- each dict
+   opened from an archive always bumps its refcount, so closing an archive
+   returned from ctf_dict_arc (..., CTF_DICT_ARC_ORIGINAL) only frees the
+   archive if the dict itself has already been closed.  */
+
 ctf_archive_t *
-ctf_dict_arc (ctf_dict_t *fp, ctf_bool_t freeable)
+ctf_dict_arc (ctf_dict_t *fp, int flags)
 {
   struct ctf_archive_internal *arci;
+  ctf_error_t err;
 
   if (fp->ctf_archive)
     {
-      if (freeable && fp->ctf_archive->ctfi_free_on_dict_close)
-	return NULL;
-
+      if (!(flags & CTF_DICT_ARC_ORIGINAL))
+	fp->ctf_archive->ctfi_refcnt++;
       return fp->ctf_archive;
     }
 
-  if ((arci = calloc (1, sizeof (struct ctf_archive_internal))) == NULL)
+  if (flags & CTF_DICT_ARC_ORIGINAL)
+    return NULL;
+
+  if ((arci = ctf_new_archive_wrapper (fp, &fp->ctf_ext_symtab,
+				       &fp->ctf_ext_strtab, &err)) == NULL)
     {
-      ctf_set_errno (fp, ENOMEM);
+      ctf_set_errno (fp, err);
       return NULL;
     }
-
-  arci->ctfi_dict = fp;
-  memcpy (&arci->ctfi_symsect, &fp->ctf_ext_symtab, sizeof (ctf_sect_t));
-  memcpy (&arci->ctfi_strsect, &fp->ctf_ext_strtab, sizeof (ctf_sect_t));
-
-  arci->ctfi_free_symsect = 0;
-  arci->ctfi_free_strsect = 0;
-  arci->ctfi_free_on_dict_close = 1;
-  arci->ctfi_symsect_little_endian = fp->ctf_symsect_little_endian;
 
   return arci;
 }
@@ -2588,7 +2598,7 @@ ctf_symsect_endianness (ctf_dict_t *fp, int little_endian)
 
   /* Propagate to the archive iff it's a wrapper for this dict alone.  */
 
-  if (fp->ctf_archive && !fp->ctf_archive->ctfi_is_archive)
+  if (fp->ctf_archive && !fp->ctf_archive->ctfi_dict)
     fp->ctf_archive->ctfi_symsect_little_endian = fp->ctf_symsect_little_endian;
 
   /* If we already have a symtab translation table, we need to repopulate it if

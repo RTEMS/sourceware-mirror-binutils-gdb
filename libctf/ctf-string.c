@@ -380,12 +380,14 @@ ctf_str_add_ref_internal (ctf_dict_t *fp, const char *str,
   if (str[0] == 0)
     atom->csa_flags |= CTF_STR_ATOM_IN_PARENT;
 
-  /* Don't allocate new strings if this string is within an mmapped
-     strtab, unless forced.  */
+  /* Don't allocate new strings if this string is within an existing strtab,
+     unless forced: just point straight at it.  */
 
   if (flags & CTF_STR_COPY
-      || ((unsigned char *) str < (unsigned char *) fp->ctf_data_mmapped
-	  || (unsigned char *) str > (unsigned char *) fp->ctf_data_mmapped + fp->ctf_data_mmapped_len))
+      || (!(fp->ctf_archive
+	    && (unsigned char *) str > (unsigned char *) fp->ctf_archive->ctfi_archive
+	    && (unsigned char *) str < (unsigned char *) fp->ctf_archive->ctfi_archive
+	    + fp->ctf_archive->ctfi_archive_len)))
     {
       if ((newstr = strdup (str)) == NULL)
 	goto oom;
@@ -609,10 +611,10 @@ ctf_str_sort_strtab (const void *a, const void *b)
    of the strtab on return, though some may appear at a later date.
 
    We use the lazy man's approach and double memory costs by always storing
-   atoms as individually allocated entities whenever they come from anywhere
-   but a freshly-opened, mmapped dict, even though after serialization there
-   is another copy in the strtab; this ensures that ctf_strptr()-returned
-   pointers to them remain valid for the lifetime of the dict.
+   atoms as individually allocated entities whenever they come from anywhere but
+   a freshly-opened dict in an archive, even though after serialization there is
+   another copy in the strtab; this ensures that ctf_strptr()-returned pointers
+   to them remain valid for the lifetime of the dict.
 
    This is all rendered more complex because if a dict is ctf_open()ed it
    will have a bunch of strings in its strtab already, and their strtab
