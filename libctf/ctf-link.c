@@ -1162,10 +1162,11 @@ ctf_link_deduplicating_per_cu (ctf_dict_t *fp)
 
       /* This output now becomes an input to the next link phase, with a name
 	 equal to the CU name.  We have to wrap it in an archive wrapper
-	 first.  */
+	 first.  The dict is closed when the archive is.  */
 
-      if ((in_arc = ctf_new_archive_internal (0, 0, NULL, outputs[0], NULL,
-					      NULL, &err)) == NULL)
+      if ((in_arc = ctf_new_archive_internal (NULL, outputs[0], 0,
+					      FREE_ARCHIVE_ONLY_DICT, 0,
+					      NULL, NULL, &err)) == NULL)
 	{
 	  ctf_set_errno (fp, err);
 	  goto err_outputs;
@@ -1789,46 +1790,34 @@ ctf_link_output_is_btf (ctf_dict_t *fp)
 
 typedef struct ctf_name_list_accum_cb_arg
 {
-  char **names;
   ctf_dict_t *fp;
   ctf_dict_t **files;
   ssize_t i;
-  char **dynames;
-  size_t ndynames;
 } ctf_name_list_accum_cb_arg_t;
 
-/* Accumulate the names and a count of the names in the link output hash.  */
+/* Accumulate the dicts in an array, suitable for the archive-writing
+   machinery.  */
 static void
-ctf_accumulate_archive_names (void *key, void *value, void *arg_)
+ctf_accumulate_archives (void *key, void *value, void *arg_)
 {
   const char *name = (const char *) key;
   ctf_dict_t *fp = (ctf_dict_t *) value;
-  char **names;
   ctf_dict_t **files;
   ctf_name_list_accum_cb_arg_t *arg = (ctf_name_list_accum_cb_arg_t *) arg_;
 
-  if ((names = realloc (arg->names, sizeof (char *) * ++(arg->i))) == NULL)
+  if ((files = realloc (arg->files, sizeof (ctf_dict_t *) * ++(arg->i))) == NULL)
     {
       (arg->i)--;
       ctf_set_errno (arg->fp, ENOMEM);
       return;
     }
 
-  if ((files = realloc (arg->files, sizeof (ctf_dict_t *) * arg->i)) == NULL)
-    {
-      (arg->i)--;
-      ctf_set_errno (arg->fp, ENOMEM);
-      return;
-    }
-
-  /* Allow the caller to get in and modify the name at the last minute.  If the
-     caller *does* modify the name, we have to stash away the new name the
-     caller returned so we can free it later on.  (The original name is the key
-     of the ctf_link_outputs hash and is freed by the dynhash machinery.)  */
+  /* Allow the caller to get in and modify the cuname at the last minute.  (The
+     original name is still used as the key of the ctf_link_outputs hash, since
+     those can't change, and is freed by the dynhash machinery.)  */
 
   if (fp->ctf_link_memb_name_changer)
     {
-      char **dynames;
       char *dyname;
       void *nc_arg = fp->ctf_link_memb_name_changer_arg;
 
@@ -1836,20 +1825,12 @@ ctf_accumulate_archive_names (void *key, void *value, void *arg_)
 
       if (dyname != NULL)
 	{
-	  if ((dynames = realloc (arg->dynames,
-				  sizeof (char *) * ++(arg->ndynames))) == NULL)
-	    {
-	      (arg->ndynames)--;
-	      ctf_set_errno (arg->fp, ENOMEM);
-	      return;
-	    }
-	    arg->dynames = dynames;
-	    name = (const char *) dyname;
+	  if ((ctf_dict_set_cuname (fp, name)) < 0)
+	    return;				/* errno is set for us.  */
+	  free (dyname);
 	}
     }
 
-  arg->names = names;
-  arg->names[(arg->i) - 1] = (char *) name;
   arg->files = files;
   arg->files[(arg->i) - 1] = fp;
 }
@@ -1864,7 +1845,6 @@ unsigned char *
 ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
 {
   ctf_name_list_accum_cb_arg_t arg;
-  char **names;
   char *transformed_name = NULL;
   ctf_dict_t **files;
   FILE *f = NULL;
@@ -1873,6 +1853,7 @@ ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
   long fsize;
   const char *errloc;
   unsigned char *buf = NULL;
+  ctf_arc_write_flags_t flags = 0;
 
   memset (&arg, 0, sizeof (ctf_name_list_accum_cb_arg_t));
   arg.fp = fp;
@@ -1880,7 +1861,7 @@ ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
 
   if (fp->ctf_link_outputs)
     {
-      ctf_dynhash_iter (fp->ctf_link_outputs, ctf_accumulate_archive_names, &arg);
+      ctf_dynhash_iter (fp->ctf_link_outputs, ctf_accumulate_archives, &arg);
       if (ctf_errno (fp) < 0)
 	{
 	  errloc = "hash creation";
@@ -1891,31 +1872,11 @@ ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
   if (is_btf)
     *is_btf = 0;
 
-  /* No extra outputs?  Just write a simple ctf_dict_t.  */
-  if (arg.i == 0)
-    {
-      unsigned char *ret = ctf_write_mem (fp, size, threshold);
-      fp->ctf_flags &= ~LCTF_LINKING;
-
-      if (is_btf && fp->ctf_serialize.cs_is_btf)
-	*is_btf = 1;
-
-      return ret;
-    }
-
   /* Writing an archive.  Stick ourselves (the shared repository, parent of all
-     other archives) on the front of it with the default name.  (Writing the parent
-     dict out first is essential for strings in child dicts shared with the parent
-     to get their proper offsets.)  */
-  if ((names = realloc (arg.names, sizeof (char *) * (arg.i + 1))) == NULL)
-    {
-      errloc = "name reallocation";
-      goto err_no;
-    }
-  arg.names = names;
-  memmove (&(arg.names[1]), arg.names, sizeof (char *) * (arg.i));
-
-  arg.names[0] = (char *) _CTF_SECTION;
+     other archives) on the front of it with the default name.  (The parent dict
+     must always come first, by definition -- the first dict in an archive is
+     the parent -- but also doing so is essential for strings in child dicts
+     shared with the parent to get their proper offsets.)  */
   if (fp->ctf_link_memb_name_changer)
     {
       void *nc_arg = fp->ctf_link_memb_name_changer_arg;
@@ -1938,6 +1899,10 @@ ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
       arg.files[i]->ctf_flags |= LCTF_LINKING;
     }
 
+  /* Only one member?  Don't bother writing out a name table at all.  */
+  if (arg.i == 1)
+    flags |= CTF_ARC_WRITE_NAMELESS;
+
   if ((files = realloc (arg.files,
 			sizeof (struct ctf_dict *) * (arg.i + 1))) == NULL)
     {
@@ -1955,8 +1920,7 @@ ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
     }
 
   if ((err = ctf_arc_write_fd (fileno (f), arg.files, arg.i + 1,
-			       (const char **) arg.names,
-			       threshold)) < 0)
+			       threshold, flags)) != 0)
     {
       errloc = NULL;				/* errno is set for us.  */
       goto err_set;
@@ -2003,16 +1967,8 @@ ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
     }
 
   *size = fsize;
-  free (arg.names);
   free (arg.files);
   free (transformed_name);
-  if (arg.ndynames)
-    {
-      size_t i;
-      for (i = 0; i < arg.ndynames; i++)
-	free (arg.dynames[i]);
-      free (arg.dynames);
-    }
   fclose (f);
   return buf;
 
@@ -2030,16 +1986,8 @@ ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
   free (buf);
   if (f)
     fclose (f);
-  free (arg.names);
   free (arg.files);
   free (transformed_name);
-  if (arg.ndynames)
-    {
-      size_t i;
-      for (i = 0; i < arg.ndynames; i++)
-	free (arg.dynames[i]);
-      free (arg.dynames);
-    }
   if (errloc)
     ctf_err (err_locus (fp), 0, _("%s"), errloc);
   else

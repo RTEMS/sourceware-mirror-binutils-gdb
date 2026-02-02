@@ -441,8 +441,9 @@ struct ctf_dict
   ctf_dynhash_t *ctf_prov_strtab;   /* Maps provisional-strtab offsets
 				       to names.  */
   ctf_dynhash_t *ctf_syn_ext_strtab; /* Maps ext-strtab offsets to names.  */
-  void *ctf_data_mmapped;	    /* CTF data we mmapped, to free later.  */
-  size_t ctf_data_mmapped_len;	    /* Length of CTF data we mmapped.  */
+  void *ctf_data_mmapped;	    /* Dict comes out of mmapped space (freed by
+				       caller).  */
+  size_t ctf_data_mmapped_len;	    /* Length of mmapped CTF data.  */
   ctf_dynhash_t *ctf_structs;	    /* Hash table of struct types.  */
   ctf_dynhash_t *ctf_unions;	    /* Hash table of union types.  */
   ctf_dynhash_t *ctf_enums;	    /* Hash table of enum types.  */
@@ -567,27 +568,47 @@ struct ctf_dict
   void *ctf_specific;		  /* Data for ctf_dict_specific*().  */
 };
 
-/* An abstraction over both a ctf_dict_t and a ctf_archive_t.  */
+/* An abstraction over both a ctf_dict_t, a collection of linked ctf_dict_t's
+   (an innate-format archive) and an (obsolescent) ctf_archive_v1.
+
+   If ctfi_hdr is non-NULL, this is a v1 archive.  If ctfi_unmap_size is nonzero
+   and this is an archive, the file needs unmapping; otherwise, it needs
+   free()ing.  */
+
+enum arc_on_close_operation
+  {
+    FREE_ARCHIVE_ONLY_DICT = 0,	   /* Close the dict this is a wrapper around,
+				      if any.  */
+    FREE_ARCHIVE_ON_CLOSE,	   /* Archive was malloced by ctf-archive.c.  */
+    FREE_ARCHIVE_UNMAP_ON_CLOSE,   /* Archive was mmappped by ctf-archive.c.  */
+    FREE_ARCHIVE_ON_DICT_CLOSE	   /* True if instantiated by ctf_dict_arc.  */
+  };
 
 struct ctf_archive_internal
 {
-  int ctfi_is_archive;
-  int ctfi_unmap_on_close;
-  int ctfi_free_on_dict_close;	    /* True if instantiated by ctf_get_arc.  */
-  ctf_dict_t *ctfi_dict;
-  struct ctf_archive *ctfi_archive;
-  ctf_dynhash_t *ctfi_dicts;	  /* Dicts we have opened and cached.  */
+  size_t ctfi_unmap_size;	    /* Size to munmap() on close.  */
+  enum arc_on_close_operation ctfi_on_close; /* What to do with things on close.  */
+  ctf_dict_t *ctfi_dict;	    /* Dict that this archive is a wrapper around.  */
+  unsigned char *ctfi_archive;	    /* Raw archive, possibly mmapped.  */
+  size_t ctfi_archive_len;	    /* Length of the archive.  */
+  struct ctf_archive_v1 *ctfi_v1_hdr; /* Always malloced.  Header only.  */
+  size_t *ctfi_members;		    /* Array of dict offsets, ascending.  */
+  size_t ctfi_nmemb;		    /* Number of dicts in this archive.  */
+  ctf_dynhash_t *ctfi_named_indexes; /* Mapping from dict name to index.  */
+  ctf_dynhash_t *ctfi_member_names; /* Mapping from dict offset to name.  */
+  const char *ctfi_names;	    /* The underlying name table. */
   char *ctfi_default_parent_cuname; /* Default the parent dict's cuname.  */
+  ctf_dynhash_t *ctfi_dicts;	    /* Dicts we have opened and cached.  */
   ctf_dict_t *ctfi_crossdict_cache; /* Cross-dict caching.  */
-  ctf_dict_t **ctfi_symdicts;	  /* Array of index -> ctf_dict_t *.  */
+  ctf_dict_t **ctfi_symdicts;	    /* Array of index -> ctf_dict_t *.  */
   ctf_dynhash_t *ctfi_symnamedicts; /* Hash of name -> ctf_dict_t *.  */
   ctf_sect_t ctfi_symsect;
-  int ctfi_symsect_little_endian; /* -1 for unknown / do not set.  */
+  int ctfi_symsect_little_endian;   /* -1 for unknown / do not set.  */
   ctf_sect_t ctfi_strsect;
   int ctfi_free_symsect;
   int ctfi_free_strsect;
   void *ctfi_data;
-  bfd *ctfi_abfd;		  /* Optional source of section data.  */
+  bfd *ctfi_abfd;		    /* Optional source of section data.  */
   void (*ctfi_bfd_close) (struct ctf_archive_internal *);
 };
 
@@ -840,13 +861,18 @@ extern ctf_ret_t ctf_preserialize (ctf_dict_t *fp, int force_ctf);
 extern void ctf_depreserialize (ctf_dict_t *fp);
 
 extern struct ctf_archive_internal *
-ctf_new_archive_internal (int is_archive, int unmap_on_close,
-			  struct ctf_archive *, ctf_dict_t *,
-			  const ctf_sect_t *symsect,
-			  const ctf_sect_t *strsect, ctf_error_t *errp);
-extern struct ctf_archive *ctf_arc_open_internal (const char *, ctf_error_t *);
-extern void ctf_arc_close_internal (struct ctf_archive *);
-extern const ctf_preamble_t *ctf_arc_bufpreamble (const ctf_sect_t *);
+ctf_new_archive_internal (unsigned char *buf, ctf_dict_t *fp, int v1,
+			  enum arc_on_close_operation on_close, size_t len,
+			  const ctf_sect_t *symsect, const ctf_sect_t *strsect,
+			  ctf_error_t *errp);
+struct ctf_archive_internal *ctf_new_archive_wrapper (ctf_dict_t *fp,
+						      const ctf_sect_t *symsect,
+						      const ctf_sect_t *strsect,
+						      ctf_error_t *errp);
+extern struct ctf_archive_internal *
+ctf_arc_open_internal (int fd, const char *filename, ctf_error_t *errp);
+extern const ctf_preamble_t *ctf_arc_bufpreamble_v1 (const ctf_sect_t *);
+extern void ctf_arc_close_free (struct ctf_archive_internal *arci);
 extern void *ctf_set_open_errno (ctf_error_t *, ctf_error_t);
 extern ssize_t ctf_buflen (const ctf_sect_t *ctfsect, ctf_error_t *errp);
 extern ctf_ret_t ctf_flip_header (void *, int, int);
