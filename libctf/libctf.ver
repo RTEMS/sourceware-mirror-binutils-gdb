@@ -21,6 +21,7 @@ LIBCTF_2.0 {
 	/* In libctf and libctf-nobfd.  */
 
 	ctf_dict_open;
+	ctf_dict_open_by_index;
 	ctf_bufopen;
 	ctf_simple_open;
 	ctf_create;
