@@ -108,6 +108,9 @@ ctf_version gains btf_hdr_len, btf_mode args.
 
 ctf_link_write gains is_btf argument
 
+ctf_arc_write loses names array (names are now derived from the cuname);
+ctf_arc_write and ctf_arc_write_fd gain flags.
+
 * Behaviour
 
 Symtypetab entries now point at types of kind CTF_K_FUNC_LINKAGE

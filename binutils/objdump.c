@@ -4838,9 +4838,15 @@ dump_ctf_archive_member (ctf_dict_t *ctf, const char *name, ctf_dict_t *parent,
      it in that case seems worthwhile.  */
 
   if (strcmp (name, ".ctf") != 0 || member != 0)
-    printf (_("\nCTF archive member: %s:\n"), sanitize_string (name));
+    {
+      if (name[0] != 0)
+	printf (_("\nCTF archive member %zi: %s:\n"), member,
+		sanitize_string (name));
+      else
+	printf (_("\nCTF archive member %zi:\n"), member);
+    }
 
-  if (ctf_dict_parent_name (ctf) != NULL)
+  if (parent && ctf_dict_parent_name (ctf) != NULL)
     ctf_import (ctf, parent);
 
   for (i = 0, thing = things; *thing[0]; thing++, i++)
@@ -4879,7 +4885,7 @@ dump_ctf (bfd *abfd, const char *sect_name, const char *parent_name,
   bfd_byte *ctfdata = NULL;
   bfd_byte *ctfpdata = NULL;
   ctf_sect_t ctfsect;
-  ctf_dict_t *parent;
+  ctf_dict_t *parent = NULL;
   ctf_dict_t *fp;
   ctf_next_t *i = NULL;
   const char *name;
@@ -4944,15 +4950,21 @@ dump_ctf (bfd *abfd, const char *sect_name, const char *parent_name,
   else
     ctfpa = ctfa;
 
-  if ((parent = ctf_dict_open (ctfpa, parent_name, &err)) == NULL)
+  /* Explicitly open the parent for importing into the children if the
+     parent name was provided.  Otherwise, it'll be done automatically for
+     us by ctf_archive_next().  */
+  if (parent_name)
     {
-      dump_ctf_errs (NULL);
-      non_fatal (_("CTF open failure: %s"), ctf_errmsg (err));
-      my_bfd_nonfatal (bfd_get_filename (abfd));
-      ctf_close (ctfa);
-      free (ctfdata);
-      free (ctfpdata);
-      return;
+      if ((parent = ctf_dict_open (ctfpa, parent_name, &err)) == NULL)
+	{
+	  dump_ctf_errs (NULL);
+	  non_fatal (_("CTF open failure: %s"), ctf_errmsg (err));
+	  my_bfd_nonfatal (bfd_get_filename (abfd));
+	  ctf_close (ctfa);
+	  free (ctfdata);
+	  free (ctfpdata);
+	  return;
+	}
     }
 
   printf (_("Contents of type section %s:\n"), sanitize_string (sect_name));
