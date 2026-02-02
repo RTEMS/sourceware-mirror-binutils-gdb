@@ -76,4 +76,8 @@ void ctf_qsort_r (void *base, size_t nmemb, size_t size,
 extern char *stpcpy (char *, const char *);
 #endif
 
+#if !HAVE_DECL_MEMMEM
+void *memmem (const void *, size_t, const void *, size_t);
+#endif
+
 #endif /* _CTF_DECLS_H */
