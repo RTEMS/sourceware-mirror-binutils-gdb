@@ -17388,9 +17388,15 @@ dump_ctf_archive_member (ctf_dict_t *ctf, const char *name, ctf_dict_t *parent,
      it in that case seems worthwhile.  */
 
   if (strcmp (name, ".ctf") != 0 || member != 0)
-    printf (_("\nCTF archive member: %s:\n"), name);
+    {
+      if (name[0] != 0)
+	printf (_("\nCTF archive member %zi: %s:\n"), member, name);
+      else
+	printf (_("\nCTF archive member %zi:\n"), member);
+    }
+  
 
-  if (ctf_dict_parent_name (ctf) != NULL)
+  if (parent && ctf_dict_parent_name (ctf) != NULL)
     ctf_import (ctf, parent);
 
   for (i = 0, thing = things; *thing[0]; thing++, i++)
@@ -17495,13 +17501,17 @@ dump_section_as_ctf (Elf_Internal_Shdr * section, Filedata * filedata)
   ctf_arc_symsect_endianness (ctfa, filedata->file_header.e_ident[EI_DATA]
 			      != ELFDATA2MSB);
 
-  /* Preload the parent dict, since it will need to be imported into every
-     child in turn.  */
-  if ((parent = ctf_dict_open (ctfa, dump_ctf_parent_name, &err)) == NULL)
+  /* Explicitly open the parent for importing into the children if the parent
+     name was provided.  Otherwise, it'll be done automatically for us by
+     ctf_archive_next().  */
+  if (dump_ctf_parent_name)
     {
-      dump_ctf_errs (NULL);
-      error (_("CTF open failure: %s\n"), ctf_errmsg (err));
-      goto fail;
+      if ((parent = ctf_dict_open (ctfa, dump_ctf_parent_name, &err)) == NULL)
+	{
+	  dump_ctf_errs (NULL);
+	  error (_("CTF open failure: %s\n"), ctf_errmsg (err));
+	  goto fail;
+	}
     }
 
   ret = true;
