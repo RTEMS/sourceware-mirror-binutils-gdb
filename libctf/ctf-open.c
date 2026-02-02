@@ -2400,9 +2400,10 @@ ctf_dict_close (ctf_dict_t *fp)
   fp->ctf_refcnt--;
   free (fp->ctf_dyn_cu_name);
 
-  if (fp->ctf_archive && fp->ctf_archive->ctfi_free_on_dict_close)
+  if (fp->ctf_archive
+      && fp->ctf_archive->ctfi_on_close == FREE_ARCHIVE_ON_DICT_CLOSE)
     {
-      free (fp->ctf_archive);
+      ctf_arc_close_free (fp->ctf_archive);
       fp->ctf_archive = NULL;
     }
 
@@ -2469,8 +2470,6 @@ ctf_dict_close (ctf_dict_t *fp)
 
   if (fp->ctf_ext_strtab.cts_name != _CTF_NULLSTR)
     free ((char *) fp->ctf_ext_strtab.cts_name);
-  else if (fp->ctf_data_mmapped)
-    ctf_munmap (fp->ctf_data_mmapped, fp->ctf_data_mmapped_len);
 
   free (fp->ctf_dynbase);
 
@@ -2515,29 +2514,23 @@ ctf_archive_t *
 ctf_dict_arc (ctf_dict_t *fp, ctf_bool_t freeable)
 {
   struct ctf_archive_internal *arci;
+  ctf_error_t err;
 
   if (fp->ctf_archive)
     {
-      if (freeable && fp->ctf_archive->ctfi_free_on_dict_close)
+      if (freeable
+	  && fp->ctf_archive->ctfi_on_close == FREE_ARCHIVE_ON_DICT_CLOSE)
 	return NULL;
 
       return fp->ctf_archive;
     }
 
-  if ((arci = calloc (1, sizeof (struct ctf_archive_internal))) == NULL)
+  if ((arci = ctf_new_archive_wrapper (fp, &fp->ctf_ext_symtab,
+				       &fp->ctf_ext_strtab, &err)) == NULL)
     {
-      ctf_set_errno (fp, ENOMEM);
+      ctf_set_errno (fp, err);
       return NULL;
     }
-
-  arci->ctfi_dict = fp;
-  memcpy (&arci->ctfi_symsect, &fp->ctf_ext_symtab, sizeof (ctf_sect_t));
-  memcpy (&arci->ctfi_strsect, &fp->ctf_ext_strtab, sizeof (ctf_sect_t));
-
-  arci->ctfi_free_symsect = 0;
-  arci->ctfi_free_strsect = 0;
-  arci->ctfi_free_on_dict_close = 1;
-  arci->ctfi_symsect_little_endian = fp->ctf_symsect_little_endian;
 
   return arci;
 }
@@ -2578,7 +2571,7 @@ ctf_symsect_endianness (ctf_dict_t *fp, int little_endian)
 
   /* Propagate to the archive iff it's a wrapper for this dict alone.  */
 
-  if (fp->ctf_archive && !fp->ctf_archive->ctfi_is_archive)
+  if (fp->ctf_archive && !fp->ctf_archive->ctfi_dict)
     fp->ctf_archive->ctfi_symsect_little_endian = fp->ctf_symsect_little_endian;
 
   /* If we already have a symtab translation table, we need to repopulate it if

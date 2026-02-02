@@ -118,9 +118,20 @@ ctf_bfdopen_ctfsect (struct bfd *abfd _libctf_unused_,
       bfderrstr = N_("CTF section is NULL");
       goto err;
     }
-  preamble = ctf_arc_bufpreamble (ctfsect);
 
-  if (preamble->ctp_flags & CTF_F_DYNSTR)
+  /* v3 dicts may cite the symtab or the dynsymtab, without using sh_link to
+     indicate which: pick the right one.  v4 dicts always use the dynsymtab (for
+     now).  */
+
+  errno = 0;
+  preamble = ctf_arc_bufpreamble_v1 (ctfsect);
+  if (!preamble && errno == EOVERFLOW)
+    {
+      bfderrstr = N_("section too short to be CTF or BTF");
+      goto err;
+    }
+
+  if (!preamble || (preamble && preamble->ctp_flags & CTF_F_DYNSTR))
     {
       symhdr = &elf_tdata (abfd)->dynsymtab_hdr;
       strtab_name = ".dynstr";
@@ -224,6 +235,8 @@ ctf_bfdopen_ctfsect (struct bfd *abfd _libctf_unused_,
       /* Get the endianness right.  */
       if (symsect_endianness > -1)
 	ctf_arc_symsect_endianness (arci, symsect_endianness);
+
+      /* XXX get the data model right.  */
       return arci;
     }
 #ifdef HAVE_BFD_ELF
@@ -242,10 +255,11 @@ err: _libctf_unused_;
 }
 
 /* Open the specified file descriptor and return a pointer to a CTF archive that
-   contains one or more CTF dicts.  The file can be an ELF file, a file
-   containing raw CTF, or a CTF archive.  The caller is responsible for closing
-   the file descriptor when it is no longer needed.  If this is an ELF file,
-   TARGET, if non-NULL, should be the name of a suitable BFD target.  */
+   contains one or more CTF dicts.  The file can be an ELF file with a .ctf or
+   .BTF section, a file containing raw CTF or BTF, or a CTF archive.  The caller
+   is responsible for closing the file descriptor when it is no longer needed.
+   If this is an ELF file, TARGET, if non-NULL, should be the name of a suitable
+   BFD target.  */
 
 ctf_archive_t *
 ctf_fdopen (int fd, const char *filename, const char *target, ctf_error_t *errp)
@@ -258,63 +272,32 @@ ctf_fdopen (int fd, const char *filename, const char *target, ctf_error_t *errp)
   ssize_t nbytes;
 
   ctf_preamble_v3_t *ctfhdr;
-  ctf_btf_preamble_t btfhdr;
-  uint64_t arc_magic;
-
-  memset (&btfhdr, 0, sizeof (btfhdr));
+  ctf_btf_preamble_t *btfhdr;
+  uint64_t arc_magic = 0;
 
   libctf_init_debug();
 
   if (fstat (fd, &st) == -1)
     return (ctf_set_open_errno (errp, errno));
 
-  if ((nbytes = ctf_pread (fd, &btfhdr, sizeof (btfhdr) > sizeof (ctfhdr)
-			   ? sizeof (btfhdr) : sizeof (ctfhdr), 0)) <= 0)
+  if ((nbytes = ctf_pread (fd, &arc_magic, sizeof (uint64_t), 0)) <= 0)
     return (ctf_set_open_errno (errp, nbytes < 0 ? errno : ECTF_FMT));
-  ctfhdr = (ctf_preamble_v3_t *) &btfhdr;
+  ctfhdr = (ctf_preamble_v3_t *) &arc_magic;
+  btfhdr = (ctf_btf_preamble_t *) &arc_magic;
 
   /* If we have read enough bytes to form a CTF or BTF header and the magic
-     string matches, in either endianness, attempt to interpret the file as raw
-     CTF/BTF.  */
+     number matches as a dict or an archive, attempt to open the file using the
+     archive-opening code, which is equally happy opening dicts or archives.  */
 
-  if (((size_t) nbytes >= sizeof (ctf_preamble_v3_t)
-      && (ctfhdr->ctp_magic == CTF_MAGIC
-	  || ctfhdr->ctp_magic == bswap_16 (CTF_MAGIC)))
-      || ((size_t) nbytes >= sizeof (ctf_btf_preamble_t)
-	  && (btfhdr.btf_magic == CTF_BTF_MAGIC
-	      || btfhdr.btf_magic == bswap_16 (CTF_BTF_MAGIC))))
-    {
-      ctf_dict_t *fp = NULL;
-      void *data;
-
-      if ((data = ctf_mmap (st.st_size, 0, fd)) == NULL)
-	return (ctf_set_open_errno (errp, errno));
-
-      if ((fp = ctf_simple_open (data, (size_t) st.st_size, NULL, 0, 0,
-				 NULL, 0, errp)) == NULL)
-	{
-	  ctf_munmap (data, (size_t) st.st_size);
-	  return NULL;			/* errno is set for us.  */
-	}
-
-      fp->ctf_data_mmapped = data;
-      fp->ctf_data_mmapped_len = (size_t) st.st_size;
-
-      return ctf_new_archive_internal (0, 1, NULL, fp, NULL, NULL, errp);
-    }
-
-  if ((nbytes = ctf_pread (fd, &arc_magic, sizeof (arc_magic), 0)) <= 0)
-    return (ctf_set_open_errno (errp, nbytes < 0 ? errno : ECTF_FMT));
-
-  if ((size_t) nbytes >= sizeof (uint64_t) && le64toh (arc_magic) == CTFA_MAGIC)
-    {
-      struct ctf_archive *arc;
-
-      if ((arc = ctf_arc_open_internal (filename, errp)) == NULL)
-	return NULL;			/* errno is set for us.  */
-
-      return ctf_new_archive_internal (1, 1, arc, NULL, NULL, NULL, errp);
-    }
+  if ((((size_t) nbytes >= sizeof (ctf_preamble_v3_t)
+	&& (ctfhdr->ctp_magic == CTF_MAGIC
+	    || ctfhdr->ctp_magic == bswap_16 (CTF_MAGIC)))
+       || ((size_t) nbytes >= sizeof (ctf_btf_preamble_t)
+	   && (btfhdr->btf_magic == CTF_BTF_MAGIC
+	       || btfhdr->btf_magic == bswap_16 (CTF_BTF_MAGIC))))
+      || ((size_t) nbytes >= sizeof (uint64_t)
+	  && (le64toh (arc_magic) == CTFA_V1_MAGIC)))
+    return ctf_arc_open_internal (fd, filename, errp);
 
   /* Attempt to open the file with BFD.  We must dup the fd first, since bfd
      takes ownership of the passed fd.  */

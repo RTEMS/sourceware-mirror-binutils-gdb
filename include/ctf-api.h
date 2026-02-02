@@ -480,7 +480,9 @@ extern void ctf_arc_symsect_endianness (ctf_archive_t *, int little_endian);
    string table (usually .dynsym) whenever the CTF_F_DYNSTR flag is set in the
    CTF preamble (which it almost always will be for linked objects, but not for
    .o files).  If you use ctf_arc_bufopen and do not specify symbol/string
-   tables, the ctf_*_lookuup_symbol functions will fail with ECTF_NOSYMTAB.
+   tables, the ctf_*_lookup_symbol functions will fail with ECTF_NOSYMTAB.
+   Do not free the buffers passed to ctf_arc_bufopen until the archive, and
+   all dicts derived from it, are closed.
 
    Like many other convenient opening functions, ctf_arc_open needs BFD and is
    not available in libctf-nobfd.  */
@@ -503,13 +505,20 @@ extern ctf_archive_t *ctf_dict_arc (ctf_dict_t *, ctf_bool_t freeable);
 extern size_t ctf_archive_count (const ctf_archive_t *);
 
 /* Open a dictionary with a given name, given a CTF archive.  The dict should be
-   closed with ctf_dict_close() when done.
+   closed with ctf_dict_close() when done.  The name NULL indicates the parent
+   dict of a multi-dict archive, or the only dict if this archive has only one.
 
    (The low-level function ctf_bufopen returns ctf_dict_t's directly, and cannot
    be used on CTF archives.)  */
 
 extern ctf_dict_t *ctf_dict_open (const ctf_archive_t *,
 				  const char *, ctf_error_t *);
+
+/* Open a dictionary with a given index in an archive.  Usable even for archives
+   where the members have no names, or where the names are duplicated.  */
+
+extern ctf_dict_t *ctf_dict_open_by_index (const ctf_archive_t *,
+					   size_t index, ctf_error_t *errp);
 
 /* Look up symbols' types in archives by index or name, returning the dict
    and optionally type ID in which the type is found.  Lookup results are
@@ -926,11 +935,14 @@ extern ctf_id_t ctf_tag_next (ctf_dict_t *, const char *tag, ctf_next_t **);
    returned).  */
 
 extern ctf_dict_t *ctf_archive_next (const ctf_archive_t *, ctf_next_t **,
-				     const char **, int skip_parent,
+				     const char **name, int skip_parent,
 				     ctf_error_t *errp);
 
 /* Iterate over raw archives, returning the name of each member and optionally
-   its content and length.
+   its content and length.  Names may be repeated: in particular they may all be
+   "" for archives with no named members (as are produced by non-CTF-aware
+   linkers just doing straight concatenation of their inputs rather than
+   deduplication).
 
    This function alone does not currently operate on CTF files masquerading as
    archives, and returns -EINVAL: the raw data is no longer available.  It is
@@ -1148,13 +1160,19 @@ extern int ctf_write (ctf_dict_t *, int);
 extern int ctf_compress_write (ctf_dict_t * fp, int fd);
 extern unsigned char *ctf_write_mem (ctf_dict_t *, size_t *, size_t threshold);
 
-/* Create a CTF archive named FILE from CTF_DICTS inputs with NAMES (or write it
-   to the passed-in fd).  */
+/* Create a CTF archive named FILE from CTF_DICTS inputs (or write it to the
+   passed-in fd).  The member names are derived from the cunames of the
+   dicts.  */
+
+enum ctf_arc_write_flags
+  {
+    CTF_ARC_WRITE_NAMELESS = 1			/* No name table.  */
+  };
 
 extern ctf_error_t ctf_arc_write (const char *file, ctf_dict_t **ctf_dicts, size_t,
-				  const char **names, size_t);
-extern ctf_error_t ctf_arc_write_fd (int, ctf_dict_t **, size_t, const char **,
-				     size_t);
+				  size_t, enum ctf_arc_write_flags);
+extern ctf_error_t ctf_arc_write_fd (int, ctf_dict_t **, size_t, size_t,
+				     enum ctf_arc_write_flags);
 
 /* Prohibit writeout of this type kind: attempts to write it out cause
    an ECTF_KIND_PROHIBITED error.  */
@@ -1238,7 +1256,7 @@ extern unsigned char *ctf_link_write (ctf_dict_t *, size_t *size,
 
 /* Specialist linker functions.  These functions are not used by ld, but can be
    used by other programs making use of the linker machinery for other purposes
-   to customize its output.  Must be called befoore ctf_link. */
+   to customize its output.  Must be called before ctf_link. */
 
 /* Add an entry to rename a given compilation unit to some other name.  This
    is only used if conflicting types are found in that compilation unit: they
@@ -1253,10 +1271,11 @@ extern unsigned char *ctf_link_write (ctf_dict_t *, size_t *size,
 extern ctf_ret_t ctf_link_add_cu_mapping (ctf_dict_t *, const char *from,
 					  const char *to);
 
-/* Allow CTF archive names to be tweaked at the last minute before writeout.
-   Unlike cu-mappings, this cannot transform names so that they collide: it's
-   meant for unusual use cases that use names for archive members that are not
-   exactly the same as CU names but are modified in some systematic way.  */
+/* Allow cunames in CTF archives to be tweaked at the last minute before
+   writeout.  Unlike cu-mappings, this cannot transform names so that they
+   collide: it's meant for unusual use cases that use names for archive members
+   that are not exactly the same as the names of compilation units but are
+   modified in some systematic way.  */
 typedef char *ctf_link_memb_name_changer_f (ctf_dict_t *,
 					    const char *, void *);
 extern void ctf_link_set_memb_name_changer
