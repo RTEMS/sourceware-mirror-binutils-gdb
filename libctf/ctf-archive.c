@@ -242,7 +242,7 @@ ctf_arc_write (const char *file, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
  err_close:
   (void) close (fd);
  err:
-  if (err < 0)
+  if (err != 0)
     unlink (file);
 
   return err;

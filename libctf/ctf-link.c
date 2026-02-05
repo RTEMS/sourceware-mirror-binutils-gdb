@@ -1915,7 +1915,7 @@ ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
     }
 
   if ((err = ctf_arc_write_fd (fileno (f), arg.files, arg.i + 1,
-			       threshold, 0)) < 0)
+			       threshold, 0)) != 0)
     {
       errloc = NULL;				/* errno is set for us.  */
       goto err_set;
