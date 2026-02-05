@@ -36,60 +36,10 @@ main (int argc, char *argv[])
   if ((fp = ctf_dict_open (ctf, NULL, &err)) == NULL)
     goto open_err;
 
-  /* First, check for signs that the compiler is fixed but not emitting the
-     relevant flag yet.  This combination is not expected to work right.  */
-
-  while ((dumpstr = ctf_dump (fp, &dump_state, CTF_SECT_HEADER, NULL, NULL))
-	 != NULL)
-    {
-      if (strstr (dumpstr, "CTF_F_ARRNELEMS") != NULL)
-	flagged = 1;
-      free (dumpstr);
-    }
-
-  if (!flagged)
-    {
-      ctf_arinfo_t ar;
-
-      if ((type = ctf_lookup_by_symbol_name (fp, "a")) == CTF_ERR)
-	goto unexpected;
-
-      if (ctf_array_info (fp, type, &ar) < 0)
-	goto unexpected;
-
-      if (ar.ctr_nelems == 3)
-	{
-	  fprintf (stderr, "UNSUPPORTED: compiler has GCC PR114186 fixed but "
-			   "no indicative flag\n");
-	  return 0;
-	}
-    }
-
-  /* Now check for the actual bug.  */
-  if (flagged)
-    {
-      while ((type = ctf_type_next (fp, &it, NULL, 1)) != -1)
-	if (ctf_type_kind (fp, type) == CTF_K_ARRAY)
-	  printf ("%s\n", ctf_type_aname (fp, type));
-    }
-
-  else
-    {
-      while ((type = ctf_symbol_next (fp, &it, &name, 0)) != CTF_ERR)
-	{
-	  char *outstr = strdup ("int ");
-	  while (ctf_type_kind (fp, type) == CTF_K_ARRAY)
-	    {
-	      ctf_arinfo_t ar;
-	      if (ctf_array_info (fp, type, &ar) < 0)
-		goto unexpected;
-	      outstr = insert_dimension (outstr, ar.ctr_nelems);
-	      printf ("%s\n", outstr);
-	      type = ar.ctr_contents;
-	    }
-	  free (outstr);
-	}
-    }
+  /* This is expected to fail with GCC prior to PR114186.  */
+  while ((type = ctf_type_next (fp, &it, NULL, 1)) != -1)
+    if (ctf_type_kind (fp, type) == CTF_K_ARRAY)
+      printf ("%s\n", ctf_type_aname (fp, type));
 
   ctf_dict_close (fp);
   ctf_close (ctf);
