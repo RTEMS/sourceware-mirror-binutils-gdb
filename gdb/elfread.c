@@ -660,7 +660,7 @@ elf_rel_plt_read (minimal_symbol_reader &reader,
 
 /* Per-objfile cache mapping function names to resolved ifunc addresses.  */
 
-using elf_gnu_ifunc_cache = gdb::unordered_map<std::string, CORE_ADDR>;
+using elf_gnu_ifunc_cache = gdb::unordered_string_map<CORE_ADDR>;
 
 static const registry<objfile>::key<elf_gnu_ifunc_cache>
   elf_objfile_gnu_ifunc_cache_data;

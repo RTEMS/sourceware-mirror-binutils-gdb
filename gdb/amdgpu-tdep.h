@@ -78,7 +78,7 @@ struct amdgpu_gdbarch_tdep : gdbarch_tdep_base
     regnum_map;
 
   /* A map of register_class_ids keyed by their name.  */
-  gdb::unordered_map<std::string, amd_dbgapi_register_class_id_t>
+  gdb::unordered_string_map<amd_dbgapi_register_class_id_t>
     register_class_map;
 };
 
