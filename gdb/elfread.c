@@ -43,6 +43,7 @@
 #include <string_view>
 #include "dwarf2/public.h"
 #include "cli/cli-cmds.h"
+#include "gdbsupport/unordered_map.h"
 
 /* Whether ctf should always be read, or only if no dwarf is present.  */
 static bool always_read_ctf;
@@ -657,44 +658,12 @@ elf_rel_plt_read (minimal_symbol_reader &reader,
     }
 }
 
-/* The data pointer is htab_t for gnu_ifunc_record_cache_unchecked.  */
+/* Per-objfile cache mapping function names to resolved ifunc addresses.  */
 
-static const registry<objfile>::key<htab, htab_deleter>
+using elf_gnu_ifunc_cache = gdb::unordered_map<std::string, CORE_ADDR>;
+
+static const registry<objfile>::key<elf_gnu_ifunc_cache>
   elf_objfile_gnu_ifunc_cache_data;
-
-/* Map function names to CORE_ADDR in elf_objfile_gnu_ifunc_cache_data.  */
-
-struct elf_gnu_ifunc_cache
-{
-  /* This is always a function entry address, not a function descriptor.  */
-  CORE_ADDR addr;
-
-  char name[1];
-};
-
-/* htab_hash for elf_objfile_gnu_ifunc_cache_data.  */
-
-static hashval_t
-elf_gnu_ifunc_cache_hash (const void *a_voidp)
-{
-  const struct elf_gnu_ifunc_cache *a
-    = (const struct elf_gnu_ifunc_cache *) a_voidp;
-
-  return htab_hash_string (a->name);
-}
-
-/* htab_eq for elf_objfile_gnu_ifunc_cache_data.  */
-
-static int
-elf_gnu_ifunc_cache_eq (const void *a_voidp, const void *b_voidp)
-{
-  const struct elf_gnu_ifunc_cache *a
-    = (const struct elf_gnu_ifunc_cache *) a_voidp;
-  const struct elf_gnu_ifunc_cache *b
-    = (const struct elf_gnu_ifunc_cache *) b_voidp;
-
-  return strcmp (a->name, b->name) == 0;
-}
 
 /* Record the target function address of a STT_GNU_IFUNC function NAME is the
    function entry address ADDR.  Return 1 if NAME and ADDR are considered as
@@ -707,11 +676,6 @@ elf_gnu_ifunc_cache_eq (const void *a_voidp, const void *b_voidp)
 static int
 elf_gnu_ifunc_record_cache (const char *name, CORE_ADDR addr)
 {
-  struct objfile *objfile;
-  htab_t htab;
-  struct elf_gnu_ifunc_cache entry_local, *entry_p;
-  void **slot;
-
   gnu_ifunc_debug_printf ("recording cache entry for \"%s\" at %s", name,
 			  paddress (current_inferior ()->arch (), addr));
 
@@ -734,7 +698,7 @@ elf_gnu_ifunc_record_cache (const char *name, CORE_ADDR addr)
       return 0;
     }
 
-  objfile = msym.objfile;
+  objfile *objfile = msym.objfile;
 
   /* If .plt jumps back to .plt the symbol is still deferred for later
      resolution and it has no use for GDB.  */
@@ -758,43 +722,23 @@ elf_gnu_ifunc_record_cache (const char *name, CORE_ADDR addr)
       return 0;
     }
 
-  htab = elf_objfile_gnu_ifunc_cache_data.get (objfile);
-  if (htab == NULL)
-    {
-      htab = htab_create_alloc (1, elf_gnu_ifunc_cache_hash,
-				elf_gnu_ifunc_cache_eq,
-				NULL, xcalloc, xfree);
-      elf_objfile_gnu_ifunc_cache_data.set (objfile, htab);
-    }
+  elf_gnu_ifunc_cache &cache
+    = elf_objfile_gnu_ifunc_cache_data.try_emplace (objfile);
 
-  entry_local.addr = addr;
-  obstack_grow (&objfile->objfile_obstack, &entry_local,
-		offsetof (struct elf_gnu_ifunc_cache, name));
-  obstack_grow_str0 (&objfile->objfile_obstack, name);
-  entry_p
-    = (struct elf_gnu_ifunc_cache *) obstack_finish (&objfile->objfile_obstack);
-
-  slot = htab_find_slot (htab, entry_p, INSERT);
-  if (*slot != NULL)
+  auto [it, inserted] = cache.emplace (name, addr);
+  if (!inserted && it->second != addr)
     {
-      struct elf_gnu_ifunc_cache *entry_found_p
-	= (struct elf_gnu_ifunc_cache *) *slot;
+      /* This case indicates buggy inferior program, the resolved
+	 address should never change.  */
       struct gdbarch *gdbarch = objfile->arch ();
 
-      if (entry_found_p->addr != addr)
-	{
-	  /* This case indicates buggy inferior program, the resolved address
-	     should never change.  */
+      warning (_("gnu-indirect-function \"%s\" has changed its "
+		 "resolved function_address from %s to %s"),
+	       name, paddress (gdbarch, it->second),
+	       paddress (gdbarch, addr));
 
-	    warning (_("gnu-indirect-function \"%s\" has changed its resolved "
-		       "function_address from %s to %s"),
-		     name, paddress (gdbarch, entry_found_p->addr),
-		     paddress (gdbarch, addr));
-	}
-
-      /* New ENTRY_P is here leaked/duplicate in the OBJFILE obstack.  */
+      it->second = addr;
     }
-  *slot = entry_p;
 
   gnu_ifunc_debug_printf ("cached \"%s\" -> %s in objfile %s", name,
 			  paddress (objfile->arch (), addr),
@@ -823,31 +767,21 @@ elf_gnu_ifunc_resolve_by_cache (const char *name, CORE_ADDR *addr_p)
   current_program_space->iterate_over_objfiles_in_search_order
     ([name, &addr_p, &found, func] (struct objfile *objfile)
        {
-	 htab_t htab;
-	 elf_gnu_ifunc_cache *entry_p;
-	 void **slot;
-
-	 htab = elf_objfile_gnu_ifunc_cache_data.get (objfile);
-	 if (htab == NULL)
+	 elf_gnu_ifunc_cache *cache
+	   = elf_objfile_gnu_ifunc_cache_data.get (objfile);
+	 if (cache == nullptr)
 	   return 0;
 
-	 entry_p = ((elf_gnu_ifunc_cache *)
-		    alloca (sizeof (*entry_p) + strlen (name)));
-	 strcpy (entry_p->name, name);
-
-	 slot = htab_find_slot (htab, entry_p, NO_INSERT);
-	 if (slot == NULL)
+	 auto it = cache->find (name);
+	 if (it == cache->end ())
 	   return 0;
-	 entry_p = (elf_gnu_ifunc_cache *) *slot;
-	 gdb_assert (entry_p != NULL);
 
-	 if (addr_p)
-	   *addr_p = entry_p->addr;
+	 if (addr_p != nullptr)
+	   *addr_p = it->second;
 
 	 gnu_ifunc_debug_printf_func
-	   (func, "cache hit for \"%s\" -> %s in objfile %s",
-	    name, paddress (objfile->arch (), entry_p->addr),
-	    objfile_name (objfile));
+	   (func, "cache hit for \"%s\" -> %s in objfile %s", name,
+	    paddress (objfile->arch (), it->second), objfile_name (objfile));
 	 found = 1;
 	 return 1;
        }, nullptr);
