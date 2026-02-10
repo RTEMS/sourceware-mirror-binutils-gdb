@@ -52,6 +52,11 @@ expect {
 	set saw_exiting 1
 	exp_continue
     }
+    # Likewise, but when using Z shell instead of Bourne shell.
+    -re "stdin/stdout redirected.*zsh:1: command not found: non-existing-program\r\nDuring startup program exited with code 127\.\r\nExiting\r\n" {
+	set saw_exiting 1
+	exp_continue
+    }
     # This is what we get on Windows.
     -re "Error creating process.*$eol+Exiting$eol+" {
 	set saw_exiting 1
