@@ -6953,27 +6953,23 @@ The @var{options} argument is any useful combination of the following:
 
 @table @code
 @item -file @var{file}
-@itemx -fi @var{file}
 Functions in @var{file} will be skipped over when stepping.
 
 @item -gfile @var{file-glob-pattern}
-@itemx -gfi @var{file-glob-pattern}
 @cindex skipping over files via glob-style patterns
 Functions in files matching @var{file-glob-pattern} will be skipped
 over when stepping.
 
 @smallexample
-(@value{GDBP}) skip -gfi utils/*.c
+(@value{GDBP}) skip -gfile utils/*.c
 @end smallexample
 
 @item -function @var{linespec}
-@itemx -fu @var{linespec}
 Functions named by @var{linespec} or the function containing the line
 named by @var{linespec} will be skipped over when stepping.
 @xref{Location Specifications}.
 
 @item -rfunction @var{regexp}
-@itemx -rfu @var{regexp}
 @cindex skipping over functions via regular expressions
 Functions whose name matches @var{regexp} will be skipped over when stepping.
 
@@ -6985,14 +6981,14 @@ the template arguments are.  Specifying the function to be skipped as a
 regular expression makes this easier.
 
 @smallexample
-(@value{GDBP}) skip -rfu ^std::(allocator|basic_string)<.*>::~?\1 *\(
+(@value{GDBP}) skip -rfunction ^std::(allocator|basic_string)<.*>::~?\1 *\(
 @end smallexample
 
 If you want to skip every templated C@t{++} constructor and destructor
 in the @code{std} namespace you can do:
 
 @smallexample
-(@value{GDBP}) skip -rfu ^std::([a-zA-z0-9_]+)<.*>::~?\1 *\(
+(@value{GDBP}) skip -rfunction ^std::([a-zA-z0-9_]+)<.*>::~?\1 *\(
 @end smallexample
 @end table
 

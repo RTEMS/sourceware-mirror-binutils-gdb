@@ -272,131 +272,180 @@ skip_function_command (const char *arg, int from_tty)
   skip_function (arg);
 }
 
+/* Storage for the "skip" command option values.  */
+
+struct skip_opts
+{
+  /* For the -file option.  */
+  std::string file;
+
+  /* For the -gfile option.  */
+  std::string gfile;
+
+  /* For the -function option.  */
+  std::string function;
+
+  /* For the -rfunction option.  */
+  std::string rfunction;
+};
+
+/* The options for the "skip" command.  */
+
+static const gdb::option::option_def skip_option_defs[] = {
+  gdb::option::filename_option_def<skip_opts> {
+    "file",
+    [] (skip_opts *opts) { return &opts->file; },
+    nullptr, /* show_cmd_cb */
+    nullptr, /* set_doc */
+  },
+
+  gdb::option::filename_option_def<skip_opts> {
+    "gfile",
+    [] (skip_opts *opts) { return &opts->gfile; },
+    nullptr, /* show_cmd_cb */
+    nullptr, /* set_doc */
+  },
+
+  gdb::option::string_option_def<skip_opts> {
+    "function",
+    [] (skip_opts *opts) { return &opts->function; },
+    nullptr, /* show_cmd_cb */
+    nullptr, /* set_doc */
+  },
+
+  gdb::option::string_option_def<skip_opts> {
+    "rfunction",
+    [] (skip_opts *opts) { return &opts->rfunction; },
+    nullptr, /* show_cmd_cb */
+    nullptr, /* set_doc */
+  },
+};
+
+/* Create the option_def_group for the "skip" command.  */
+
+static inline gdb::option::option_def_group
+make_skip_options_def_group (skip_opts *opts)
+{
+  return {{skip_option_defs}, opts};
+}
+
+/* Completion for the "skip" command.  */
+
+static void
+skip_command_completer (struct cmd_list_element *cmd,
+			completion_tracker &tracker,
+			const char *text, const char * /* word */)
+{
+  /* We only need to handle option completion here.  The sub-commands of
+     'skip' are handled automatically by the command system.  */
+  const auto group = make_skip_options_def_group (nullptr);
+  gdb::option::complete_options
+    (tracker, &text, gdb::option::PROCESS_OPTIONS_UNKNOWN_IS_OPERAND, group);
+}
+
 /* Process "skip ..." that does not match "skip file" or "skip function".  */
 
 static void
 skip_command (const char *arg, int from_tty)
 {
-  const char *file = NULL;
-  const char *gfile = NULL;
-  const char *function = NULL;
-  const char *rfunction = NULL;
-  int i;
-
-  if (arg == NULL)
+  if (arg == nullptr)
     {
       skip_function_command (arg, from_tty);
       return;
     }
 
-  gdb_argv argv (arg);
+  /* Parse command line options.  */
+  skip_opts opts;
+  const auto group = make_skip_options_def_group (&opts);
+  gdb::option::process_options
+    (&arg, gdb::option::PROCESS_OPTIONS_UNKNOWN_IS_OPERAND, group);
 
-  for (i = 0; argv[i] != NULL; ++i)
+  /* Handle invalid argument combinations.  */
+  if (!opts.file.empty () && !opts.gfile.empty ())
+    error (_("Cannot specify both -file and -gfile."));
+
+  if (!opts.function.empty () && !opts.rfunction.empty ())
+    error (_("Cannot specify both -function and -rfunction."));
+
+  /* If there's anything left on the command line then this is an error if
+     a valid command line flag was also given, or we assume that it's a
+     function name if the user entered 'skip blah'.  */
+  if (*arg != '\0')
     {
-      const char *p = argv[i];
-      const char *value = argv[i + 1];
-
-      if (strcmp (p, "-fi") == 0
-	  || strcmp (p, "-file") == 0)
+      if (!opts.file.empty () || !opts.gfile.empty ()
+	  || !opts.function.empty () || !opts.rfunction.empty ())
+	error (_("Junk after arguments: %s"), arg);
+      else if (*arg == '-')
 	{
-	  if (value == NULL)
-	    error (_("Missing value for %s option."), p);
-	  file = value;
-	  ++i;
+	  const char *after_arg = skip_to_space (arg);
+	  error (_("Invalid skip option: %.*s"), (int) (after_arg - arg), arg);
 	}
-      else if (strcmp (p, "-gfi") == 0
-	       || strcmp (p, "-gfile") == 0)
+      else
 	{
-	  if (value == NULL)
-	    error (_("Missing value for %s option."), p);
-	  gfile = value;
-	  ++i;
-	}
-      else if (strcmp (p, "-fu") == 0
-	       || strcmp (p, "-function") == 0)
-	{
-	  if (value == NULL)
-	    error (_("Missing value for %s option."), p);
-	  function = value;
-	  ++i;
-	}
-      else if (strcmp (p, "-rfu") == 0
-	       || strcmp (p, "-rfunction") == 0)
-	{
-	  if (value == NULL)
-	    error (_("Missing value for %s option."), p);
-	  rfunction = value;
-	  ++i;
-	}
-      else if (*p == '-')
-	error (_("Invalid skip option: %s"), p);
-      else if (i == 0)
-	{
-	  /* Assume the user entered "skip FUNCTION-NAME".
-	     FUNCTION-NAME may be `foo (int)', and therefore we pass the
-	     complete original arg to skip_function command as if the user
-	     typed "skip function arg".  */
+	  /* Assume the user entered "skip FUNCTION-NAME".  FUNCTION-NAME
+	     may be `foo (int)', and therefore we pass the complete
+	     original ARG to skip_function_command as if the user typed
+	     "skip function arg".  */
 	  skip_function_command (arg, from_tty);
 	  return;
 	}
-      else
-	error (_("Invalid argument: %s"), p);
     }
 
-  if (file != NULL && gfile != NULL)
-    error (_("Cannot specify both -file and -gfile."));
-
-  if (function != NULL && rfunction != NULL)
-    error (_("Cannot specify both -function and -rfunction."));
-
   /* This shouldn't happen as "skip" by itself gets punted to
-     skip_function_command.  */
-  gdb_assert (file != NULL || gfile != NULL
-	      || function != NULL || rfunction != NULL);
+     skip_function_command, and if the user entered "skip blah" then this
+     will have been handled above.  */
+  gdb_assert (!opts.file.empty () || !opts.gfile.empty ()
+	      || !opts.function.empty () || !opts.rfunction.empty ());
 
+  /* Create the skip list entry.  */
   std::string entry_file;
-  if (file != NULL)
-    entry_file = file;
-  else if (gfile != NULL)
-    entry_file = gfile;
+  if (!opts.file.empty ())
+    entry_file = opts.file;
+  else if (!opts.gfile.empty ())
+    entry_file = opts.gfile;
 
   std::string entry_function;
-  if (function != NULL)
-    entry_function = function;
-  else if (rfunction != NULL)
-    entry_function = rfunction;
+  if (!opts.function.empty ())
+    entry_function = opts.function;
+  else if (!opts.rfunction.empty ())
+    entry_function = opts.rfunction;
 
-  skiplist_entry::add_entry (gfile != NULL, std::move (entry_file),
-			     rfunction != NULL, std::move (entry_function));
+  skiplist_entry::add_entry (!opts.gfile.empty (),
+			     std::move (entry_file),
+			     !opts.rfunction.empty (),
+			     std::move (entry_function));
 
   /* I18N concerns drive some of the choices here (we can't piece together
      the output too much).  OTOH we want to keep this simple.  Therefore the
      only polish we add to the output is to append "(s)" to "File" or
      "Function" if they're a glob/regexp.  */
   {
-    const char *file_to_print = file != NULL ? file : gfile;
-    const char *function_to_print = function != NULL ? function : rfunction;
-    const char *file_text = gfile != NULL ? _("File(s)") : _("File");
-    const char *lower_file_text = gfile != NULL ? _("file(s)") : _("file");
-    const char *function_text
-      = rfunction != NULL ? _("Function(s)") : _("Function");
+    std::string &file_to_print
+      = !opts.file.empty () ? opts.file : opts.gfile;
+    std::string &function_to_print
+      = !opts.function.empty () ? opts.function : opts.rfunction;
 
-    if (function_to_print == NULL)
+    const char *file_text = !opts.gfile.empty () ? _("File(s)") : _("File");
+    const char *lower_file_text = !opts.gfile.empty () ? _("file(s)") : _("file");
+    const char *function_text
+      = !opts.rfunction.empty () ? _("Function(s)") : _("Function");
+
+    if (function_to_print.empty ())
       {
 	gdb_printf (_("%s %s will be skipped when stepping.\n"),
-		    file_text, file_to_print);
+		    file_text, file_to_print.c_str ());
       }
-    else if (file_to_print == NULL)
+    else if (file_to_print.empty ())
       {
 	gdb_printf (_("%s %s will be skipped when stepping.\n"),
-		    function_text, function_to_print);
+		    function_text, function_to_print.c_str ());
       }
     else
       {
 	gdb_printf (_("%s %s in %s %s will be skipped"
 		      " when stepping.\n"),
-		    function_text, function_to_print,
-		    lower_file_text, file_to_print);
+		    function_text, function_to_print.c_str (),
+		    lower_file_text, file_to_print.c_str ());
       }
   }
 }
@@ -732,7 +781,7 @@ INIT_GDB_FILE (step_skip)
   static struct cmd_list_element *skiplist = NULL;
   struct cmd_list_element *c;
 
-  add_prefix_cmd ("skip", class_breakpoint, skip_command, _("\
+  c = add_prefix_cmd ("skip", class_breakpoint, skip_command, _("\
 Ignore a function while stepping.\n\
 \n\
 Usage: skip [FUNCTION-NAME]\n\
@@ -740,12 +789,13 @@ Usage: skip [FUNCTION-NAME]\n\
 If no arguments are given, ignore the current function.\n\
 \n\
 FILE-SPEC is one of:\n\
-       -fi|-file FILE-NAME\n\
-       -gfi|-gfile GLOB-FILE-PATTERN\n\
+       -file FILE-NAME\n\
+       -gfile GLOB-FILE-PATTERN\n\
 FUNCTION-SPEC is one of:\n\
-       -fu|-function FUNCTION-NAME\n\
-       -rfu|-rfunction FUNCTION-NAME-REGULAR-EXPRESSION"),
+       -function FUNCTION-NAME\n\
+       -rfunction FUNCTION-NAME-REGULAR-EXPRESSION"),
 		  &skiplist, 1, &cmdlist);
+  set_cmd_completer_handle_brkchars (c, skip_command_completer);
 
   c = add_cmd ("file", class_breakpoint, skip_file_command, _("\
 Ignore a file while stepping.\n\
