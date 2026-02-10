@@ -769,6 +769,7 @@ ranges (e.g. \"skip enable 4-8\"), or both (e.g. \"skip enable 1 3 4-8\").\n\n\
 If you don't specify any numbers or ranges, we'll enable all skip entries."),
 	       &skiplist);
   set_cmd_completer (c, complete_skip_number);
+  add_alias_cmd ("skip", c, class_breakpoint, 0, &enablelist);
 
   c = add_cmd ("disable", class_breakpoint, skip_disable_command, _("\
 Disable skip entries.\n\
@@ -778,6 +779,7 @@ ranges (e.g. \"skip disable 4-8\"), or both (e.g. \"skip disable 1 3 4-8\").\n\n
 If you don't specify any numbers or ranges, we'll disable all skip entries."),
 	       &skiplist);
   set_cmd_completer (c, complete_skip_number);
+  add_alias_cmd ("skip", c, class_breakpoint, 0, &disablelist);
 
   c = add_cmd ("delete", class_breakpoint, skip_delete_command, _("\
 Delete skip entries.\n\
@@ -787,6 +789,7 @@ ranges (e.g. \"skip delete 4-8\"), or both (e.g. \"skip delete 1 3 4-8\").\n\n\
 If you don't specify any numbers or ranges, we'll delete all skip entries."),
 	       &skiplist);
   set_cmd_completer (c, complete_skip_number);
+  add_alias_cmd ("skip", c, class_breakpoint, 0, &deletelist);
 
   add_info ("skip", info_skip_command, _("\
 Display the status of skips.\n\

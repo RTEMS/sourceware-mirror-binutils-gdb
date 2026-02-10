@@ -108,6 +108,12 @@ info proc environ
   Print the initial environment variables of the specified process.
   Supported on Linux.
 
+delete skip
+enable skip
+disable skip
+  These are new aliases for 'skip delete', 'skip enable', and 'skip
+  disable' respectively.
+
 * Changed commands
 
 maintenance info program-spaces

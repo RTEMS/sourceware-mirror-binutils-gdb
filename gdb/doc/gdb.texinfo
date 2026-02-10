@@ -7056,17 +7056,23 @@ If no function is specified this is @samp{<none>}.
 @end table
 
 @kindex skip delete
+@kindex delete skip
 @item skip delete @r{[}@var{range}@r{]}
+@itemx delete skip @r{[}@var{range}@r{]}
 Delete the specified skip(s).  If @var{range} is not specified, delete all
 skips.
 
 @kindex skip enable
+@kindex enable skip
 @item skip enable @r{[}@var{range}@r{]}
+@itemx enable skip @r{[}@var{range}@r{]}
 Enable the specified skip(s).  If @var{range} is not specified, enable all
 skips.
 
 @kindex skip disable
+@kindex disable skip
 @item skip disable @r{[}@var{range}@r{]}
+@itemx disable skip @r{[}@var{range}@r{]}
 Disable the specified skip(s).  If @var{range} is not specified, disable all
 skips.
 
