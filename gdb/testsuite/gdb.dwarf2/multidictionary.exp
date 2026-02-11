@@ -144,12 +144,10 @@ if {[build_executable $testfile.exp $testfile [list $asm_file $srcfile] {}] \
     return -1
 }
 
-# We force the DIEs above to be read in via "-readnow".
-save_vars { GDBFLAGS } {
-    set GDBFLAGS "$GDBFLAGS -readnow"
-    clean_restart
-}
-gdb_load $binfile
+clean_restart $binfile
+
+# We force the DIEs above to be read in.
+gdb_test_name "maint expand-symtabs"
 
 # All we need to do is check whether GDB is alive.  Without
 # multidictionaries, it will either crash, assert, or throw an

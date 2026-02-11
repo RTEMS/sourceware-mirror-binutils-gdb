@@ -18,8 +18,6 @@
 
 standard_testfile main.cc
 
-require !readnow
-
 set opts {}
 lappend opts debug
 lappend opts c++

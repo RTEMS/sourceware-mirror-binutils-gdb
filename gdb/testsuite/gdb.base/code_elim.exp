@@ -90,21 +90,6 @@ with_test_prefix "single psymtabs" {
     not_null_var_address main
 }
 
-# Same thing for symtabs
-
-gdb_exit
-save_vars { GDBFLAGS } {
-    set GDBFLAGS "$GDBFLAGS --readnow $binfile1"
-    gdb_start
-}
-
-with_test_prefix "single symtabs" {
-    test_eliminated_var my_global_symbol
-    test_eliminated_var my_static_symbol
-    test_eliminated_var my_global_func
-    not_null_var_address main
-}
-
 # binfile2 contains the symbols that have been eliminated in binfile1. Check
 # the eliminated symbols does not hide these valid ones.
 

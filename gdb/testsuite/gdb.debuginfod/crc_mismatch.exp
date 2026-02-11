@@ -123,7 +123,7 @@ proc_with_prefix local_debuginfod { } {
 	[multi_line \
 	     "Reading symbols from ${escapedobjdirsubdir}/crc_mismatch-2\\.\\.\\." \
 	     "Downloading.*separate debug info for ${escapedobjdirsubdir}/crc_mismatch-2\\.\\.\\." \
-	     "Reading symbols from ${cache}/\[^\r\n\]+\\.\\.\\.(?:\r\nExpanding full symbols from \[^\r\n\]+)*"] \
+	     "Reading symbols from ${cache}/\[^\r\n\]+\\.\\.\\."] \
 	 "debuginfod running, info downloaded, no CRC mismatch"
 }
 

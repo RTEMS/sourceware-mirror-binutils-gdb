@@ -28,20 +28,15 @@ if {[prepare_for_testing "failed to prepare" $testfile \
     return -1
 }
 
-set readnow_p [readnow]
-
 # Check that we find all static symbols before the inferior has
 # started, at which point some of the symtabs might not have been
 # expanded.
 gdb_test "python print (len (gdb.lookup_static_symbols ('rr')))" \
     "2" "print (len (gdb.lookup_static_symbols ('rr')))"
 
-# This test does not make sense when readnow is in effect.
-if {!$readnow_p} {
-    # Make sure that the global symbol's symtab was not expanded.
-    gdb_test_no_output "pipe maint info symtab | grep \"name.*py-symbol-3.c\"" \
-	"global rr symtab was not expanded"
-}
+# Make sure that the global symbol's symtab was not expanded.
+gdb_test_no_output "pipe maint info symtab | grep \"name.*py-symbol-3.c\"" \
+    "global rr symtab was not expanded"
 
 # Restart so we don't have expanded symtabs after the previous test.
 clean_restart ${::testfile}

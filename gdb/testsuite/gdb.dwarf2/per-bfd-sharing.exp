@@ -14,7 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # This test checks that loading a file with different methods (partial symtabs,
-# index, readnow) does not crash.
+# index) does not crash.
 
 standard_testfile
 
@@ -25,8 +25,7 @@ if { [build_executable "failed to prepare" $testfile $srcfile \
 set host_binfile [gdb_remote_download host $binfile]
 
 set has_index_section [exec_has_index_section $binfile]
-set uses_readnow [expr {[string first "-readnow" $GDBFLAGS] != -1}]
-set expecting_index_cache_use [expr {!$has_index_section && !$uses_readnow}]
+set expecting_index_cache_use [expr {!$has_index_section}]
 
 lassign [remote_exec host mktemp -d] ret cache_dir
 
@@ -61,10 +60,6 @@ proc load_binary { method } {
 	gdb_test_no_output "set index-cache enabled on"
 	gdb_test "file $::host_binfile" "Reading symbols from .*" "file index"
 	gdb_test_no_output "set index-cache enabled off"
-    } elseif { $method == "readnow" } {
-	gdb_test "file -readnow $::host_binfile" \
-	    "Reading symbols from .*Expanding full symbols from .*" \
-	    "file readnow"
     } else {
 	error "unknown method"
     }
@@ -74,7 +69,7 @@ proc load_binary { method } {
     gdb_test "print foo" " = {int \\(int, int\\)} $hex <foo>"
 }
 
-set methods {standard index readnow}
+set methods {standard index}
 
 foreach_with_prefix first $methods {
     foreach_with_prefix second $methods {

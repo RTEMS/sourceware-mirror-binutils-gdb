@@ -68,10 +68,6 @@ if { [prepare_for_testing "failed to prepare" $testfile \
 
 # Check that no symtabs are expanded.
 set test "no symtabs expanded"
-if { [readnow] } {
-    unsupported $test
-    return -1
-}
 gdb_test_no_output "maint info symtabs" $test
 
 # Expand dw2-symtab-includes.h symtab

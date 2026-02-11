@@ -18,10 +18,6 @@
 # Out of bounds index.
 set int_str_idx 1
 
-# With readnow, the dwarf error is printed during the file command, so skip
-# the test.
-require !readnow
-
 set prepare_for_testing_done 0
 source $srcdir/$subdir/dw-form-strx.exp.tcl
 require {expr {$prepare_for_testing_done == 1}}

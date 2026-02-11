@@ -38,9 +38,8 @@ if { [build_executable ${testfile}.exp ${testfile} \
     return -1
 }
 
-save_vars { GDBFLAGS } {
-    set GDBFLAGS "$GDBFLAGS --readnow"
-    clean_restart $testfile
-}
+clean_restart $executable
+
+gdb_test_no_output "maint expand-symtabs"
 
 gdb_test "p 1" " = 1" "alive"

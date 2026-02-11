@@ -5,8 +5,7 @@ idea is to group similar boards together, and have one line to describe a
 board.
 
 # Modify gdb default flags.
-readnow.exp
-	Run gdb with -readnow.
+[ None right now ]
 
 # Post-process executable.
 cc-with-gdb-index.exp

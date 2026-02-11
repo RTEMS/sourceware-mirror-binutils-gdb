@@ -49,7 +49,7 @@ if {[build_executable $testfile.exp $testfile \
     return -1
 }
 
-clean_restart
-gdb_test "file -readnow $binfile" \
+clean_restart $binfile
+gdb_test "maint expand-symtabs" \
     "could not find supplementary DWARF file" \
-    "file $testfile"
+    "expanding symtabs"

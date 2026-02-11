@@ -18,9 +18,6 @@
 
 load_lib selftest-support.exp
 
-# Can't save an index with readnow.
-require !readnow
-
 # A multiplier used to ensure slow tasks are less likely to timeout.
 set timeout_factor 20
 

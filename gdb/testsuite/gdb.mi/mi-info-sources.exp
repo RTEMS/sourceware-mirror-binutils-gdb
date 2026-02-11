@@ -28,8 +28,6 @@ if {[build_executable $testfile.exp $testfile \
 
 mi_clean_restart $::testfile
 
-set readnow_p [mi_readnow]
-
 mi_runto_main
 
 # Unload symbols for shared libraries to prevent
@@ -201,9 +199,7 @@ proc check_info_sources { debug_fully_read } {
     }
 }
 
-if { ! $readnow_p } {
-    check_info_sources "false"
-}
+check_info_sources "false"
 
 mi_continue_to "some_other_func"
 

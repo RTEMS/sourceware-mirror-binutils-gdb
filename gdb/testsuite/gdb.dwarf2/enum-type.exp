@@ -124,7 +124,6 @@ gdb_test "ptype enum EU" \
 gdb_test "p ns::val1" \
     " = ns::val1"
 
-require !readnow
 require {string equal [have_index $binfile] ""}
 
 set re_ws "\[ \t\]"

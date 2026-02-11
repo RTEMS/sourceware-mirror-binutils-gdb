@@ -358,10 +358,6 @@ extern bool separate_debug_file_debug;
   scoped_debug_start_end (separate_debug_file_debug,	     \
 			  "separate-debug-file", fmt, ##__VA_ARGS__)
 
-/* Read full symbols immediately.  */
-
-extern int readnow_symbol_files;
-
 /* Never read full symbols.  */
 
 extern int readnever_symbol_files;
@@ -375,7 +371,7 @@ extern int readnever_symbol_files;
    the way things are quoted (or not quoted) elsewhere in GDB.
 
    2. Options are used, which are not generally used in GDB (perhaps
-   "set mapped on", "set readnow on" would be better)
+   "set mapped on" would be better)
 
    3. The order of options matters, which is contrary to GNU
    conventions (because it is confusing and inconvenient).  */

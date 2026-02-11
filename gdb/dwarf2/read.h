@@ -713,7 +713,7 @@ public:
      VMA of 0.  */
   bool has_section_at_zero = false;
 
-  /* The mapped index, or NULL in the readnow case.  */
+  /* The mapped index.  */
   dwarf_scanner_base_up index_table;
 
   /* When using index_table, this keeps track of all quick_file_names entries.

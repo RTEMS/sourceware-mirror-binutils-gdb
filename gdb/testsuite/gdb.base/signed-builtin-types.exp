@@ -36,11 +36,6 @@ if {![runto_main]} {
     return -1
 }
 
-if {[readnow]} {
-    untested "this test checks for delayed symtab expansion"
-    return -1
-}
-
 # Use 'info sources' to check if the debug information for the shared
 # library has been fully expanded or not.  Return true if the debug
 # information has NOT been fully expanded (which is what we want for this

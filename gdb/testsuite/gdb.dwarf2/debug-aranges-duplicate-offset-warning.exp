@@ -65,17 +65,10 @@ save_vars { GDBFLAGS } {
     }
 }
 
-set readnow_p [readnow]
-
 set test "file command warnings"
-if { $readnow_p } {
-    set re "warning:"
-    gdb_assert { ![regexp $re $gdb_file_cmd_msg] } $test
-} else {
-    set re \
-	[concat \
-	     "warning: Section .debug_aranges in \[^\r\n\]* has" \
-	     "duplicate debug_info_offset $hex," \
-	     "ignoring \\.debug_aranges\\."]
-    gdb_assert { [regexp $re $gdb_file_cmd_msg] } $test
-}
+set re \
+    [concat \
+	 "warning: Section .debug_aranges in \[^\r\n\]* has" \
+	 "duplicate debug_info_offset $hex," \
+	 "ignoring \\.debug_aranges\\."]
+gdb_assert { [regexp $re $gdb_file_cmd_msg] } $test

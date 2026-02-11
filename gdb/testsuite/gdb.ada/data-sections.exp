@@ -25,10 +25,6 @@ if {[gdb_compile_ada "${srcfile}" "${binfile}" executable \
     return
 }
 
-# The bug was that the DWARF reader would crash when processing a
-# certain symbol.
-save_vars {GDBFLAGS} {
-    append GDBFLAGS " --readnow"
+clean_restart ${testfile}
 
-    clean_restart ${testfile}
-}
+gdb_test_no_output "maint expand-symtabs"

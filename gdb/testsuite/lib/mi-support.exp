@@ -648,14 +648,6 @@ proc mi_gdb_load { arg } {
     return 0
 }
 
-# Return true if symbols were read in using -readnow.  Otherwise,
-# return false.
-
-proc mi_readnow { args } {
-    # Just defer to gdb.exp.
-    return [readnow]
-}
-
 # mi_gdb_test COMMAND [PATTERN [MESSAGE [IPATTERN]]] -- send a command to gdb;
 #   test the result.
 #

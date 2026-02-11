@@ -538,19 +538,6 @@ symbol_file_add_main_adapter (const char *arg, int from_tty)
   symbol_file_add_main (arg, add_flags);
 }
 
-/* Perform validation of the '--readnow' and '--readnever' flags.  */
-
-static void
-validate_readnow_readnever ()
-{
-  if (readnever_symbol_files && readnow_symbol_files)
-    {
-      error (_("%s: '--readnow' and '--readnever' cannot be "
-	       "specified simultaneously"),
-	     gdb_program_name);
-    }
-}
-
 /* Type of this option.  */
 enum cmdarg_kind
 {
@@ -1031,17 +1018,11 @@ captured_main_1 (struct captured_main_args *context)
 	    break;
 
 	  case OPT_READNOW:
-	    {
-	      readnow_symbol_files = 1;
-	      validate_readnow_readnever ();
-	    }
+	    /* Ignore.  */
 	    break;
 
 	  case OPT_READNEVER:
-	    {
-	      readnever_symbol_files = 1;
-	      validate_readnow_readnever ();
-	    }
+	    readnever_symbol_files = 1;
 	    break;
 
 #ifdef USE_WIN32API
@@ -1437,7 +1418,6 @@ Selection of debuggee and its files:\n\n\
   --directory=DIR    Search for source files in DIR.\n\
   --se=FILE          Use FILE as symbol file and executable file.\n\
   --symbols=SYMFILE  Read symbols from SYMFILE.\n\
-  --readnow          Fully read symbol files on first access.\n\
   --readnever        Do not read symbol files.\n\
   --write            Set writing into executable and core files.\n\n\
 "), stream);

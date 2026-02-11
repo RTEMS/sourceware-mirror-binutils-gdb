@@ -30,10 +30,6 @@ gdb_test_no_output "set language c"
 gdb_load ${binfile}
 
 set test "verify no symtabs are expanded"
-if { [readnow] } {
-    unsupported $test
-    return -1
-}
 gdb_test_no_output "maint info symtabs" $test
 
 # Expand the header file symtab.

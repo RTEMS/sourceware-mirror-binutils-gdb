@@ -88,8 +88,7 @@ proc attach_to {testpid} {
 		# Seen when "set debug libthread_db" is on.
 		exp_continue
 	    }
-	    -re "Reading symbols from|Expanding full symbols from" {
-		# Prevent -readnow timeout.
+	    -re "Reading symbols from" {
 		exp_continue
 	    }
 	    -re "is a zombie - the process has already terminated.*$::gdb_prompt " {

@@ -77,10 +77,6 @@ using clear_symtab_users_cleanup
 
 /* See symfile.h.  */
 
-int readnow_symbol_files;
-
-/* See symfile.h.  */
-
 int readnever_symbol_files;
 
 /* Functions this file defines.  */
@@ -1018,16 +1014,10 @@ symbol_file_add_with_addrs (const gdb_bfd_ref_ptr &abfd, const char *name,
   const int mainline = add_flags & SYMFILE_MAINLINE;
   const int always_confirm = add_flags & SYMFILE_ALWAYS_CONFIRM;
   const int should_print = (print_symbol_loading_p (from_tty, mainline, 1)
-			    && (readnow_symbol_files
-				|| (add_flags & SYMFILE_NO_READ) == 0));
+			    && (add_flags & SYMFILE_NO_READ) == 0);
 
-  if (readnow_symbol_files)
-    {
-      flags |= OBJF_READNOW;
-      add_flags &= ~SYMFILE_NO_READ;
-    }
-  else if (readnever_symbol_files
-	   || (parent != NULL && (parent->flags & OBJF_READNEVER)))
+  if (readnever_symbol_files
+      || (parent != NULL && (parent->flags & OBJF_READNEVER)))
     {
       flags |= OBJF_READNEVER;
       add_flags |= SYMFILE_NO_READ;
@@ -1064,20 +1054,6 @@ symbol_file_add_with_addrs (const gdb_bfd_ref_ptr &abfd, const char *name,
 		    styled_string (file_name_style.style (), name));
     }
   syms_from_objfile (objfile, addrs, add_flags);
-
-  /* We now have at least a partial symbol table.  Check to see if the
-     user requested that all symbols be read on initial access via either
-     the gdb startup command line or on a per symbol file basis.  Expand
-     all partial symbol tables for this objfile if so.  */
-
-  if ((flags & OBJF_READNOW))
-    {
-      if (should_print)
-	gdb_printf (_("Expanding full symbols from %ps...\n"),
-		    styled_string (file_name_style.style (), name));
-
-      objfile->expand_all_symtabs ();
-    }
 
   /* Note that we only print a message if we have no symbols and have
      no separate debug file.  If there is a separate debug file which
@@ -1122,8 +1098,7 @@ symbol_file_add_separate (const gdb_bfd_ref_ptr &bfd, const char *name,
 
   symbol_file_add_with_addrs
     (bfd, name, symfile_flags, &sap,
-     objfile->flags & (OBJF_SHARED | OBJF_READNOW
-		       | OBJF_USERLOADED | OBJF_MAINLINE),
+     objfile->flags & (OBJF_SHARED | OBJF_USERLOADED | OBJF_MAINLINE),
      objfile);
 }
 
@@ -1530,16 +1505,6 @@ find_separate_debug_file_by_debuglink
   return debugfile;
 }
 
-/* Make sure that OBJF_{READNOW,READNEVER} are not set
-   simultaneously.  */
-
-static void
-validate_readnow_readnever (objfile_flags flags)
-{
-  if ((flags & OBJF_READNOW) && (flags & OBJF_READNEVER))
-    error (_("-readnow and -readnever cannot be used simultaneously"));
-}
-
 /* See symfile.h.  */
 
 void
@@ -1575,7 +1540,9 @@ symbol_file_command (const char *args, int from_tty)
 		error (_("Unrecognized argument \"%s\""), arg);
 	    }
 	  else if (strcmp (arg, "-readnow") == 0)
-	    flags |= OBJF_READNOW;
+	    {
+	      /* Ignore.  */
+	    }
 	  else if (strcmp (arg, "-readnever") == 0)
 	    flags |= OBJF_READNEVER;
 	  else if (strcmp (arg, "-o") == 0)
@@ -1594,8 +1561,6 @@ symbol_file_command (const char *args, int from_tty)
 
       if (name == NULL)
 	error (_("no symbol file name was specified"));
-
-      validate_readnow_readnever (flags);
 
       /* Set SYMFILE_DEFER_BP_RESET because the proper displacement for a PIE
 	 (Position Independent Executable) main symbol file will only be
@@ -2215,7 +2180,9 @@ add_symbol_file_command (const char *args, int from_tty)
 	    error (_("Unrecognized argument \"%s\""), arg);
 	}
       else if (strcmp (arg, "-readnow") == 0)
-	flags |= OBJF_READNOW;
+	{
+	  /* Ignore.  */
+	}
       else if (strcmp (arg, "-readnever") == 0)
 	flags |= OBJF_READNEVER;
       else if (strcmp (arg, "-s") == 0)
@@ -2247,8 +2214,6 @@ add_symbol_file_command (const char *args, int from_tty)
 
   if (filename == NULL)
     error (_("You must provide a filename to be loaded."));
-
-  validate_readnow_readnever (flags);
 
   /* Print the prompt for the query below.  And save the arguments into
      a sect_addr_info structure to be passed around to other
@@ -2615,19 +2580,6 @@ reread_symbols (int from_tty)
 	  objfile.sf->sym_offsets (&objfile, {});
 
 	  read_symbols (&objfile, 0);
-
-	  if ((objfile.flags & OBJF_READNOW))
-	    {
-	      const int mainline = objfile.flags & OBJF_MAINLINE;
-	      const int should_print = (print_symbol_loading_p (from_tty, mainline, 1)
-					&& readnow_symbol_files);
-	      if (should_print)
-		gdb_printf (_("Expanding full symbols from %ps...\n"),
-			    styled_string (file_name_style.style (),
-					   objfile_name (&objfile)));
-
-	      objfile.expand_all_symtabs ();
-	    }
 
 	  if (!objfile.has_symbols ())
 	    {
@@ -3765,24 +3717,21 @@ INIT_GDB_FILE (symfile)
   add_symtab_fns (bfd_target_ihex_flavour, nullptr);
   add_symtab_fns (bfd_target_tekhex_flavour, nullptr);
 
-#define READNOW_READNEVER_HELP \
-  "The '-readnow' option will cause GDB to read the entire symbol file\n\
-immediately.  This makes the command slower, but may make future operations\n\
-faster.\n\
-The '-readnever' option will prevent GDB from reading the symbol file's\n\
+#define READNEVER_HELP \
+  "The '-readnever' option will prevent GDB from reading the symbol file's\n\
 symbolic debug information."
 
   c = add_cmd ("symbol-file", class_files, symbol_file_command, _("\
 Load symbol table from executable file FILE.\n\
-Usage: symbol-file [-readnow | -readnever] [-o OFF] FILE\n\
+Usage: symbol-file [-readnever] [-o OFF] FILE\n\
 OFF is an optional offset which is added to each section address.\n\
 The `file' command can also load symbol tables, as well as setting the file\n\
-to execute.\n" READNOW_READNEVER_HELP), &cmdlist);
+to execute.\n" READNEVER_HELP), &cmdlist);
   set_cmd_completer (c, filename_maybe_quoted_completer);
 
   c = add_cmd ("add-symbol-file", class_files, add_symbol_file_command, _("\
 Load symbols from FILE, assuming FILE has been dynamically loaded.\n\
-Usage: add-symbol-file FILE [-readnow|-readnever] [-o OFF] [ADDR]\n\
+Usage: add-symbol-file FILE [-readnever] [-o OFF] [ADDR]\n\
 		       [-s SECT-NAME SECT-ADDR]...\n\
 ADDR is the starting address of the file's text.\n\
 Each '-s' argument provides a section name and address, and\n\
@@ -3790,7 +3739,7 @@ should be specified if the data and bss segments are not contiguous\n\
 with the text.  SECT-NAME is a section name to be loaded at SECT-ADDR.\n\
 OFF is an optional offset which is added to the default load addresses\n\
 of all sections for which no other address was specified.\n"
-READNOW_READNEVER_HELP),
+READNEVER_HELP),
 	       &cmdlist);
   set_cmd_completer (c, filename_maybe_quoted_completer);
 

@@ -24,9 +24,8 @@ if { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" object {}] != ""
     return -1
 }
 
-save_vars { GDBFLAGS } {
-    set GDBFLAGS "$GDBFLAGS --readnow"
-    clean_restart $executable
-}
+clean_restart $executable
+
+gdb_test_no_output "maint expand-symtabs"
 
 gdb_test "p 1" " = 1" "alive"

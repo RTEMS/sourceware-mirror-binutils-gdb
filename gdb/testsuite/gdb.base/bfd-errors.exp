@@ -147,12 +147,11 @@ if { [catch {exec $objcopy_program \
     return -1
 }
 
-clean_restart
+clean_restart $binfile_lib
 
 # Count number of distinct BFD error messages via 'bfd_error_count'
-# array while using add-symbol-file to "load" the shared library.
-gdb_test_multiple "add-symbol-file -readnow $binfile_lib" \
-		  "load library with add-symbol-file" {
+# array.
+gdb_test_multiple "maint expand-symtabs " "expand symtabs" {
     -re "add symbol table from file.*\(y or n\)" {
 	send_gdb "y\n" answer
 	exp_continue
@@ -160,9 +159,6 @@ gdb_test_multiple "add-symbol-file -readnow $binfile_lib" \
     -re "(BFD:\[^\r\n\]*)\[\r\n\]+" {
 	incr bfd_error_count($expect_out(1,string))
 	exp_continue
-    }
-    -re "Expanding full symbols from.*$gdb_prompt $" {
-	pass $gdb_test_name
     }
 }
 

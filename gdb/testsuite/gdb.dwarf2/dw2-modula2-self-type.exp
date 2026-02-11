@@ -32,7 +32,7 @@ clean_restart $testfile
 # type = POINTER TO PROCEDURE
 gdb_test "set language modula-2"
 
-# The first access (as we do not use -readnow) crashes GDB.
+# The first access crashes GDB.
 gdb_test "ptype v"
 
 gdb_test "p 1" " = 1" "alive"

@@ -141,7 +141,7 @@ proc_with_prefix local_debuginfod { } {
 	[multi_line \
 	     "Reading symbols from ${build_id_debug_file}\\.\\.\\." \
 	     "Downloading\[^\r\n\]*separate debug info for ${build_id_debug_file}\\.\\.\\." \
-	     "Reading symbols from ${cache}/\[^\r\n\]+\\.\\.\\.(?:\r\nExpanding full symbols from \[^\r\n\]+)*"] \
+	     "Reading symbols from ${cache}/\[^\r\n\]+\\.\\.\\."] \
 	"debuginfod running, info downloaded, no warnings"
 }
 

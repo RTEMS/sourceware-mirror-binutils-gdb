@@ -7776,8 +7776,7 @@ proc gdb_load_no_complaints { arg } {
     set re \
 	[multi_line \
 	     "^(Reading symbols from \[^\r\n\]*" \
-	     ")+(Expanding full symbols from \[^\r\n\]*" \
-	     ")?$gdb_prompt $"]
+	     ")+$gdb_prompt $"]
     gdb_assert {[regexp $re $gdb_file_cmd_msg]} "No complaints"
 }
 
@@ -10538,14 +10537,6 @@ gdb_caching_proc supports_fcf_protection {} {
   } executable "additional_flags=-fcf-protection=full"]
 }
 
-# Return true if symbols were read in using -readnow.  Otherwise,
-# return false.
-
-proc readnow { } {
-    return [expr {[lsearch -exact $::GDBFLAGS -readnow] != -1
-		  || [lsearch -exact $::GDBFLAGS --readnow] != -1}]
-}
-
 # Return 'gdb_index' if the symbols from OBJFILE were read using a
 # .gdb_index index.  Return 'debug_names' if the symbols were read
 # using a DWARF-5 style .debug_names index.  Otherwise, return an
@@ -10620,8 +10611,6 @@ proc add_gdb_index { program {style ""} } {
 #
 # 'dwarf5' - Contain DWARF5 style index sections,
 #
-# 'readnow' - A fake .gdb_index as a result of readnow being used,
-#
 # 'cooked' - The cooked index created when reading non-indexed debug
 #            information,
 #
@@ -10649,10 +10638,6 @@ proc get_index_type { objfile { testname "" } } {
 	}
 	-re "\r\n(Cooked index in use:|Psymtabs)(?=\r\n)" {
 	    set index_type "cooked"
-	    gdb_test_lines "" $gdb_test_name ".*"
-	}
-	-re ".gdb_index: faked for \"readnow\"" {
-	    set index_type "readnow"
 	    gdb_test_lines "" $gdb_test_name ".*"
 	}
 	-re -wrap "" {
@@ -10686,10 +10671,6 @@ proc ensure_gdb_index { binfile {style ""} } {
 
     if { $index_type eq "gdb" || $index_type eq "dwarf5" } {
 	return 0
-    }
-
-    if { $index_type eq "readnow" } {
-	return -1
     }
 
     if { [add_gdb_index $binfile $style] == "1" } {

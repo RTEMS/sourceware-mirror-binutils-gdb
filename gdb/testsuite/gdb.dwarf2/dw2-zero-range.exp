@@ -25,7 +25,7 @@ standard_testfile .c -shlib.c -dw.S
 
 # Test for presence of complaint, with the lib relocated.
 
-proc_with_prefix test_relocated { exec_path lib_path complaint_re readnow_p } {
+proc_with_prefix test_relocated { exec_path lib_path complaint_re } {
     clean_restart
     gdb_load $exec_path
     gdb_load_shlib $lib_path
@@ -52,16 +52,14 @@ proc_with_prefix test_relocated { exec_path lib_path complaint_re readnow_p } {
 	    gdb_assert { $have_complaint } "complaint"
 	}
 
-	if { ! $readnow_p } {
-	    gdb_test "maint expand-symtabs $::srcfile2" $complaint_re \
-		"complaint when expanding symtab"
-	}
+	gdb_test "maint expand-symtabs $::srcfile2" $complaint_re \
+	    "complaint when expanding symtab"
     }
 }
 
 # Test for presence of complaint, with the lib unrelocated.
 
-proc_with_prefix test_unrelocated { exec_path lib_path complaint_re readnow_p } {
+proc_with_prefix test_unrelocated { exec_path lib_path complaint_re } {
     clean_restart
     gdb_test_no_output "maint set dwarf synchronous on"
 
@@ -76,10 +74,8 @@ proc_with_prefix test_unrelocated { exec_path lib_path complaint_re readnow_p } 
 
 	gdb_test_no_output "maint set dwarf synchronous off"
 
-	if { ! $readnow_p } {
-	    gdb_test "maint expand-symtabs $::srcfile2" $complaint_re \
-		"complaint when expanding symtab"
-	}
+	gdb_test "maint expand-symtabs $::srcfile2" $complaint_re \
+	    "complaint when expanding symtab"
     }
 }
 
@@ -165,8 +161,6 @@ foreach_with_prefix ranges_sect {ranges rnglists} {
     set complaint_re \
 	"During symbol reading: $complaint_re \\\[in module \[^\r\n\]*\\\]"
 
-    set readnow_p [readnow]
-
-    test_relocated $exec_path $lib_path $complaint_re $readnow_p
-    test_unrelocated $exec_path $lib_path $complaint_re $readnow_p
+    test_relocated $exec_path $lib_path $complaint_re
+    test_unrelocated $exec_path $lib_path $complaint_re
 }

@@ -96,11 +96,7 @@ if { [prepare_for_testing "failed to prepare" $testfile \
 
 # Check that no symtabs are expanded.
 set test "no symtabs expanded"
-if { [readnow] } {
-    unsupported $test
-} else {
-    gdb_test_no_output "maint info symtabs" $test
-}
+gdb_test_no_output "maint info symtabs" $test
 
 # Lookup myint.  Regression test for PR28539.
 gdb_test "ptype myint" "type = myint"

@@ -29,14 +29,11 @@ if { [build_executable "failed to prepare" ${testfile} \
 
 # We are trying to verify that the partial symtab to symtab expansion
 # for the debugging info hand-coded in our assembly file does not cause
-# the debugger to crash (infinite recursion).  To facilitate the test,
-# start the debugger with -readnow.  This force expansion as soon as
-# the objfile is loaded.
+# the debugger to crash (infinite recursion).
 
-save_vars { GDBFLAGS } {
-    set GDBFLAGS "$GDBFLAGS -readnow"
-    clean_restart ${testfile}
-}
+clean_restart ${testfile}
+
+gdb_test_name "maint expand-symtabs"
 
 # And just to be sure that the debugger did not crash after having
 # expanded our symbols, do a life-check.

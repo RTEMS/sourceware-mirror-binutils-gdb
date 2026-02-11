@@ -30,11 +30,10 @@ if {![runto "foo.adb:$bp_location"]} {
     return
 }
 
-# The xfail mentioned below triggers for the "after" print, but may not
-# trigger for the "before" print, though it will for -readnow.  This is
-# related to PR25764 - "LOC_UNRESOLVED symbol missing from partial symtab".
-# Stabilize test results by ensuring that the xfail triggers for the "before"
-# print.
+# The xfail mentioned below triggers for the "after" print, but may
+# not trigger for the "before" print.  This is related to PR25764 -
+# "LOC_UNRESOLVED symbol missing from partial symtab".  Stabilize test
+# results by ensuring that the xfail triggers for the "before" print.
 gdb_test_no_output {maint expand-symtabs "\(pck\|foo\)\.adb"}
 
 set have_xfail [expr {[gnat_version_compare >= 8] && [gnat_version_compare < 10]}]

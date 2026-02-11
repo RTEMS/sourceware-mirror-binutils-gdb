@@ -103,7 +103,7 @@ proc test_python_helper {} {
 
     # Load the test executable into the inner GDB.  The output here is
     # being read from the inner GDB, hence the use of -i here.
-    send_inferior "file -readnow $::binfile\n"
+    send_inferior "file $::binfile\n"
     gdb_test_multiple "" "loading test binary into inner GDB" {
 	-i "$inferior_spawn_id"
 	-re "Reading symbols from.*\r\n$gdb_prompt $" {

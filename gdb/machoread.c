@@ -580,7 +580,7 @@ macho_add_oso_symfile (oso_el *oso, const gdb_bfd_ref_ptr &abfd,
   symbol_file_add_from_bfd
     (abfd, name, symfile_flags & ~(SYMFILE_MAINLINE | SYMFILE_VERBOSE),
      NULL,
-     main_objfile->flags & (OBJF_SHARED | OBJF_READNOW | OBJF_USERLOADED),
+     main_objfile->flags & (OBJF_SHARED | OBJF_USERLOADED),
      main_objfile);
 }
 

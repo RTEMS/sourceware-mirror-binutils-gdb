@@ -40,7 +40,6 @@ gdb_test "file $host_binfile" \
     {Reading symbols.*DWARF Error: wrong version in unit header \(is 153, should be 2, 3, 4 or 5\).*} \
     "file $testfile"
 
-# We can't use proc readnow, because the PR makes it return 0.
 gdb_test_multiple "maint print objfiles $host_binfile" "" {
     -re "^maint print objfiles \[^\r\n\]*\r\n$gdb_prompt $" {
 	setup_kfail "gdb/26797" *-*-*

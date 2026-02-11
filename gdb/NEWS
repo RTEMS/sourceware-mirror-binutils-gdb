@@ -19,6 +19,10 @@
   this flag is used gdbserver will not escape special shell characters
   within the inferior arguments.
 
+* The -readnow option now does nothing.  It is still accepted, but has
+  no effect.  This applies to the 'symbol-file', and 'add-symbol-file'
+  commands as well.
+
 * The add-inferior, clone-inferior, and MI -add-inferior commands will
   now give a warning, and create the new inferior without a
   connection, when the current inferior's connection, at the time the

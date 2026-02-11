@@ -20,10 +20,6 @@
 # Require an architecture with the SVC instruction.
 require {is_any_target "aarch64*-*-*" "arm*-*-*"}
 
-# See if we have target board readnow.exp or similar.  We're using
-# --readnever, which is not allowed in combination with --readnow.
-require !readnow
-
 standard_testfile
 
 if { [build_executable "failed to prepare" ${testfile} ${srcfile} \

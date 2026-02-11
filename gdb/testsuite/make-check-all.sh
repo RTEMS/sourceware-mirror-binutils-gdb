@@ -80,7 +80,6 @@ target_boards=(
     fission-dwp
     gold
     gold-gdb-index
-    readnow
 )
 
 # Like target_boards, but not actual files in gdb/testsuite/boards.

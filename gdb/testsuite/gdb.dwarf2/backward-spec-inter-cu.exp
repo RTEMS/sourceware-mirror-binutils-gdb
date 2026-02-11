@@ -20,7 +20,6 @@ load_lib dwarf.exp
 
 # This test can only be run on targets which support DWARF-2 and use gas.
 require dwarf2_support
-require !readnow
 
 standard_testfile main.c -debug.S
 

@@ -79,8 +79,6 @@ proc run_style_tests { } {
 	# means that GDB will enable styling.
 	clean_restart_and_disable "restart 1" $::testfile
 
-	set readnow [readnow]
-
 	if {![runto_main]} {
 	    return
 	}
@@ -276,15 +274,8 @@ proc run_style_tests { } {
 	clean_restart_and_disable "restart 2"
 
 	set quoted [string_to_regexp $binfile]
-	set pass_re "Reading symbols from [limited_style $quoted file]\.\.\."
-	if { $readnow } {
-	    set pass_re \
-		[multi_line \
-		     $pass_re \
-		     "Expanding full symbols from [limited_style $quoted file]\.\.\."]
-	}
 	gdb_test "file $binfile" \
-	    $pass_re \
+	    "Reading symbols from [limited_style $quoted file]\.\.\." \
 	    "filename is styled when loading symbol file"
 
 	gdb_test "pwd" "Working directory [limited_style .*? file].*"

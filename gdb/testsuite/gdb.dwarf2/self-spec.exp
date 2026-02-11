@@ -59,8 +59,6 @@ if {[prepare_for_testing "failed to prepare" $testfile "${asm_file} ${srcfile}" 
 set index [have_index $binfile]
 require {string eq $index ""}
 
-require !readnow
-
 gdb_test "pipe maint print objfiles $testfile | grep class1" \
     " *qualified: *class1" \
     "class c1 in cooked index"

@@ -1185,13 +1185,8 @@ dwarf2_has_info (struct objfile *objfile,
       dwarf2_per_bfd *per_bfd;
 
       /* We can share a "dwarf2_per_bfd" with other objfiles if the
-	 BFD doesn't require relocations.
-
-	 We don't share with objfiles for which -readnow was requested,
-	 because it would complicate things when loading the same BFD with
-	 -readnow and then without -readnow.  */
-      if (!gdb_bfd_requires_relocations (objfile->obfd.get ())
-	  && (objfile->flags & OBJF_READNOW) == 0)
+	 BFD doesn't require relocations.  */
+      if (!gdb_bfd_requires_relocations (objfile->obfd.get ()))
 	{
 	  /* See if one has been created for this BFD yet.  */
 	  per_bfd = dwarf2_per_bfd_bfd_data_key.get (objfile->obfd.get ());
@@ -1476,65 +1471,6 @@ struct quick_file_names
   /* The file names from the line table after being run through
      gdb_realpath.  These are computed lazily.  */
   const char **real_names;
-};
-
-/* With OBJF_READNOW, the DWARF reader expands all CUs immediately.
-   It's handy in this case to have an empty implementation of the
-   quick symbol functions, to avoid special cases in the rest of the
-   code.  */
-
-struct readnow_functions : public dwarf2_base_index_functions
-{
-  void dump (struct objfile *objfile) override
-  {
-  }
-
-  bool search (struct objfile *objfile,
-	       search_symtabs_file_matcher file_matcher,
-	       const lookup_name_info *lookup_name,
-	       search_symtabs_symbol_matcher symbol_matcher,
-	       search_symtabs_expansion_listener listener,
-	       block_search_flags search_flags,
-	       domain_search_flags domain,
-	       search_symtabs_lang_matcher lang_matcher) override
-  {
-    dwarf2_per_objfile *per_objfile = get_dwarf2_per_objfile (objfile);
-    auto_bool_vector cus_to_skip;
-    dw_search_file_matcher (per_objfile, cus_to_skip, file_matcher);
-
-    for (const auto &per_cu : per_objfile->per_bfd->all_units)
-      {
-	QUIT;
-
-	/* Skip various types of unit that should not be searched
-	   directly: partial units and dummy units.  */
-	if (/* Note that we request the non-strict unit type here.  If
-	       there was an error while reading, like in
-	       dw-form-strx-out-of-bounds.exp, then the unit type may
-	       not be set.  */
-	    per_cu->unit_type (false) == DW_UT_partial
-	    || per_cu->unit_type (false) == 0
-	    || per_objfile->get_symtab (per_cu.get ()) == nullptr)
-	  continue;
-	if (!dw2_search_one (per_cu.get (), per_objfile, cus_to_skip,
-			     file_matcher, listener, lang_matcher))
-	  return false;
-      }
-    return true;
-  }
-
-  struct symbol *find_symbol_by_address (struct objfile *objfile,
-					 CORE_ADDR address) override
-  {
-    for (compunit_symtab &symtab : objfile->compunits ())
-      {
-	struct symbol *sym = symtab.symbol_at_address (address);
-	if (sym != nullptr)
-	  return sym;
-      }
-
-    return nullptr;
-  }
 };
 
 /* See read.h.  */
@@ -2335,20 +2271,9 @@ dwarf2_initialize_objfile (struct objfile *objfile,
 
   dwarf_read_debug_printf ("called");
 
-  /* If we're about to read full symbols, don't bother with the
-     indices.  In this case we also don't care if some other debug
-     format is making psymtabs, because they are all about to be
-     expanded anyway.  */
-  if ((objfile->flags & OBJF_READNOW))
-    {
-      dwarf_read_debug_printf ("readnow requested");
-
-      create_all_units (per_objfile);
-      objfile->qf.emplace_front (new readnow_functions);
-    }
   /* Was a GDB index already read when we processed an objfile sharing
      PER_BFD?  */
-  else if (per_bfd->index_table != nullptr)
+  if (per_bfd->index_table != nullptr)
     dwarf_read_debug_printf ("reusing symbols");
   else if (dwarf2_read_debug_names (per_objfile))
     dwarf_read_debug_printf ("found debug names");
@@ -6053,8 +5978,8 @@ dwarf2_cu::setup_type_unit_groups (struct die_info *die)
 
   attr = dwarf2_attr (die, DW_AT_stmt_list, this);
 
-  /* If we're using .gdb_index (includes -readnow) then
-     per_cu->type_unit_group may not have been set up yet.  */
+  /* If we're using .gdb_index then per_cu->type_unit_group may not
+     have been set up yet.  */
   if (!sig_type->type_unit_group_key.has_value ())
     sig_type->type_unit_group_key = get_type_unit_group_key (this, attr);
 

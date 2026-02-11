@@ -20,7 +20,6 @@
 load_lib dwarf.exp
 
 require dwarf2_support
-require !readnow
 
 standard_testfile main.c .S
 

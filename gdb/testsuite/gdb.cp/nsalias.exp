@@ -314,19 +314,11 @@ if {[gdb_compile [list ${binfile}1.o ${binfile}3.o] \
 
 clean_restart
 
-# Set complaints before loading the file.  Otherwise the complaint won't
-# trigger for -readnow.
+# Set complaints before loading the file.
 gdb_test_no_output "set complaints 1"
 
 gdb_load [standard_output_file ${testfile}-r]
 
-set readnow_p [readnow]
-
 set test "complaint for too many recursively imported declarations"
 set re ".* has too many recursively imported declarations.*"
-if { $readnow_p } {
-    global gdb_file_cmd_msg
-    gdb_assert {[regexp $re $gdb_file_cmd_msg]} $test
-} else {
-    gdb_test "maint expand-symtabs" $re $test
-}
+gdb_test "maint expand-symtabs" $re $test

@@ -16,8 +16,6 @@
 # Searching for "INT" should not cause CU expansion in a C program.
 # PR symtab/31010.
 
-require !readnow
-
 standard_testfile main.c
 
 if {[prepare_for_testing "failed to prepare" $testfile \

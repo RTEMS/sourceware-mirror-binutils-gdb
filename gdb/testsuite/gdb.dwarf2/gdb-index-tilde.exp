@@ -19,9 +19,6 @@
 # work for remote hosts, but right now, this isn't supported.
 require {!is_remote host}
 
-# Can't save an index with readnow.
-require !readnow
-
 standard_testfile main.c
 
 # Create a directory to generate an index file into.
