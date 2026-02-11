@@ -1525,6 +1525,10 @@ struct readnow_functions : public dwarf2_base_index_functions
     return true;
   }
 
+  struct compunit_symtab *find_pc_sect_compunit_symtab (
+    struct objfile *objfile, bound_minimal_symbol msymbol, CORE_ADDR pc,
+    struct obj_section *section, int warn_if_readin) override;
+
   struct symbol *find_symbol_by_address (struct objfile *objfile,
 					 CORE_ADDR address) override
   {
@@ -2164,6 +2168,33 @@ dwarf2_base_index_functions::find_pc_sect_compunit_symtab
 	     paddress (objfile->arch (), pc));
 
   return result;
+}
+
+struct compunit_symtab *
+readnow_functions::find_pc_sect_compunit_symtab
+     (struct objfile *objfile,
+      bound_minimal_symbol msymbol,
+      CORE_ADDR pc,
+      struct obj_section *section,
+      int warn_if_readin)
+{
+  dwarf2_per_objfile *per_objfile = get_dwarf2_per_objfile (objfile);
+  dwarf2_per_bfd *per_bfd = per_objfile->per_bfd;
+
+  /* This invariant is documented in read.h  */
+  gdb_assert (per_bfd->index_table == nullptr);
+
+  /* Since we have no index, we simply walk all units until matching CU is
+     found (of there are no more CUs).  */
+  for (int i = 0; i < per_bfd->all_units.size (); i++)
+    {
+      dwarf2_per_cu *data = per_bfd->all_units[i].get ();
+      compunit_symtab *result = find_pc_sect_compunit_symtab_includes (
+	dw2_instantiate_symtab (data, per_objfile, false), pc);
+      if (result != nullptr)
+	return result;
+    }
+  return nullptr;
 }
 
 void
