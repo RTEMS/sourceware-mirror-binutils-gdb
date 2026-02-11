@@ -236,7 +236,8 @@ skip_file_command (const char *arg, int from_tty)
   skiplist_entry::add_entry (false, std::string (filename),
 			     false, std::string ());
 
-  gdb_printf (_("File %s will be skipped when stepping.\n"), filename);
+  gdb_printf (_("File %ps will be skipped when stepping.\n"),
+	      styled_string (file_name_style.style (), filename));
 }
 
 /* Create a skiplist entry for the given function NAME and add it to the
@@ -247,7 +248,8 @@ skip_function (const char *name)
 {
   skiplist_entry::add_entry (false, std::string (), false, std::string (name));
 
-  gdb_printf (_("Function %s will be skipped when stepping.\n"), name);
+  gdb_printf (_("Function %ps will be skipped when stepping.\n"),
+	      styled_string (function_name_style.style (), name));
 }
 
 static void
@@ -432,20 +434,28 @@ skip_command (const char *arg, int from_tty)
 
     if (function_to_print.empty ())
       {
-	gdb_printf (_("%s %s will be skipped when stepping.\n"),
-		    file_text, file_to_print.c_str ());
+	gdb_printf (_("%s %ps will be skipped when stepping.\n"),
+		    file_text,
+		    styled_string (file_name_style.style (),
+				   file_to_print.c_str ()));
       }
     else if (file_to_print.empty ())
       {
-	gdb_printf (_("%s %s will be skipped when stepping.\n"),
-		    function_text, function_to_print.c_str ());
+	gdb_printf (_("%s %ps will be skipped when stepping.\n"),
+		    function_text,
+		    styled_string (function_name_style.style (),
+				   function_to_print.c_str ()));
       }
     else
       {
-	gdb_printf (_("%s %s in %s %s will be skipped"
+	gdb_printf (_("%s %ps in %s %ps will be skipped"
 		      " when stepping.\n"),
-		    function_text, function_to_print.c_str (),
-		    lower_file_text, file_to_print.c_str ());
+		    function_text,
+		    styled_string (function_name_style.style (),
+				   function_to_print.c_str ()),
+		    lower_file_text,
+		    styled_string (file_name_style.style (),
+				   file_to_print.c_str ()));
       }
   }
 }
