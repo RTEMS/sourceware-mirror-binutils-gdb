@@ -362,17 +362,6 @@ objfile::dump ()
 }
 
 void
-objfile::expand_all_symtabs ()
-{
-  if (debug_symfile)
-    gdb_printf (gdb_stdlog, "qf->expand_all_symtabs (%s)\n",
-		objfile_debug_name (this));
-
-  for (const auto &iter : qf)
-    iter->expand_all_symtabs (this);
-}
-
-void
 objfile::expand_symtabs_with_fullname (const char *fullname)
 {
   if (debug_symfile)

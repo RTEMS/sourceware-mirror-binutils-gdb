@@ -720,16 +720,6 @@ psymbol_functions::dump (struct objfile *objfile)
     }
 }
 
-/* Psymtab version of expand_all_symtabs.  See its definition in
-   the definition of quick_symbol_functions in symfile.h.  */
-
-void
-psymbol_functions::expand_all_symtabs (struct objfile *objfile)
-{
-  for (partial_symtab *psymtab : partial_symbols (objfile))
-    psymtab_to_symtab (objfile, psymtab);
-}
-
 /* Psymtab version of map_symbol_filenames.  See its definition in
    the definition of quick_symbol_functions in symfile.h.  */
 

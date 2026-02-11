@@ -926,25 +926,17 @@ maintenance_expand_symtabs (const char *args, int from_tty)
 	  regexp = argv[0];
 	  if (argv[1] != NULL)
 	    error (_("Extra arguments after regexp."));
+	  re_comp (regexp);
 	}
     }
-
-  if (regexp == nullptr)
-    {
-      for (struct program_space *pspace : program_spaces)
-	for (objfile &objfile : pspace->objfiles ())
-	  objfile.expand_all_symtabs ();
-
-      return;
-    }
-
-  re_comp (regexp);
 
   for (struct program_space *pspace : program_spaces)
     for (objfile &objfile : pspace->objfiles ())
       objfile.search
 	([&] (const char *filename, bool basenames)
 	   {
+	     if (regexp == nullptr)
+	       return true;
 	     /* KISS: Only apply the regexp to the complete file name.  */
 	     return !basenames && re_exec (filename);
 	   },

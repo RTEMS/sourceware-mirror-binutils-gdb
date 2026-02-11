@@ -626,8 +626,6 @@ struct psymbol_functions : public quick_symbol_functions
 
   void dump (struct objfile *objfile) override;
 
-  void expand_all_symtabs (struct objfile *objfile) override;
-
   bool search
     (struct objfile *objfile,
      search_symtabs_file_matcher file_matcher,

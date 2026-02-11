@@ -119,9 +119,6 @@ struct quick_symbol_functions
      gdb_stdout.  This is used for "maint print objfiles".  */
   virtual void dump (struct objfile *objfile) = 0;
 
-  /* Read all symbol tables associated with OBJFILE.  */
-  virtual void expand_all_symtabs (struct objfile *objfile) = 0;
-
   /* Search all symbol tables in OBJFILE matching some criteria.
 
      If LANG_MATCHER returns false, search of the symbol table may be

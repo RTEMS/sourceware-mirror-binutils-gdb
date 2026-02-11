@@ -231,12 +231,6 @@ struct cooked_index_functions : public dwarf2_base_index_functions
     index->dump (objfile->arch ());
   }
 
-  void expand_all_symtabs (struct objfile *objfile) override
-  {
-    wait (objfile, true);
-    dwarf2_base_index_functions::expand_all_symtabs (objfile);
-  }
-
   bool search
     (struct objfile *objfile,
      search_symtabs_file_matcher file_matcher,

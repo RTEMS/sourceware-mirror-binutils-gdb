@@ -1266,8 +1266,6 @@ struct dwarf2_base_index_functions : public quick_symbol_functions
 
   void print_stats (struct objfile *objfile, bool print_bcache) override;
 
-  void expand_all_symtabs (struct objfile *objfile) override;
-
   struct compunit_symtab *find_pc_sect_compunit_symtab
     (struct objfile *objfile, bound_minimal_symbol msymbol,
      CORE_ADDR pc, struct obj_section *section, int warn_if_readin)

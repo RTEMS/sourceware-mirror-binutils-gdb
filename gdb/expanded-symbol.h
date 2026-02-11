@@ -57,10 +57,6 @@ struct expanded_symbols_functions : public quick_symbol_functions
   {
   }
 
-  void expand_all_symtabs (objfile *objfile) override
-  {
-  }
-
   bool search (objfile *objfile,
 	       search_symtabs_file_matcher file_matcher,
 	       const lookup_name_info *lookup_name,

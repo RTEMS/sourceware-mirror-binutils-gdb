@@ -607,9 +607,6 @@ public:
   /* See quick_symbol_functions.  */
   void dump ();
 
-  /* See quick_symbol_functions.  */
-  void expand_all_symtabs ();
-
   /* Read all symbol tables associated with OBJFILE which have
      symtab_to_fullname equal to FULLNAME.
      This is for the purposes of examining code only, e.g., expand_line_sal.
