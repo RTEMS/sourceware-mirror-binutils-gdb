@@ -904,16 +904,6 @@ obj_section::set_offset (CORE_ADDR offset)
 
 /* Declarations for functions defined in objfiles.c */
 
-/* If there is a valid and known entry point in PSPACE, fill *ENTRY_P with it
-   and return non-zero.  */
-
-extern int entry_point_address_query (program_space *pspace,
-				      CORE_ADDR *entry_p);
-
-/* Get the entry point address in PSPACE.  Call error if it is not known.  */
-
-extern CORE_ADDR entry_point_address (program_space *pspace);
-
 extern void build_objfile_section_table (struct objfile *);
 
 extern void free_objfile_separate_debug (struct objfile *);

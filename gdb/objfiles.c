@@ -284,34 +284,6 @@ objfile::objfile (gdb_bfd_ref_ptr bfd_, program_space *pspace,
   set_objfile_per_bfd (this);
 }
 
-/* See objfiles.h.  */
-
-int
-entry_point_address_query (program_space *pspace, CORE_ADDR *entry_p)
-{
-  objfile *objf = pspace->symfile_object_file;
-  if (objf == NULL || !objf->per_bfd->ei.entry_point_p)
-    return 0;
-
-  int idx = objf->per_bfd->ei.the_bfd_section_index;
-  *entry_p = objf->per_bfd->ei.entry_point + objf->section_offsets[idx];
-
-  return 1;
-}
-
-/* See objfiles.h.  */
-
-CORE_ADDR
-entry_point_address (program_space *pspace)
-{
-  CORE_ADDR retval;
-
-  if (!entry_point_address_query (pspace, &retval))
-    error (_("Entry point address is not known."));
-
-  return retval;
-}
-
 separate_debug_iterator &
 separate_debug_iterator::operator++ ()
 {

@@ -285,6 +285,34 @@ program_space::empty ()
   return find_inferior_for_program_space (this) == nullptr;
 }
 
+/* See progspace.h.  */
+
+int
+program_space::entry_point_address_query (CORE_ADDR *entry_p) const
+{
+  objfile *objf = symfile_object_file;
+  if (objf == NULL || !objf->per_bfd->ei.entry_point_p)
+    return 0;
+
+  int idx = objf->per_bfd->ei.the_bfd_section_index;
+  *entry_p = objf->per_bfd->ei.entry_point + objf->section_offsets[idx];
+
+  return 1;
+}
+
+/* See progspace.h.  */
+
+CORE_ADDR
+program_space::entry_point_address () const
+{
+  CORE_ADDR retval;
+
+  if (!entry_point_address_query (&retval))
+    error (_("Entry point address is not known."));
+
+  return retval;
+}
+
 /* Prints the list of program spaces and their details on UIOUT.  If
    REQUESTED is not -1, it's the ID of the pspace that should be
    printed.  Otherwise, all spaces are printed.  */
