@@ -287,17 +287,15 @@ program_space::empty ()
 
 /* See progspace.h.  */
 
-int
-program_space::entry_point_address_query (CORE_ADDR *entry_p) const
+std::optional<CORE_ADDR>
+program_space::entry_point_address_query () const
 {
   objfile *objf = symfile_object_file;
   if (objf == NULL || !objf->per_bfd->ei.entry_point_p)
-    return 0;
+    return {};
 
   int idx = objf->per_bfd->ei.the_bfd_section_index;
-  *entry_p = objf->per_bfd->ei.entry_point + objf->section_offsets[idx];
-
-  return 1;
+  return objf->per_bfd->ei.entry_point + objf->section_offsets[idx];
 }
 
 /* See progspace.h.  */
@@ -305,12 +303,12 @@ program_space::entry_point_address_query (CORE_ADDR *entry_p) const
 CORE_ADDR
 program_space::entry_point_address () const
 {
-  CORE_ADDR retval;
+  std::optional<CORE_ADDR> retval = entry_point_address_query ();
 
-  if (!entry_point_address_query (&retval))
+  if (!retval.has_value ())
     error (_("Entry point address is not known."));
 
-  return retval;
+  return *retval;
 }
 
 /* Prints the list of program spaces and their details on UIOUT.  If

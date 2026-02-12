@@ -333,8 +333,8 @@ struct program_space
   }
 
   /* If there is a valid and known entry point in this program space,
-     fill *ENTRY_P with it and return non-zero.  */
-  int entry_point_address_query (CORE_ADDR *entry_p) const;
+     return it.  Otherwise return an empty optional.  */
+  std::optional<CORE_ADDR> entry_point_address_query () const;
 
   /* Get the entry point address in this program space.  Call error if
      it is not known.  */
