@@ -315,6 +315,10 @@ struct block : public allocate_on_obstack<block>
 
   bool contains (const struct block *a, bool allow_nested = false) const;
 
+  /* FIXME!!! */
+
+  bool contains (const CORE_ADDR addr) const;
+
   /* Relocate this block and all contained blocks.  OBJFILE is the
      objfile holding this block, and OFFSETS is the relocation offsets
      to use.  */
