@@ -492,14 +492,6 @@ struct blockvector
   const struct block *static_block () const
   { return this->block (STATIC_BLOCK); }
 
-  /* Const version of the above.  */
-  const addrmap_fixed *map () const
-  { return m_map; }
-
-  /* Set this blockvector's address -> block map.  */
-  void set_map (addrmap_fixed *map)
-  { m_map = map; }
-
   /* Block comparison function.  Returns true if B1 must be ordered before
      B2 in a blockvector, false otherwise.  */
   static bool block_less_than (const struct block *b1, const struct block *b2);
@@ -526,11 +518,6 @@ struct blockvector
 		 gdb::array_view<const CORE_ADDR> offsets);
 
 private:
-  /* An address map mapping addresses to blocks in this blockvector.
-     This pointer is zero if the blocks' start and end addresses are
-     enough.  */
-  addrmap_fixed *m_map = nullptr;
-
   /* The blocks themselves.  */
   std::vector<struct block *> m_blocks;
 };

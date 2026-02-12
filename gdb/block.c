@@ -842,11 +842,6 @@ blockvector::lookup (CORE_ADDR addr) const
   if (addr < start || end <= addr)
     return nullptr;
 
-  /* If we have an addrmap mapping code addresses to blocks, then use
-     that.  */
-  if (map () != nullptr)
-    return (const struct block *) map ()->find (addr);
-
   /* Otherwise, use binary search to find the last block that starts
      before PC.
      Note: GLOBAL_BLOCK is block 0, STATIC_BLOCK is block 1.
@@ -925,11 +920,6 @@ void
 blockvector::relocate (struct objfile *objfile,
 		       gdb::array_view<const CORE_ADDR> offsets)
 {
-  int block_line_section = SECT_OFF_TEXT (objfile);
-
-  if (m_map != nullptr)
-    m_map->relocate (offsets[block_line_section]);
-
   for (struct block *b : m_blocks)
     b->relocate (objfile, offsets);
 }
