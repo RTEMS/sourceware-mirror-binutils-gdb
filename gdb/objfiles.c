@@ -613,31 +613,6 @@ objfile::has_symbols ()
 
 /* See objfiles.h.  */
 
-bool
-have_partial_symbols (program_space *pspace)
-{
-  for (objfile &ofp : pspace->objfiles ())
-    if (ofp.has_partial_symbols ())
-      return true;
-
-  return false;
-}
-
-/* See objfiles.h.  */
-
-bool
-have_full_symbols (program_space *pspace)
-{
-  for (objfile &ofp : pspace->objfiles ())
-    if (ofp.has_full_symbols ())
-      return true;
-
-  return false;
-}
-
-
-/* See objfiles.h.  */
-
 void
 objfile_purge_solibs (program_space *pspace)
 {
@@ -649,18 +624,6 @@ objfile_purge_solibs (program_space *pspace)
       if (!(objf.flags & OBJF_USERLOADED) && (objf.flags & OBJF_SHARED))
 	objf.unlink ();
     }
-}
-
-/* See objfiles.h.  */
-
-bool
-have_minimal_symbols (program_space *pspace)
-{
-  for (objfile &ofp : pspace->objfiles ())
-    if (ofp.per_bfd->minimal_symbol_count > 0)
-      return true;
-
-  return false;
 }
 
 /* Qsort comparison function.  */

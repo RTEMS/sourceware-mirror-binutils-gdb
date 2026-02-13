@@ -311,6 +311,42 @@ program_space::entry_point_address () const
   return *retval;
 }
 
+/* See progspace.h.  */
+
+bool
+program_space::has_partial_symbols ()
+{
+  for (objfile &ofp : objfiles ())
+    if (ofp.has_partial_symbols ())
+      return true;
+
+  return false;
+}
+
+/* See progspace.h.  */
+
+bool
+program_space::has_full_symbols ()
+{
+  for (objfile &ofp : objfiles ())
+    if (ofp.has_full_symbols ())
+      return true;
+
+  return false;
+}
+
+/* See progspace.h.  */
+
+bool
+program_space::has_minimal_symbols ()
+{
+  for (objfile &ofp : objfiles ())
+    if (ofp.per_bfd->minimal_symbol_count > 0)
+      return true;
+
+  return false;
+}
+
 /* Prints the list of program spaces and their details on UIOUT.  If
    REQUESTED is not -1, it's the ID of the pspace that should be
    printed.  Otherwise, all spaces are printed.  */

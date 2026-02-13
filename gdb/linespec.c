@@ -1524,9 +1524,9 @@ symbol_not_found_error (const char *symbol, const char *filename)
   if (symbol == NULL)
     symbol = "";
 
-  if (!have_full_symbols (current_program_space)
-      && !have_partial_symbols (current_program_space)
-      && !have_minimal_symbols (current_program_space))
+  if (!current_program_space->has_full_symbols ()
+      && !current_program_space->has_partial_symbols ()
+      && !current_program_space->has_minimal_symbols ())
     throw_error (NOT_FOUND_ERROR,
 		 _("No symbol table is loaded.  Use the \"file\" command."));
 
@@ -3648,8 +3648,8 @@ symtabs_from_filename (const char *filename,
 
   if (result.empty ())
     {
-      if (!have_full_symbols (current_program_space)
-	  && !have_partial_symbols (current_program_space))
+      if (!current_program_space->has_full_symbols ()
+	  && !current_program_space->has_partial_symbols ())
 	throw_error (NOT_FOUND_ERROR,
 		     _("No symbol table is loaded.  "
 		       "Use the \"file\" command."));
