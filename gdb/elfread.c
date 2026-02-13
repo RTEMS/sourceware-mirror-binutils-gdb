@@ -47,6 +47,23 @@
 /* Whether ctf should always be read, or only if no dwarf is present.  */
 static bool always_read_ctf;
 
+/* Value of the 'set debug gnu-ifunc' configuration variable.  */
+static bool debug_gnu_ifunc;
+
+static void
+show_debug_gnu_ifunc (struct ui_file *file, int from_tty,
+		      struct cmd_list_element *c, const char *value)
+{
+  gdb_printf (file, _("gnu-ifunc debugging is %s.\n"), value);
+}
+
+#define gnu_ifunc_debug_printf(fmt, ...) \
+  debug_prefixed_printf_cond (debug_gnu_ifunc, "gnu-ifunc", fmt, ##__VA_ARGS__)
+
+#define gnu_ifunc_debug_printf_func(func, fmt, ...)			    \
+  debug_prefixed_printf_cond_func (debug_gnu_ifunc, "gnu-ifunc", func, fmt, \
+				   ##__VA_ARGS__)
+
 /* The struct elfinfo is available only during ELF symbol table and
    psymtab reading.  It is destroyed at the completion of psymtab-reading.
    It's local to elf_symfile_read.  */
@@ -695,11 +712,28 @@ elf_gnu_ifunc_record_cache (const char *name, CORE_ADDR addr)
   struct elf_gnu_ifunc_cache entry_local, *entry_p;
   void **slot;
 
+  gnu_ifunc_debug_printf ("recording cache entry for \"%s\" at %s", name,
+			  paddress (current_inferior ()->arch (), addr));
+
   bound_minimal_symbol msym = lookup_minimal_symbol_by_pc (addr);
   if (msym.minsym == NULL)
-    return 0;
+    {
+      gnu_ifunc_debug_printf ("no minimal symbol found at %s, not caching",
+			      paddress (current_inferior ()->arch (), addr));
+      return 0;
+    }
+
   if (msym.value_address () != addr)
-    return 0;
+    {
+      gnu_ifunc_debug_printf ("minimal symbol \"%s\" at %s does not match "
+			      "addr %s, not caching",
+			      msym.minsym->linkage_name (),
+			      paddress (current_inferior ()->arch (),
+					msym.value_address ()),
+			      paddress (current_inferior ()->arch (), addr));
+      return 0;
+    }
+
   objfile = msym.objfile;
 
   /* If .plt jumps back to .plt the symbol is still deferred for later
@@ -711,10 +745,18 @@ elf_gnu_ifunc_record_cache (const char *name, CORE_ADDR addr)
      symbol is in the .plt section because some systems have @plt
      symbols in the .text section.  */
   if (len > 4 && strcmp (target_name + len - 4, "@plt") == 0)
-    return 0;
+    {
+      gnu_ifunc_debug_printf ("target \"%s\" is a PLT stub, not caching",
+			      target_name);
+      return 0;
+    }
 
   if (strcmp (target_name, "_PROCEDURE_LINKAGE_TABLE_") == 0)
-    return 0;
+    {
+      gnu_ifunc_debug_printf ("target is _PROCEDURE_LINKAGE_TABLE_, "
+			      "not caching");
+      return 0;
+    }
 
   htab = elf_objfile_gnu_ifunc_cache_data.get (objfile);
   if (htab == NULL)
@@ -754,6 +796,9 @@ elf_gnu_ifunc_record_cache (const char *name, CORE_ADDR addr)
     }
   *slot = entry_p;
 
+  gnu_ifunc_debug_printf ("cached \"%s\" -> %s in objfile %s", name,
+			  paddress (objfile->arch (), addr),
+			  objfile_name (objfile));
   return 1;
 }
 
@@ -767,14 +812,16 @@ elf_gnu_ifunc_record_cache (const char *name, CORE_ADDR addr)
 static int
 elf_gnu_ifunc_resolve_by_cache (const char *name, CORE_ADDR *addr_p)
 {
+  gnu_ifunc_debug_printf ("resolving \"%s\" by cache", name);
   int found = 0;
+  const char *func = __func__;
 
   /* FIXME: we only search the initial namespace.
 
      To search other namespaces, we would need to provide context, e.g. in
      form of an objfile in that namespace.  */
   current_program_space->iterate_over_objfiles_in_search_order
-    ([name, &addr_p, &found] (struct objfile *objfile)
+    ([name, &addr_p, &found, func] (struct objfile *objfile)
        {
 	 htab_t htab;
 	 elf_gnu_ifunc_cache *entry_p;
@@ -797,9 +844,16 @@ elf_gnu_ifunc_resolve_by_cache (const char *name, CORE_ADDR *addr_p)
 	 if (addr_p)
 	   *addr_p = entry_p->addr;
 
+	 gnu_ifunc_debug_printf_func
+	   (func, "cache hit for \"%s\" -> %s in objfile %s",
+	    name, paddress (objfile->arch (), entry_p->addr),
+	    objfile_name (objfile));
 	 found = 1;
 	 return 1;
        }, nullptr);
+
+  if (!found)
+    gnu_ifunc_debug_printf ("cache miss for \"%s\"", name);
 
   return found;
 }
@@ -815,9 +869,11 @@ elf_gnu_ifunc_resolve_by_cache (const char *name, CORE_ADDR *addr_p)
 static int
 elf_gnu_ifunc_resolve_by_got (const char *name, CORE_ADDR *addr_p)
 {
+  gnu_ifunc_debug_printf ("resolving \"%s\" by GOT", name);
   char *name_got_plt;
   const size_t got_suffix_len = strlen (SYMBOL_GOT_PLT_SUFFIX);
   int found = 0;
+  const char *func = __func__;
 
   name_got_plt = (char *) alloca (strlen (name) + got_suffix_len + 1);
   sprintf (name_got_plt, "%s" SYMBOL_GOT_PLT_SUFFIX, name);
@@ -827,7 +883,7 @@ elf_gnu_ifunc_resolve_by_got (const char *name, CORE_ADDR *addr_p)
      To search other namespaces, we would need to provide context, e.g. in
      form of an objfile in that namespace.  */
   current_program_space->iterate_over_objfiles_in_search_order
-    ([name, name_got_plt, &addr_p, &found] (struct objfile *objfile)
+    ([name, name_got_plt, &addr_p, &found, func] (struct objfile *objfile)
        {
 	 bfd *obfd = objfile->obfd.get ();
 	 struct gdbarch *gdbarch = objfile->arch ();
@@ -859,17 +915,26 @@ elf_gnu_ifunc_resolve_by_got (const char *name, CORE_ADDR *addr_p)
 	   (gdbarch, addr, current_inferior ()->top_target ());
 	 addr = gdbarch_addr_bits_remove (gdbarch, addr);
 
+	 gnu_ifunc_debug_printf_func (func, "GOT entry \"%s\" points to %s",
+				      name_got_plt, paddress (gdbarch, addr));
+
 	 if (elf_gnu_ifunc_record_cache (name, addr))
 	   {
 	     if (addr_p != NULL)
 	       *addr_p = addr;
 
+	     gnu_ifunc_debug_printf_func (func,
+					  "resolved \"%s\" via GOT to %s",
+					  name, paddress (gdbarch, addr));
 	     found = 1;
 	     return 1;
 	   }
 
 	 return 0;
        }, nullptr);
+
+  if (!found)
+    gnu_ifunc_debug_printf ("failed to resolve \"%s\" by GOT", name);
 
   return found;
 }
@@ -884,17 +949,20 @@ elf_gnu_ifunc_resolve_by_got (const char *name, CORE_ADDR *addr_p)
 static bool
 elf_gnu_ifunc_resolve_name (const char *name, CORE_ADDR *addr_p)
 {
+  gnu_ifunc_debug_printf ("resolving name \"%s\"", name);
+
   if (elf_gnu_ifunc_resolve_by_cache (name, addr_p))
     return true;
 
   if (elf_gnu_ifunc_resolve_by_got (name, addr_p))
     return true;
 
+  gnu_ifunc_debug_printf ("failed to resolve name \"%s\"", name);
   return false;
 }
 
 /* Call STT_GNU_IFUNC - a function returning address of a real function to
-   call.  PC is theSTT_GNU_IFUNC resolving function entry.  The value returned
+   call.  PC is the STT_GNU_IFUNC resolving function entry.  The value returned
    is the entry point of the resolved STT_GNU_IFUNC target function to call.
    */
 
@@ -908,6 +976,8 @@ elf_gnu_ifunc_resolve_addr (struct gdbarch *gdbarch, CORE_ADDR pc)
   CORE_ADDR hwcap = 0;
   struct value *hwcap_val;
 
+  gnu_ifunc_debug_printf ("resolving ifunc %s", paddress (gdbarch, pc));
+
   /* Try first any non-intrusive methods without an inferior call.  */
 
   if (find_pc_partial_function (pc, &name_at_pc, &start_at_pc, NULL)
@@ -918,6 +988,9 @@ elf_gnu_ifunc_resolve_addr (struct gdbarch *gdbarch, CORE_ADDR pc)
     }
   else
     name_at_pc = NULL;
+
+  gnu_ifunc_debug_printf ("resolving via inferior call to resolver at %s",
+			  paddress (gdbarch, pc));
 
   function = value::allocate (func_func_type);
   function->set_lval (lval_memory);
@@ -936,6 +1009,9 @@ elf_gnu_ifunc_resolve_addr (struct gdbarch *gdbarch, CORE_ADDR pc)
     (gdbarch, address, current_inferior ()->top_target ());
   address = gdbarch_addr_bits_remove (gdbarch, address);
 
+  gnu_ifunc_debug_printf ("resolver at %s returned %s", paddress (gdbarch, pc),
+			  paddress (gdbarch, address));
+
   if (name_at_pc)
     elf_gnu_ifunc_record_cache (name_at_pc, address);
 
@@ -952,6 +1028,9 @@ elf_gnu_ifunc_resolver_stop (code_breakpoint *b)
   struct frame_id prev_frame_id = get_stack_frame_id (prev_frame);
   CORE_ADDR prev_pc = get_frame_pc (prev_frame);
   int thread_id = inferior_thread ()->global_num;
+
+  gnu_ifunc_debug_printf ("stop on resolver for \"%s\"",
+			  b->locspec->to_string ());
 
   gdb_assert (b->type == bp_gnu_ifunc_resolver);
 
@@ -983,12 +1062,17 @@ elf_gnu_ifunc_resolver_stop (code_breakpoint *b)
 				    prev_frame_id,
 				    bp_gnu_ifunc_resolver_return).release ();
 
+      gnu_ifunc_debug_printf ("created resolver return breakpoint at %s",
+			      paddress (get_frame_arch (prev_frame), prev_pc));
 
       /* Add new b_return to the ring list b->related_breakpoint.  */
       gdb_assert (b_return->related_breakpoint == b_return);
       b_return->related_breakpoint = b->related_breakpoint;
       b->related_breakpoint = b_return;
     }
+  else
+    gnu_ifunc_debug_printf ("found existing resolver return breakpoint at %s",
+			    paddress (get_frame_arch (prev_frame), prev_pc));
 }
 
 /* Handle inferior hit of bp_gnu_ifunc_resolver_return, see its definition.  */
@@ -1004,6 +1088,8 @@ elf_gnu_ifunc_resolver_return_stop (code_breakpoint *b)
   struct value *func_func;
   struct value *value;
   CORE_ADDR resolved_address, resolved_pc;
+
+  gnu_ifunc_debug_printf ("stop on resolver return");
 
   gdb_assert (b->type == bp_gnu_ifunc_resolver_return);
 
@@ -1039,6 +1125,12 @@ elf_gnu_ifunc_resolver_return_stop (code_breakpoint *b)
   resolved_pc = gdbarch_convert_from_func_ptr_addr
     (gdbarch, resolved_address, current_inferior ()->top_target ());
   resolved_pc = gdbarch_addr_bits_remove (gdbarch, resolved_pc);
+
+  gnu_ifunc_debug_printf ("resolver for \"%s\" returned resolved address=%s, "
+			  "resolved pc=%s",
+			  b->locspec->to_string (),
+			  paddress (gdbarch, resolved_address),
+			  paddress (gdbarch, resolved_pc));
 
   gdb_assert (current_program_space == b->pspace || b->pspace == NULL);
   elf_gnu_ifunc_record_cache (b->locspec->to_string (), resolved_pc);
@@ -1342,6 +1434,13 @@ INIT_GDB_FILE (elfread)
   add_symtab_fns (bfd_target_elf_flavour, &elf_sym_fns);
 
   gnu_ifunc_fns_p = &elf_gnu_ifunc_fns;
+
+  add_setshow_boolean_cmd
+    ("gnu-ifunc", class_maintenance, &debug_gnu_ifunc,
+     _("Set GNU ifunc debugging."),
+     _("Show GNU ifunc debugging."),
+     _("When on, debug output for GNU ifunc resolution is displayed."),
+     nullptr, show_debug_gnu_ifunc, &setdebuglist, &showdebuglist);
 
   /* Add "set always-read-ctf on/off".  */
   add_setshow_boolean_cmd ("always-read-ctf", class_support, &always_read_ctf,
