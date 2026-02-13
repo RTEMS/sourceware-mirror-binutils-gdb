@@ -85,7 +85,7 @@ proc quotemeta {str} {
 	    # Match the usual forms.
 	    if {![regexp -- "^(\\.\\.\\.|\[A-Z\]\[A-Z_\]*|@|/\[^/\]*/)(.*)$" \
 		      $at_text ignore at_text remainder]} {
-		error "invalid quotemeta expression"
+		error "invalid quotemeta expression @$at_text"
 	    }
 	}
 
@@ -100,6 +100,9 @@ proc quotemeta {str} {
 	    # an embedded "/".
 	    append result $rx
 	} else {
+	    if {![info exists ::_quotemeta($at_text)]} {
+		error "undefined quotemeta expression @$at_text"
+	    }
 	    append result $::_quotemeta($at_text)
 	}
 
