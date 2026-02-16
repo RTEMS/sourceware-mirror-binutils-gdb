@@ -3207,6 +3207,9 @@ do_repeat (size_t count, const char *start, const char *end,
       count = 0;
     }
 
+  demand_empty_rest_of_line ();
+  --input_line_pointer;
+
   sb_new (&one);
   if (!buffer_and_nest (start, end, &one, get_non_macro_line_sb))
     {
