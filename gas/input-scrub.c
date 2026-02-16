@@ -495,7 +495,12 @@ new_logical_line_flags (const char *fname, /* DON'T destroy it!  We point to it!
       /* FIXME: we could check that include nesting is correct.  */
       break;
     case 1 << 3:
-      if (line_number < 0 || fname != NULL)
+      /* s_linefile conditionally decrements the line depending on
+	 whether '\n' is seen.  */
+      if (line_number < 0
+	  || (line_number == 0 && input_line_pointer[-1] != '\n'))
+	line_number = physical_input_line;
+      if (fname != NULL)
 	abort ();
       if (next_saved_file == NULL)
 	fname = physical_input_file;
