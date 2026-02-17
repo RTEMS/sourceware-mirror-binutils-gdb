@@ -15147,6 +15147,7 @@ dwarf_lang_to_enum_language (ULONGEST lang)
     case DW_LANG_C_plus_plus_17:
     case DW_LANG_C_plus_plus_20:
     case DW_LANG_C_plus_plus_23:
+    case DW_LANG_HIP:
       language = language_cplus;
       break;
     case DW_LANG_D:
