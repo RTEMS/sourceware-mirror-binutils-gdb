@@ -1260,6 +1260,40 @@ proc check_sysroot_available { } {
     return $ld_sysroot_available_saved
 }
 
+# Return a path to a dummy target executable if we can build one
+# or an empty string otherwise.
+proc make_dummy_target_executable { } {
+    global CC_FOR_TARGET
+
+    if { [which $CC_FOR_TARGET] == 0 } {
+	return ""
+    }
+
+    set flags [get_board_flags]
+    set basename "tmpdir/compiler[pid]"
+    set src ${basename}.c
+    set output ${basename}.out
+    set f [open $src "w"]
+    puts $f "int main (void)"
+    puts $f "{"
+    puts $f "  return 0; "
+    puts $f "}"
+    close $f
+    if [is_remote host] {
+	set src [remote_download host $src]
+    }
+
+    set status [run_host_noleak "$CC_FOR_TARGET" "$flags $src -o $output"]
+    remote_file host delete $src
+    file delete $src
+    if { $status == 0 } {
+	remote_file host delete $output
+	return ""
+    }
+
+    return $output
+}
+
 # Return true if we can build a program with the compiler.
 # On some targets, CC might be defined, but libraries and startup
 # code might be missing or require special options that the ld test
@@ -1267,31 +1301,15 @@ proc check_sysroot_available { } {
 
 proc check_compiler_available { } {
     global compiler_available_saved
-    global CC_FOR_TARGET
 
     if {![info exists compiler_available_saved]} {
-	if { [which $CC_FOR_TARGET] == 0 } {
-	    set compiler_available_saved 0
-	    return 0
-	}
+	set compiler_available_saved 0
 
-	set flags [get_board_flags]
-	set basename "tmpdir/compiler[pid]"
-	set src ${basename}.c
-	set output ${basename}.out
-	set f [open $src "w"]
-	puts $f "int main (void)"
-	puts $f "{"
-	puts $f "  return 0; "
-	puts $f "}"
-	close $f
-	if [is_remote host] {
-	    set src [remote_download host $src]
+	set binfile [make_dummy_target_executable]
+	if { $binfile != "" } {
+	    remote_file host delete $binfile
+	    set compiler_available_saved 1
 	}
-	set compiler_available_saved [run_host_noleak "$CC_FOR_TARGET" "$flags $src -o $output"]
-	remote_file host delete $src
-	remote_file host delete $output
-	file delete $src
     }
     return $compiler_available_saved
 }
