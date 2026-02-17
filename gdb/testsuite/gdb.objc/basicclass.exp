@@ -104,7 +104,7 @@ gdb_test "break newWithArg:" \
 # Continue until breakpoint (test re-setting breakpoint)
 #
 gdb_test continue \
-    "Continuing\\..*Breakpoint \[0-9\]+, -.BasicClass takeArg:. \\(self=.*, _cmd=.*, arg=.*\\) at .*$srcfile:$decimal.*" \
+    "Continuing\\..*Breakpoint ${::decimal}, -.BasicClass takeArg:. \\(self=.*, _cmd=.*, arg=.*\\) at .*$srcfile:$decimal.*" \
     "continue until method breakpoint"
 
 #
@@ -147,7 +147,7 @@ gdb_test "break hiddenMethod" \
 # Continue until breakpoint (test re-setting category breakpoint)
 #
 gdb_test continue \
-    "Continuing\\..*Breakpoint \[0-9\]+, -.BasicClass\\(Private\\) hiddenMethod. \\(self=.*, _cmd=.*\\) at .*$srcfile:$decimal.*" \
+    "Continuing\\..*Breakpoint ${::decimal}, -.BasicClass\\(Private\\) hiddenMethod. \\(self=.*, _cmd=.*\\) at .*$srcfile:$decimal.*" \
     "continue until category method"
 
 #

@@ -123,7 +123,7 @@ gdb_test "continue" \
 gdb_test "info break" \
     "Num     Type\[ \]+Disp Enb Address\[ \]+What\r?
 1\[\t \]+breakpoint     keep y *<PENDING> *shrfunc1\r?
-\[\t \]+breakpoint already hit \[0-9\]+ (time|times)\r?
+\[\t \]+breakpoint already hit ${::decimal} (time|times)\r?
 2\[\t \]+breakpoint     keep y *0x\[0-9a-f\]+ *in shrfunc2 at .*" \
 "pending breakpoint info on second run at shrfunc2"
 

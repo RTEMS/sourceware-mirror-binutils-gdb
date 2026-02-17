@@ -72,12 +72,12 @@ delete_breakpoints
 gdb_test "source $bps" "" "source bps"
 
 # Now, verify that all breakpoints have been created correctly...
-set bp_row_start "\[0-9\]+ +breakpoint +keep +y +0x\[0-9a-f\]+ +in"
-set disabled_row_start "\[0-9\]+ +breakpoint +keep +n +0x\[0-9a-f\]+ +in"
-set dprintf_row_start "\[0-9\]+ +dprintf +keep +y +0x\[0-9a-f\]+ +in"
+set bp_row_start "${::decimal} +breakpoint +keep +y +0x\[0-9a-f\]+ +in"
+set disabled_row_start "${::decimal} +breakpoint +keep +n +0x\[0-9a-f\]+ +in"
+set dprintf_row_start "${::decimal} +dprintf +keep +y +0x\[0-9a-f\]+ +in"
 gdb_test_sequence "info break" "info break" [list				\
   "\[\r\n\]+Num +Type +Disp +Enb +Address +What"				\
-  "\[\r\n\]+$bp_row_start break_me at \[^\r\n\]*$srcfile:\[0-9\]+"		\
+  "\[\r\n\]+$bp_row_start break_me at \[^\r\n\]*$srcfile:${::decimal}"		\
   "\[\r\n\]+$bp_row_start main at \[^\r\n\]*$srcfile:$loc_bp2"			\
   "\[\r\n\]+$bp_row_start main at \[^\r\n\]*$srcfile:$loc_bp3"			\
   "\[\r\n\]+\[ \t]+stop only in thread 1"					\
