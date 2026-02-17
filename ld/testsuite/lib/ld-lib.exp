@@ -849,27 +849,50 @@ proc run_ld_link_exec_tests { ldtests args } {
 	    }
 	}
 
-	if { $failed == 0 && [isnative] } {
-	    send_log "Running: $binfile > $binfile.out\n"
-	    verbose "Running: $binfile > $binfile.out"
-	    catch "exec $binfile > $binfile.out" exec_output
+	# For remote targets this relies on the LD test subdirectory
+	# being identity mapped between the test host and the test
+	# target, e.g. mounted over NFS.  This is due to shared module
+	# dependencies using a relative path, which implies the need
+	# for execution to start in the same directory, arranged via
+	# the `remotedir' setting, the link has been made in.
+	if { $failed == 0 && [check_execution_available] } {
+	    global board_info
 
-	    if ![string match "" $exec_output] then {
+	    set board [target_info name]
+	    if { [info exists board_info($board,remotedir)] } {
+		set remotedir board_info($board,remotedir)
+	    }
+	    set board_info($board,remotedir) [pwd]
+
+	    send_log "Running: $binfile\n"
+	    verbose "Running: $binfile"
+	    set result [remote_load target $binfile]
+	    set status [lindex $result 0]
+	    set exec_output [lindex $result 1]
+
+	    if { $status == "pass" } {
+		set_file_contents $binfile.out $exec_output
+		send_log [file_contents $binfile.out]
+		verbose [file_contents $binfile.out] 2
+		if [regexp_diff $binfile.out $srcdir/$subdir/$expfile] {
+		    set failed 1
+		}
+	    } else {
 		send_log "$exec_output\n"
 		verbose "$exec_output" 1
 		set failed 1
+	    }
+
+	    if { [info exists remotedir] } {
+		set board_info($board,remotedir) $remotedir
 	    } else {
-		send_log [file_contents $binfile.out]
-		verbose [file_contents $binfile.out] 2
-		if [regexp_diff "$binfile.out" "$srcdir/$subdir/$expfile"] {
-		    set failed 1
-		}
+		unset board_info($board,remotedir)
 	    }
 	}
 
 	if { $failed != 0 } {
 	    fail $testname
-	} elseif ![isnative] {
+	} elseif ![check_execution_available] {
 	    unsupported $testname
 	} else {
 	    set errcnt 0
