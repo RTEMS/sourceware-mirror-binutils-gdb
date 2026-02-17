@@ -255,7 +255,8 @@ gdb_test "continue" \
 gdb_test "continue" "Breakpoint.*handle_TERM.*" "send signal TERM"
 
 with_timeout_factor 2 {
-    gdb_test "continue" "\[process ${::decimal} .*" "continue to signal exit" \
+    gdb_test "continue" "Process record: inferior program stopped.*" \
+	"continue to signal exit" \
 	"The next instruction is syscall exit_group.* program...y. or n. " \
 	"yes"
 }

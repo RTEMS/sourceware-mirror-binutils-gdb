@@ -30,7 +30,16 @@ if {$tool == ""} {
 }
 
 # Add "convience abbreviation" for positive decimals, without leading zeros.
-set positive {[1-9][0-9]*}
+set positive {(?:[1-9][0-9]*)}
+
+# Dejagnu defines decimal as one of the "convenience abbreviations".
+# Override it with one that uses parentheses, which flushes incorrect uses
+# like "\[Inferior $decimal\]".
+set decimal {(?:[0-9]+)}
+
+# Dejagnu defines hex as one of the "convenience abbreviations".
+# Override it with one that uses parentheses.
+set hex {(?:0x[0-9A-Fa-f]+)}
 
 # Execute BODY, if COND wrapped in proc WRAP.
 # Instead of writing the verbose and repetitive:
@@ -332,7 +341,7 @@ if {![info exists env(EXEEXT)]} {
     set EXEEXT $env(EXEEXT)
 }
 
-set octal "\[0-7\]+"
+set octal {(?:[0-7]+)}
 
 set inferior_exited_re "(?:\\\[Inferior ${::decimal} \\(\[^\n\r\]*\\) exited)"
 
