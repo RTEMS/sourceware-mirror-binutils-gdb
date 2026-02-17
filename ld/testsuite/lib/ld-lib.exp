@@ -1314,6 +1314,33 @@ proc check_compiler_available { } {
     return $compiler_available_saved
 }
 
+# Return true if we can run a program built with the compiler.
+proc check_execution_available { } {
+    global execution_available_saved
+
+    if { ![info exists execution_available_saved] } {
+	set execution_available_saved 0
+
+	if { ![check_compiler_available] } {
+	    return 0
+	}
+
+	set binfile [make_dummy_target_executable]
+	if { $binfile == "" } {
+	    return 0
+	}
+
+	set status [lindex [remote_load target $binfile] 0]
+	remote_file host delete $binfile
+	if { $status != "pass" } {
+	    return 0
+	}
+
+	set execution_available_saved 1
+    }
+    return $execution_available_saved
+}
+
 # Returns 1 if plugin is enabled in gcc.  Returns 0 otherwise.
 proc check_gcc_plugin_enabled { } {
     global CC_FOR_TARGET
