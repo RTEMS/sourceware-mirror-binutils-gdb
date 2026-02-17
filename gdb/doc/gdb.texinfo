@@ -10319,8 +10319,17 @@ Print the starting and ending addresses of the compiled code for the
 source lines of the code locations that result from resolving
 @var{locspec}.  @xref{Location Specifications}, for the various forms
 of @var{locspec}.
-With no @var{locspec}, information about the current source line is
-printed.
+
+With no @var{locspec}, information is printed about either:
+@itemize @bullet
+@item
+the last line listed (@pxref{List})
+@item
+the line after the line shown by the previous @code{info line} command
+(@pxref{info-line-repeated-calls, ,info line@comma{} repeated calls})
+@item
+the current source line
+@end itemize
 @end table
 
 For example, we can use @code{info line} to discover the location of
@@ -10355,6 +10364,7 @@ convenience variable @code{$_} (@pxref{Convenience Vars, ,Convenience
 Variables}).
 
 @cindex info line, repeated calls
+@anchor{info-line-repeated-calls}
 After @code{info line}, using @code{info line} again without
 specifying a location will display information about the next source
 line.
