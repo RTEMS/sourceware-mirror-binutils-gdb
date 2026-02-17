@@ -37,7 +37,7 @@ if {[gdb_compile_ada "${srcfile}" "${binfile}" executable [list debug]] != "" } 
 
 proc test_bp { loc msg } {
     gdb_test "break $loc" \
-	"Breakpoint ${::decimal} at 0x\[0-9a-fA-F\]+: file .*pck.adb, line ${::decimal}\\." \
+	"Breakpoint ${::decimal} at ${::hex}: file .*pck.adb, line ${::decimal}\\." \
 	"break $loc - $msg"
 
     gdb_run_cmd

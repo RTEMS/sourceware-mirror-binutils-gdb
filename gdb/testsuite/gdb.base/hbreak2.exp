@@ -188,7 +188,7 @@ gdb_test "hbreak \"marker2\"" \
     "Hardware assisted breakpoint.*at.* file .*$srcfile1, line.*" \
     "hardware breakpoint quoted function, 2"
 gdb_test "continue" \
-    "Continuing\\..*Breakpoint ${::decimal}, (0x\[0-9a-f\]+ in )?marker2 \\(a=43\\) at .*$srcfile1:$bp_location8.*" \
+    "Continuing\\..*Breakpoint ${::decimal}, (${::hex} in )?marker2 \\(a=43\\) at .*$srcfile1:$bp_location8.*" \
     "run until quoted breakpoint"
 delete_breakpoints
 #

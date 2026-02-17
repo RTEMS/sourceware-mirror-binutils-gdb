@@ -50,7 +50,7 @@ gdb_test_multiple "s" $name \
     -re "hithere2 \\(\\) at.*${libfile}.c:${::decimal}\r\n${::decimal}.*a = 21;.*$gdb_prompt $"  {
 	pass $name
     }
-    -re "0x\[0-9a-f\]+ in .* \\(\\) from /lib/ld.so.1.*$gdb_prompt $" {
+    -re "${::hex} in .* \\(\\) from /lib/ld.so.1.*$gdb_prompt $" {
 	kfail "gdb/1555" $name
     }
 }

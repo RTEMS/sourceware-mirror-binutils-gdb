@@ -282,7 +282,7 @@ proc check_philosopher_stack {thread seen_name} {
 
     select_thread $thread
     gdb_test_multiple "where" "$name" {
-	-re ".* in philosopher \\(data=(0x\[0-9a-f\]+).*\r\n$gdb_prompt $" {
+	-re ".* in philosopher \\(data=(${::hex}).*\r\n$gdb_prompt $" {
 	    set data $expect_out(1,string)
 	    if {[info exists seen($data)]} {
 		fail $name

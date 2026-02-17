@@ -462,7 +462,7 @@ proc gdb_collect_globals_test { } {
 	set globalarr2_addr ""
 	set test "get address of globalarr2"
 	gdb_test_multiple "p /x &globalarr2" $test {
-	    -re " = (0x\[0-9a-f\]+)\r\n$gdb_prompt $" {
+	    -re " = (${::hex})\r\n$gdb_prompt $" {
 		set globalarr2_addr $expect_out(1,string)
 		pass $test
 	    }

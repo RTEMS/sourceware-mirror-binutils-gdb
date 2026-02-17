@@ -39,7 +39,7 @@ gdb_test "continue" "Program received signal SIGSEGV, Segmentation fault.*"
 gdb_test_sequence "record function-call-history" "function-call-history" {
     "${::decimal}\tmain"
     "\t  \\\[iret(: ip = $hex)?\\\]"
-    "\t  \\\[interrupt: vector = 0xe \\\(#pf\\\)(, cr2 = 0x0)?(, ip = 0x\[0-9a-fA-F\]+)?\\\]"
+    "\t  \\\[interrupt: vector = 0xe \\\(#pf\\\)(, cr2 = 0x0)?(, ip = ${::hex})?\\\]"
 }
 
 # Test the instruction-history.  Assembly can differ between compilers. To

@@ -197,7 +197,7 @@ for {set i 6} {$i >= 1} {incr i -1} {
 #
 # Run until the breakpoint set at a quoted function
 #
-gdb_test continue "Continuing\\..*Breakpoint ${::decimal}, (0x\[0-9a-f\]+ in )?marker2 \\(a=43\\) at .*$srcfile:$bp_location8.*" \
+gdb_test continue "Continuing\\..*Breakpoint ${::decimal}, (${::hex} in )?marker2 \\(a=43\\) at .*$srcfile:$bp_location8.*" \
 		"run until quoted breakpoint"
 #
 # run until the file:function breakpoint at a line number in a file
