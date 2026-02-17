@@ -29,6 +29,9 @@ if {$tool == ""} {
     exit 2
 }
 
+# Add "convience abbreviation" for positive decimals, without leading zeros.
+set positive {[1-9][0-9]*}
+
 # Execute BODY, if COND wrapped in proc WRAP.
 # Instead of writing the verbose and repetitive:
 #   if { $cond } {
