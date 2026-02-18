@@ -316,18 +316,10 @@ buildsym_compunit::make_blockvector ()
   std::unique_ptr<struct blockvector> blockvector;
   int i;
 
-  /* Count the length of the list of blocks.  Also, if any blocks are
-     non-contiguous then we need to make use of the addrmap for mapping
-     addresses to blocks (PENDING_ADDRMAP_INTERESTING is set to true).  If
-     all the blocks are contiguous then we can avoid creating the addrmap,
-     and perform block look up using the blockvector.  */
+  /* Count the length of the list of blocks.  */
 
-  bool pending_addrmap_interesting = false;
   for (next = m_pending_blocks, i = 0; next; next = next->next, i++)
-    {
-      if (!next->block->is_contiguous ())
-	pending_addrmap_interesting = true;
-    }
+    ;
 
   blockvector = std::make_unique<struct blockvector> (i);
 
@@ -344,49 +336,6 @@ buildsym_compunit::make_blockvector ()
   /* Finished with the pending blocks now.  */
   m_pending_block_obstack.clear ();
   m_pending_blocks = nullptr;
-
-  /* If we needed an address map for this symtab, record it in the
-     blockvector.  */
-  if (pending_addrmap_interesting)
-    {
-      struct addrmap_mutable pending_addrmap;
-      int num_blocks = blockvector->num_blocks ();
-
-      /* If PENDING_ADDRMAP_INTERESTING is true then we must have seen
-	 an interesting block.  If we see one block, then we should at a
-	 minimum have a global block, and a static block.  */
-      gdb_assert (num_blocks > 1);
-
-      /* Assert our understanding of how the blocks are laid out.  */
-      gdb_assert (blockvector->block (0)->is_global_block ());
-      gdb_assert (blockvector->block (1)->is_static_block ());
-
-      /* The 'J > 1' here is so that we don't place the global block into
-	 the map.  For CU with gaps, the static block will reflect the
-	 gaps, while the global block will just reflect the full extent of
-	 the range.  */
-      for (int j = num_blocks; j > 1; )
-	{
-	  --j;
-	  struct block *b = blockvector->block (j);
-
-	  gdb_assert (!b->is_global_block ());
-
-	  if (b->is_contiguous ())
-	    pending_addrmap.set_empty (b->start (), (b->end () - 1), b);
-	  else
-	    {
-	      for (const auto &br : b->ranges ())
-		pending_addrmap.set_empty (br.start (), (br.end () - 1), b);
-	    }
-	}
-
-      blockvector->set_map
-	(new (&m_objfile->objfile_obstack) addrmap_fixed
-	 (&m_objfile->objfile_obstack, &pending_addrmap));
-    }
-  else
-    blockvector->set_map (nullptr);
 
   /* Some compilers output blocks in the wrong order, but we depend on
      their being in the right order so we can binary search.  Check the
