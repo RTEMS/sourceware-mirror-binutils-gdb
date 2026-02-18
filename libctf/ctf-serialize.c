@@ -1694,12 +1694,14 @@ ctf_serialize (ctf_dict_t *fp, size_t *bufsiz, int force_ctf)
   /* Allow string and type lookup again.  */
   fp->ctf_flags = fp->ctf_serialize.cs_old_flags;
 
-  /* Construct the final string table and fill out all the string refs with the
-     final offsets.  At link time, before the strtab can be constructed, child
-     dicts also need their cth_parent_strlen header field updated to match the
-     parent's.  (These are always newly-created dicts, so we don't need to worry
-     about the upgraded-from-v3 case, which must always retain a
-     cth_parent_strlen value of 0.)  */
+  /* Freshly-created parent and child during linking.  Construct the final
+     string table and fill out all the string refs with the final offsets.  At
+     link time, before the strtab can be constructed, child dicts also need
+     their cth_parent_strlen header field updated to match the parent's, since
+     the parent's was just updated while its strtab was written out.  (These are
+     always newly-created dicts, so we don't need to worry about the
+     upgraded-from-v3 case, which must always retain a cth_parent_strlen value
+     of 0.)  */
 
   if ((fp->ctf_flags & LCTF_LINKING) && fp->ctf_parent)
     fp->ctf_header->cth_parent_strlen = fp->ctf_parent->ctf_str[CTF_STRTAB_0].cts_len;
