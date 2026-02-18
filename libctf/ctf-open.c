@@ -2717,12 +2717,22 @@ ctf_import_internal (ctf_dict_t *fp, ctf_dict_t *pfp, int unreffed)
   if (fp->ctf_idmax + fp->ctf_header->cth_parent_ntypes >= pfp->ctf_provtypemax)
     return ctf_set_errno (fp, ECTF_FULL);
 
-  if (fp->ctf_header->cth_parent_strlen != 0 &&
-      pfp->ctf_header->btf.bth_str_len != fp->ctf_header->cth_parent_strlen)
-    return ctf_err (err_locus (fp), ECTF_WRONGPARENT,
-		    _("incorrect parent dict: %u bytes of strings expected, %u found"),
-		    fp->ctf_header->cth_parent_strlen,
-		    pfp->ctf_header->btf.bth_str_len);
+  /* Complain if the strlen of the parent is wrong, since this will corrupt all
+     child dicts: if the expected strlen is zero, this must be a freshly-created
+     dict or a v3 dict; if there are no strings in the child either, this is a
+     freshly-created dict, so set the strlen we expect in the parent to the value
+     we find there.  */
+
+  if (fp->ctf_header->cth_parent_strlen != 0)
+    {
+      if (pfp->ctf_header->btf.bth_str_len != fp->ctf_header->cth_parent_strlen)
+	return ctf_err (err_locus (fp), ECTF_WRONGPARENT,
+			_("incorrect parent dict: %u bytes of strings expected, %u found"),
+			fp->ctf_header->cth_parent_strlen,
+			pfp->ctf_header->btf.bth_str_len);
+    }
+  else if (fp->ctf_str[CTF_STRTAB_0].cts_len == 0) /* Freshly-created dict.  */
+    fp->ctf_header->cth_parent_strlen = pfp->ctf_str[CTF_STRTAB_0].cts_len;
 
   /* If the child dict expects the parent to have types, make sure it has that
      number of types.  (Provisional types excepted: they go at the top of the
@@ -2796,7 +2806,8 @@ ctf_import_internal (ctf_dict_t *fp, ctf_dict_t *pfp, int unreffed)
   fp->ctf_parent = pfp;
 
   /* BTF dicts don't have any parent strlen in the header, but we need to know
-     it to dereference strings.  */
+     it to dereference strings.  (We already handled the corresponding case for
+     newly-created CTF dicts imported into pre-existing parents above.)  */
 
   if (fp->ctf_opened_btf)
     fp->ctf_header->cth_parent_strlen = pfp->ctf_str[CTF_STRTAB_0].cts_len;
