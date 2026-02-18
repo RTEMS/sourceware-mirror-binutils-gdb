@@ -2465,6 +2465,7 @@ ctf_dict_close (ctf_dict_t *fp)
      ctf_link_outputs, the parent dict's atoms table may have refs that refer to
      the outputs: so purge the refs first.  */
 
+  ctf_dict_close (fp->ctf_link_parent);
   if (fp->ctf_link_outputs && ctf_dynhash_elements (fp->ctf_link_outputs) > 0)
     ctf_str_purge_refs (fp);
 
