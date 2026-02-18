@@ -25,7 +25,8 @@
 
 /* (In the below, relevant functions are named in square brackets.)  */
 
-/* Type deduplication is a three-phase process:
+/* Type deduplication is a three-phase process, followed by string
+   deduplication:
 
     [ctf_dedup, ctf_dedup_hash_type, ctf_dedup_rhash_type]
     1) come up with unambiguous hash values for all types: no two types may have
@@ -1518,11 +1519,21 @@ ctf_dedup_populate_mappings (ctf_dict_t *fp, ctf_dict_t *input _libctf_unused_,
   void *root_visible;
   ctf_kind_t kind;
 
-#ifdef ENABLE_LIBCTF_HASH_DEBUGGING
   ctf_dprintf ("Hash %s, %s, into output mapping for %i/%lx @ %s\n",
 	       hval, decorated_name ? decorated_name : "(unnamed)",
 	       input_num, type, ctf_link_input_name (input));
 
+  /* Don't do anything else if this is the first input and we're in
+     against-first mode: no output will be done for types in this dict.
+
+    The nonroot-consistency flag may be wrong, but it is never consulted for
+    cu-mapped links, and against-first links are always cu-mapped.  */
+
+  if ((fp->ctf_link_flags & CTF_LINK_DEDUP_AGAINST_FIRST)
+      && CTF_DEDUP_GID_TO_INPUT (id) == 0)
+    return 0;
+
+#ifdef ENABLE_LIBCTF_HASH_DEBUGGING
   const char *orig_hval;
 
   /* Make sure we never map a single GID to multiple hash values.  */
@@ -1889,6 +1900,14 @@ ctf_dedup_mark_conflicting_hash (ctf_dict_t *fp, ctf_dict_t **inputs,
 
   input = inputs[CTF_DEDUP_GID_TO_INPUT (id)];
 
+  /* Make sure that we don't drag in tags from the non-modified parent in
+     dedup-against-first mode: these do not appear in the output mapping,
+     so cannot be emitted.  (This should be impossible, hence this assertion.)  */
+
+  if (!ctf_assert (fp, !(fp->ctf_link_flags & CTF_LINK_DEDUP_AGAINST_FIRST)
+		   || CTF_DEDUP_GID_TO_INPUT (id) > 0))
+    return -1;
+
   if ((name = ctf_type_name_raw (input, CTF_DEDUP_GID_TO_TYPE (id))) == NULL)
     {
       ctf_set_errno (fp, ctf_errno (input));
@@ -1962,7 +1981,9 @@ ctf_dedup_detect_name_ambiguity (ctf_dict_t *fp, ctf_dict_t **inputs)
   ctf_error_t err;
   const char *whaterr;
 
-  /* Go through cd_name_counts for all CTF namespaces in turn.  */
+  /* Go through cd_name_counts for all CTF namespaces in turn.  This is
+     populated at the same time as the output mapping, so in against-types mode
+     will omit types that are merely hashed.  */
 
   while ((err = ctf_dynhash_next (d->cd_name_counts, &i, &k, &v)) == 0)
     {
@@ -2018,7 +2039,8 @@ ctf_dedup_detect_name_ambiguity (ctf_dict_t *fp, ctf_dict_t **inputs)
 		      ctf_dprintf ("Marking %p, with hash %s, conflicting: one "
 				   "of many non-forward GIDs for %s\n", id,
 				   hval, (char *) k);
-		      ctf_dedup_mark_conflicting_hash (fp, inputs, hval);
+		      if (ctf_dedup_mark_conflicting_hash (fp, inputs, hval) < 0)
+			goto assert_err;
 		    }
 		}
 	      if (err != ECTF_NEXT_END)
@@ -3097,6 +3119,12 @@ ctf_dedup_maybe_synthesize_forward (ctf_dict_t *output, ctf_dict_t *target,
 	   && kind != CTF_K_UNION && kind != CTF_K_FORWARD)))
     return 0;
 
+  /* This should only be callable in non-dedup-against-first mode, since the
+     target is always the child in that mode.  */
+
+  if (!ctf_assert (output, !(output->ctf_link_flags & CTF_LINK_DEDUP_AGAINST_FIRST)))
+    return CTF_ERR;
+
   fwdkind = ctf_type_kind_forwarded (input, id);
 
   ctf_dprintf ("Using synthetic forward for conflicted struct/union with "
@@ -3187,6 +3215,13 @@ ctf_dedup_id_to_target (ctf_dict_t *output, ctf_dict_t *target,
 
   hval = ctf_dynhash_lookup (od->cd_type_hashes,
 			     CTF_DEDUP_GID (output, input_num, id));
+
+  /* In dedup-against-first mode, if this is a parent type, we can just return
+     its id, since the parent dict never changes in that mode.  */
+
+  if (output->ctf_link_flags & CTF_LINK_DEDUP_AGAINST_FIRST
+      && ctf_type_isparent (input, id))
+    return id;
 
   if (!ctf_assert (output, hval && td->cd_output_emission_hashes))
     return CTF_ERR;
@@ -3298,18 +3333,29 @@ ctf_dedup_emit_type (const char *hval, ctf_dict_t *output, ctf_dict_t **inputs,
   /* Conflicting types go into a per-CU output dictionary, unless this is the
      final phase of a CU-mapped run and the input CU name is empty.  The import
      is not refcounted, since it goes into the ctf_link_outputs dict of the
-     output that is its parent.  */
+     output that is its parent.
+
+     In dedup-against-first mode, all unconflicting types in the output mapping
+     are simply omitted: all other types are always emitted in the child.  */
+
   is_conflicting = ctf_dynset_exists (d->cd_conflicting_types, hval, NULL);
+
+  if ((output->ctf_link_flags & CTF_LINK_DEDUP_AGAINST_FIRST) && !is_conflicting)
+    return 0;
 
   if (cu_mapping_phase == 2 && ctf_dict_cuname (input) != NULL
       && strcmp (ctf_dict_cuname (input), "") == 0)
     parent_cu_mapped = 1;
 
-  if (is_conflicting && cu_mapping_phase != 1 && !parent_cu_mapped)
+  if ((is_conflicting && cu_mapping_phase != 1 && !parent_cu_mapped)
+      || (output->ctf_link_flags & CTF_LINK_DEDUP_AGAINST_FIRST))
     {
-      ctf_dprintf ("%i: Type %s in %i/%lx is conflicted: "
-		   "inserting into per-CU target.\n",
-		   depth, hval, input_num, type);
+      if (is_conflicting && cu_mapping_phase != 1 && !parent_cu_mapped)
+	{
+	  ctf_dprintf ("%i: Type %s in %i/%lx is conflicted: "
+		       "inserting into per-CU target.\n",
+		       depth, hval, input_num, type);
+	}
 
       if (input->ctf_dedup.cd_output)
 	target = input->ctf_dedup.cd_output;
@@ -3321,13 +3367,38 @@ ctf_dedup_emit_type (const char *hval, ctf_dict_t *output, ctf_dict_t **inputs,
 	    return ctf_err (link_err_locus (output, input, input_num), err,
 			    _("cannot create per-CU CTF archive"));
 
-	  target->ctf_flags |= LCTF_STRICT_NO_DUP_ENUMERATORS;
-	  ctf_import_unref (target, output);
+	  if (output->ctf_link_flags & CTF_LINK_DEDUP_AGAINST_FIRST)
+	    target->ctf_flags |= LCTF_STRICT_NO_DUP_ENUMERATORS;
+
+	  /* In against-first mode, the parent is the unmodified first dict in
+	     the link: in that mode we can use a normal import because the
+	     parent does not hold a ref to any dicts.  In other modes, the same
+	     considerations apply here as in ctf_create_per_cu: OUTPUT is the
+	     dict doing the dedupping and already holds a ref to all the inputs.
+	     We also cannot use no-duplicate-enum mode when against-first is on,
+	     since that relies on putting conflicting enums into dicts that are
+	     children of the one being inserted into, but in that mode we always
+	     insert directly into the only child, which cannot have children of
+	     its own.  */
+
+	  if (output->ctf_link_flags & CTF_LINK_DEDUP_AGAINST_FIRST)
+	    err = ctf_import (target, inputs[0]);
+	  else
+	    err = ctf_import_unref (target, output);
+
+	  if (err != 0)
+	    return ctf_err (link_err_locus (output, input, input_num), err,
+			    _("cannot import parent into per-CU CTF archive"));
+
 	  if (ctf_dict_cuname (input) != NULL)
 	    ctf_dict_set_cuname (target, ctf_dict_cuname (input));
 	  else
 	    ctf_dict_set_cuname (target, "unnamed-CU");
-	  target->ctf_parent_name = _CTF_SECTION;
+
+	  if (output->ctf_link_flags & CTF_LINK_DEDUP_AGAINST_FIRST)
+	    target->ctf_parent_name = ctf_dict_cuname (inputs[0]);
+	  else
+	    target->ctf_parent_name = _CTF_SECTION;
 
 	  input->ctf_dedup.cd_output = target;
 	  input->ctf_link_in_out = target;
@@ -3391,13 +3462,22 @@ ctf_dedup_emit_type (const char *hval, ctf_dict_t *output, ctf_dict_t **inputs,
 
      So in phase 2, we hide conflicting types, if this type is conflicting and a
      type with this name already exists in the target and is not a forward.
+     (This is not optimal, as popularity contests don't take effect and an
+     unpopular type might by chance appear first, but the results are likely to
+     be acceptable nonetheless.)
 
      Note that enums also get their enumerands checked, below.
 
      Otherwise, in "phase 0" (i.e. normal links), we can respect the non-root
      flag the user passed in and simply propagate it directly to the output.
      If the user provided a mix of root-visible and non-root-visible flags,
-     we treat it as non-root-visible: see ctf_dedup_hash_type_fini.  */
+     we treat it as non-root-visible: see ctf_dedup_hash_type_fini.
+
+     Future optimization opportunity: in against-types mode, since only one
+     archive can be provided and the parent never changes, all phase 2 really
+     does is identifies types to unhide.  We could probably short-circuit this
+     a bit more than we do.  (But the performance hit is likely minimal except
+     for the very largest modules.)  */
 
   switch (cu_mapping_phase)
     {

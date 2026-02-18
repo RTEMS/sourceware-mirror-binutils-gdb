@@ -519,6 +519,7 @@ struct ctf_dict
   unsigned long ctf_snapshots;	  /* ctf_snapshot() call count.  */
   ctf_archive_t *ctf_archive;	  /* Archive this ctf_dict_t came from.  */
   ctf_list_t ctf_errs_warnings;	  /* CTF errors and warnings.  */
+  ctf_dict_t *ctf_link_parent;	  /* Parent dict for against-types mode.  */
   ctf_dynhash_t *ctf_link_inputs; /* Inputs to this link.  */
   ctf_dynhash_t *ctf_link_outputs; /* Additional outputs from this link.  */
 
@@ -706,8 +707,9 @@ extern ctf_id_t ctf_index_to_type (const ctf_dict_t *, uint32_t);
 #define LCTF_LINKING		0x0002  /* CTF link is underway: respect ctf_link_flags.  */
 #define LCTF_STRICT_NO_DUP_ENUMERATORS 0x0004 /* Duplicate enums prohibited.  */
 #define LCTF_NO_STR		0x0008  /* No string lookup possible yet.  */
-#define LCTF_NO_TYPE		0x0010	/* No type additions possible.  */
-#define LCTF_PRESERIALIZED	0x0020  /* Already serialized all but the strtab.  */
+#define LCTF_NO_STR_DEDUP	0x0010	/* Suppress string deduplication.  */
+#define LCTF_NO_TYPE		0x0020	/* No type additions possible.  */
+#define LCTF_PRESERIALIZED	0x0040  /* Already serialized all but the strtab.  */
 
 extern ctf_dynhash_t *ctf_name_table (ctf_dict_t *, ctf_kind_t);
 extern const ctf_type_t *ctf_lookup_by_id (ctf_dict_t **, ctf_id_t,
