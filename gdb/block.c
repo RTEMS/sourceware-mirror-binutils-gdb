@@ -85,6 +85,25 @@ block::contains (const struct block *a, bool allow_nested) const
 
 /* See block.h.  */
 
+bool
+block::contains (const CORE_ADDR addr) const
+{
+  if (addr >= start () && addr < end ())
+    {
+      if (is_contiguous ())
+	return true;
+
+      for (auto range : ranges ())
+	{
+	  if (range.start () <= addr && addr < range.end ())
+	    return true;
+	}
+    }
+  return false;
+}
+
+/* See block.h.  */
+
 struct symbol *
 block::linkage_function () const
 {
@@ -857,7 +876,10 @@ blockvector::lookup (CORE_ADDR addr) const
       if (b->start () > addr)
 	return nullptr;
       if (b->end () > addr)
-	return b;
+	{
+	  if (b->contains (addr))
+	    return b;
+	}
       bot--;
     }
 
