@@ -100,8 +100,9 @@ ctf_arc_preserialize (ctf_dict_t **ctf_dicts, ssize_t ctf_dict_cnt,
   /* If linking, deduplicate strings against the children in every dict that has
      any.  (String deduplication is not yet implemented for non-linked dicts.)  */
 
-  if (ctf_dict_cnt > 1 && ctf_dicts[0]->ctf_flags & LCTF_LINKING &&
-      ctf_dicts[0]->ctf_link_outputs)
+  if (ctf_dict_cnt > 1 && (ctf_dicts[0]->ctf_flags & LCTF_LINKING)
+      && !(ctf_dicts[0]->ctf_flags & LCTF_NO_STR_DEDUP)
+      && ctf_dicts[0]->ctf_link_outputs)
     {
       ctf_dprintf ("Deduplicating strings.\n");
 
