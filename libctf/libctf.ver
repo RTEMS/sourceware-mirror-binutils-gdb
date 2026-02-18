@@ -160,6 +160,7 @@ LIBCTF_2.0 {
 	ctf_link_set_memb_name_changer;
 	ctf_link_set_variable_filter;
 	ctf_link;
+	ctf_link_against;
 	ctf_link_add_strtab;
 	ctf_link_shuffle_syms;
 	ctf_link_output_is_btf;
