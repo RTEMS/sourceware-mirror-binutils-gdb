@@ -149,7 +149,8 @@ enum ctf_link_flags
 
     CTF_LINK_NO_FILTER_REPORTED_SYMS = 0x10,
 
-    /* Dedup all archives but the first added against the first added.  */
+    /* Dedup all archives but the first added against the first added.
+       ctf_link_against() automatically enables this.  */
 
     CTF_LINK_DEDUP_AGAINST_FIRST = 0x20
 
@@ -1213,9 +1214,10 @@ extern ctf_ret_t ctf_write_suppress_kind (ctf_dict_t *fp, ctf_kind_t kind,
    private to the linker.
 
    They should be called in the order they appear below, though some are
-   optional.  */
+   optional.  If you call ctf_link_against, don't call ctf_link_add or
+   ctf_link.  */
 
-/* Add a CTF archive to the link with a given NAME (usually the name of the
+/* Add a CTF archive to the link with a given FILENAME (usually the name of the
    containing object file); the CUNAME_PREFIX, if set, prefixes all input
    cunames with a given string (used for archives).  The dict added to is
    usually a new dict created with ctf_create which will be filled with types
@@ -1223,9 +1225,9 @@ extern ctf_ret_t ctf_write_suppress_kind (ctf_dict_t *fp, ctf_kind_t kind,
    dicts in the output archive are stored in internal space inside this dict,
    but are not easily visible until after ctf_link_write below).
 
-   The NAME need not be unique (but usually is).  */
+   The FILENAME need not be unique (but usually is).  */
 
-extern ctf_ret_t ctf_link_add (ctf_dict_t *, ctf_archive_t *, const char *name,
+extern ctf_ret_t ctf_link_add (ctf_dict_t *, ctf_archive_t *, const char *filename,
 			       const char *cuname_prefix);
 
 /* Set the cuname for the parent dict in an archive, without opening it,
@@ -1238,6 +1240,16 @@ extern void ctf_link_set_default_parent_cuname (ctf_archive_t *arc,
    CTF_LINK_* flags above.  */
 
 extern ctf_ret_t ctf_link (ctf_dict_t *, ctf_link_flags_t flags);
+
+/* Do a deduplicating link of one archive against another parent dict AGAINST,
+   without changing the parent dict.  All types in every archive member are
+   smushed together into one dict, the child of AGAINST, using the cu-mapping
+   mechanism (see below).  AGAINST is an archive but must contain only one dict.
+   You may not call ctf_link_add or ctf_link if you call this.   */
+
+extern ctf_ret_t ctf_link_against (ctf_dict_t *fp, ctf_archive_t *against,
+				   ctf_archive_t *dict, const char *cuname,
+				   ctf_link_flags_t flags);
 
 /* Symtab linker handling, called after ctf_link to set up the symbol type
    information used by ctf_*_lookup_symbol.  Optional.  */
@@ -1272,7 +1284,9 @@ extern ctf_ret_t ctf_link_output_is_btf (ctf_dict_t *);
 
    May be a CTF dict or a CTF archive (this library mostly papers over the
    differences so you can open both the same way, treat both as ctf_archive_t
-   and so on).
+   and so on).  If ctf_link_against was used, a single dict is always written.
+   Concatenate a parent onto the front of it if you want to open it with
+   ctf_open*(), or open it with ctf_bufopen() and explicitly supply the parent.
 
    If IS_BTF is set on return, the output is BTF-compatible and can be stored
    in a .BTF section.  */
