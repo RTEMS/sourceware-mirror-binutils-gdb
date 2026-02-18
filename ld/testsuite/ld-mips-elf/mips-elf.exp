@@ -1808,3 +1808,5 @@ foreach { abi } $abis {
 
 run_dump_test "dynamic-sections-1${irixn}"
 run_dump_test "dynamic-sections-2${irixn}"
+run_dump_test "dynamic-sections-3${irixn}"
+run_dump_test "dynamic-sections-4${irixn}"
