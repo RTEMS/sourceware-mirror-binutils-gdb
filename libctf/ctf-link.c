@@ -152,12 +152,13 @@ ctf_link_add_internal (ctf_dict_t *fp, ctf_archive_t *ctf,
 }
 
 /* Add an opened CTF archive or unopened file (by name) to a link.
-   If CTF is NULL and NAME is non-null, an unopened file is meant:
-   otherwise, the specified archive is assumed to have the given NAME.
+   If CTF is NULL and FILENAME is non-null, an unopened file is meant:
+   otherwise, the specified archive is assumed to have the given FILENAME (as
+   its cuname).
 
-   If CTF is NULL, the NAME is only opened when needed, and is closed when no
-   longer needed, so that large cu-mapped links will only use memory for their
-   cu-mapped inputs briefly (compensating for the memory usage of the
+   If CTF is NULL, the FILENAME is only opened when needed, and is closed when
+   no longer needed, so that large cu-mapped links will only use memory for
+   their cu-mapped inputs briefly (compensating for the memory usage of the
    smushed-together cu-mapped verion).
 
    The CUNAME_PREFIX, if set, prefixes all input cunames with a given string
@@ -168,15 +169,15 @@ ctf_link_add_internal (ctf_dict_t *fp, ctf_archive_t *ctf,
    The order of calls to this function influences the order of types in the
    final link output, but otherwise is not important.
 
-   Repeated additions of the same NAME have no effect; repeated additions of
-   different dicts with the same NAME add all the dicts with unique NAMEs
-   derived from NAME.  */
+   Repeated additions of the same FILENAME have no effect; repeated additions of
+   different dicts with the same FILENAME add all the dicts with unique
+   FILENAMEs derived from FILENAME.  */
 
 ctf_ret_t
-ctf_link_add (ctf_dict_t *fp, ctf_archive_t *ctf, const char *name,
+ctf_link_add (ctf_dict_t *fp, ctf_archive_t *ctf, const char *filename,
 	      const char *cuname_prefix)
 {
-  if (!name)
+  if (!filename)
     return (ctf_set_errno (fp, EINVAL));
 
   if (fp->ctf_link_outputs)
@@ -198,7 +199,7 @@ ctf_link_add (ctf_dict_t *fp, ctf_archive_t *ctf, const char *name,
     return (ctf_set_errno (fp, ECTF_NEEDSBFD));
 #endif
 
-  return ctf_link_add_internal (fp, ctf, NULL, name, cuname_prefix);
+  return ctf_link_add_internal (fp, ctf, NULL, filename, cuname_prefix);
 }
 
 /* Lazily open a CTF archive for linking, if not already open.
@@ -313,8 +314,13 @@ ctf_create_per_cu (ctf_dict_t *fp, ctf_dict_t *input, const char *cu_name)
 	  return NULL;
 	}
 
-      /* The deduplicator is ready for strict enumerator value checking.  */
-      cu_fp->ctf_flags |= LCTF_STRICT_NO_DUP_ENUMERATORS;
+      /* The deduplicator is ready for strict enumerator value checking, unless
+	 doing dedup-against-first links, in which case no child dicts are
+	 created to put conflicting enums in and duplicate enumerators must be
+	 tolerated.  */
+
+      if (!(fp->ctf_link_flags & CTF_LINK_DEDUP_AGAINST_FIRST))
+	cu_fp->ctf_flags |= LCTF_STRICT_NO_DUP_ENUMERATORS;
       ctf_import_unref (cu_fp, fp);
 
       if ((dynname = ctf_new_per_cu_name (fp, ctf_name)) == NULL)
@@ -1110,8 +1116,13 @@ ctf_link_deduplicating_per_cu (ctf_dict_t *fp)
 	  goto err_inputs;
 	}
 
-      /* The deduplicator is ready for strict enumerator value checking.  */
-      out->ctf_flags |= LCTF_STRICT_NO_DUP_ENUMERATORS;
+      /* The deduplicator is ready for strict enumerator value checking, unless
+	 doing dedup-against-first links, in which case no child dicts are
+	 created to put conflicting enums in and duplicate enumerators must be
+	 tolerated.  */
+
+      if (!(fp->ctf_link_flags & CTF_LINK_DEDUP_AGAINST_FIRST))
+	out->ctf_flags |= LCTF_STRICT_NO_DUP_ENUMERATORS;
 
       /* Share the atoms table to reduce memory usage.  */
       out->ctf_dedup_atoms = fp->ctf_dedup_atoms_alloc;
@@ -1273,6 +1284,15 @@ ctf_link_deduplicating (ctf_dict_t *fp)
 	return;					/* Errno is set for us.  */
       cu_phase = 2;
     }
+  else if (fp->ctf_link_flags & CTF_LINK_DEDUP_AGAINST_FIRST)
+    {
+      /* Ban non-cu-mapped against-first links because various structures that
+	 are needed by non-cu-mapped links are not populated in this mode,
+	 notably cd_nonroot_consistency.  */
+      ctf_err (err_locus (fp), EINVAL,
+	       _("against-first deduplication requires cu-mapping mode"));
+      return;
+    }
 
   if ((ninputs = ctf_link_deduplicating_count_inputs (fp, NULL, NULL)) < 0)
     return;					/* Errno is set for us.  */
@@ -1381,6 +1401,33 @@ ctf_link (ctf_dict_t *fp, ctf_link_flags_t flags)
   if (fp->ctf_link_inputs == NULL)
     return 0;					/* Nothing to do. */
 
+  /* Validation for against-first link mode.  */
+  if (fp->ctf_link_flags & CTF_LINK_DEDUP_AGAINST_FIRST)
+    {
+      /* If the parent is not already set or has more than one member, fail:
+	 only dicts are permitted (since you can only have a parent dict, not a
+	 parent archive).  */
+
+      if (fp->ctf_link_parent == NULL)
+	{
+	  ctf_err (err_locus (fp), EINVAL,
+		   _("parent is not set in against-types mode: use ctf_link_against"));
+	  return -1;
+	}
+
+      if (ctf_dynhash_elements (fp->ctf_link_inputs) != 2)
+	{
+	  ctf_err (err_locus (fp), ECTF_NOTYET,
+		   _("dedup-against-first link mode may only link two inputs at a time"));
+	  return -1;
+	}
+
+      /* Always use share-duplicated mode.  We cannot promote types found only
+	 in the child into the parent, since we cannot modify the parent.  */
+
+      fp->ctf_link_flags |= CTF_LINK_SHARE_DUPLICATED;
+    }
+
   if (fp->ctf_link_outputs != NULL)
     {
       if (ctf_link_empty_outputs (fp) < 0)
@@ -1398,7 +1445,8 @@ ctf_link (ctf_dict_t *fp, ctf_link_flags_t flags)
   if (fp->ctf_link_outputs == NULL)
     return ctf_set_errno (fp, ENOMEM);
 
-  fp->ctf_flags |= LCTF_LINKING & LCTF_STRICT_NO_DUP_ENUMERATORS;
+  if (!(fp->ctf_link_flags & CTF_LINK_DEDUP_AGAINST_FIRST))
+    fp->ctf_flags |= LCTF_LINKING & LCTF_STRICT_NO_DUP_ENUMERATORS;
   ctf_link_deduplicating (fp);
   fp->ctf_flags = oldflags;
 
@@ -1420,16 +1468,110 @@ ctf_link (ctf_dict_t *fp, ctf_link_flags_t flags)
 	  const char *to = (const char *) k;
 	  if (ctf_create_per_cu (fp, NULL, to) == NULL)
 	    {
-	      fp->ctf_flags = oldflags;
 	      ctf_next_destroy (i);
 	      return -1;			/* Errno is set for us.  */
 	    }
 	}
       if (err != ECTF_NEXT_END)
 	{
-	  fp->ctf_flags = oldflags;
 	  ctf_warn (err_locus (fp), err, _("iteration error creating empty CUs"));
 	  return ctf_set_errno (fp, err);
+	}
+    }
+
+  return 0;
+}
+
+/* Link DICT against AGAINST, without changing AGAINST.  */
+
+ctf_ret_t
+ctf_link_against (ctf_dict_t *fp, ctf_archive_t *against, ctf_archive_t *dict,
+		  const char *name, ctf_link_flags_t flags)
+{
+  ctf_next_t *it = NULL;
+  const char *input_parent_cuname = NULL, *cuname;
+  ctf_error_t err;
+  ctf_dict_t *tmp;
+
+  if (ctf_archive_count (against) != 1)
+    return ctf_err (err_locus (fp), ECTF_NOTYET,
+		    _("parent must have exactly one member in against-types mode"));
+
+  /* Allow repeated calls without leaks (with some inefficiency for repeated
+     reopens if AGAINST is the same).  */
+  ctf_dict_close (fp->ctf_link_parent);
+  if (fp->ctf_link_outputs)
+    ctf_link_empty_outputs (fp);
+  if (fp->ctf_link_inputs)
+    ctf_dynhash_empty (fp->ctf_link_inputs);
+
+  if ((fp->ctf_link_parent = ctf_dict_open_by_index (against, 0, &err))
+      == NULL)
+    return ctf_err (err_locus (fp), err, _("cannot open against-types parent dict"));
+
+  /* Add the sole parent, then the single child.  */
+
+  if (ctf_link_add (fp, against, _CTF_SECTION, NULL) < 0)
+    return -1;					/* errno is set for us.  */
+
+  if (ctf_link_add (fp, dict, name, NULL) < 0)
+    return -1;					/* errno is set for us.  */
+
+  /* Add cu-mappings from every child in the input to the cuname of the parent
+     in the input, to smush everything into one dict (which will be a child
+     of AGAINST).  */
+
+  while ((tmp = ctf_archive_next (dict, &it, &cuname, 0, &err)) != NULL)
+    {
+      /* No parent cuname yet?  This dict is the parent.  */
+
+      if (!input_parent_cuname)
+	input_parent_cuname = ctf_dict_cuname (tmp);
+
+      if (ctf_link_add_cu_mapping (fp, cuname, input_parent_cuname) < 0)
+	{
+	  ctf_dict_close (tmp);
+	  ctf_next_destroy (it);
+	  return -1;				/* errno is set for us.  */
+	}
+      ctf_dict_close (tmp);
+    }
+
+  if (err != ECTF_NEXT_END)
+    return ctf_err (err_locus (fp), err, _("iteration error"));
+
+  flags |= CTF_LINK_DEDUP_AGAINST_FIRST;
+
+  if (ctf_link (fp, flags) < 0)
+    return -1;					/* errno is set for us.  */
+
+  if (ctf_dynhash_elements (fp->ctf_link_outputs) == 0)
+    {
+      ctf_dict_t *empty;
+      char *dynname;
+
+      /* No output is perfectly valid -- there are simply no types here. Create
+	 a new dict, import the parent, and stick it in ctf_link_outputs so that
+	 we can return something.  */
+
+      if ((empty = ctf_create (&err)) == NULL)
+	return ctf_err (err_locus (fp), err, _("creating empty against-types link dict"));
+
+      if (ctf_import (empty, fp->ctf_link_parent) < 0)
+	return ctf_err (err_locus (fp), err, _("importing parent into empty against-types link dict"));
+
+      if (input_parent_cuname)
+	ctf_dict_set_cuname (empty, input_parent_cuname);
+      else
+	ctf_dict_set_cuname (empty, "unnamed-CU");
+      empty->ctf_parent_name = ctf_dict_cuname (fp->ctf_link_parent);
+
+      if ((dynname = ctf_new_per_cu_name (fp, name)) == NULL
+	  || ctf_dynhash_insert (fp->ctf_link_outputs, dynname, empty) < 0)
+	{
+	  free (dynname);
+	  ctf_dict_close (empty);
+	  return ctf_err (err_locus (fp), ENOMEM, _("allocating link outputs"));
 	}
     }
 
@@ -1851,7 +1993,6 @@ ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
 {
   ctf_name_list_accum_cb_arg_t arg;
   char *transformed_name = NULL;
-  ctf_dict_t **files;
   FILE *f = NULL;
   ssize_t i;
   ctf_error_t err;
@@ -1878,10 +2019,16 @@ ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
     *is_btf = 0;
 
   /* Writing an archive.  Stick ourselves (the shared repository, parent of all
-     other archives) on the front of it with the default name.  (The parent dict
-     must always come first, by definition -- the first dict in an archive is
-     the parent -- but also doing so is essential for strings in child dicts
-     shared with the parent to get their proper offsets.)  */
+     other archives) on the front of it with the default name, unless
+     against-first mode is on.  (The parent dict must always come first, by
+     definition -- the first dict in an archive is the parent -- but also doing
+     so is essential for strings in child dicts shared with the parent to get
+     their proper offsets.)
+
+     If against-first mode is on, rather than linking all input dicts into fp
+     and some set of children, all dicts after the first are linked into a
+     single dict in the output.  */
+
   if (fp->ctf_link_memb_name_changer)
     {
       void *nc_arg = fp->ctf_link_memb_name_changer_arg;
@@ -1897,26 +2044,37 @@ ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
 	}
     }
 
-  /* Propagate the link flags to all the dicts in this link.  */
+  /* Propagate the link flags to all the dicts in this link.  Suppress string
+     deduplication if against-first mode is on.  */
   for (i = 0; i < arg.i; i++)
     {
       arg.files[i]->ctf_link_flags = fp->ctf_link_flags;
       arg.files[i]->ctf_flags |= LCTF_LINKING;
+
+      if (fp->ctf_link_flags & CTF_LINK_DEDUP_AGAINST_FIRST)
+	arg.files[i]->ctf_flags |= LCTF_NO_STR_DEDUP;
+    }
+
+  if (!(fp->ctf_link_flags & CTF_LINK_DEDUP_AGAINST_FIRST))
+    {
+      ctf_dict_t **files;
+
+      if ((files = realloc (arg.files,
+			    sizeof (struct ctf_dict *) * (arg.i + 1))) == NULL)
+	{
+	  errloc = "ctf_dict reallocation";
+	  goto err_no;
+	}
+      arg.files = files;
+
+      memmove (&(arg.files[1]), arg.files, sizeof (ctf_dict_t *) * (arg.i));
+      arg.files[0] = fp;
+      arg.i++;
     }
 
   /* Only one member?  Don't bother writing out a name table at all.  */
   if (arg.i == 1)
     flags |= CTF_ARC_WRITE_NAMELESS;
-
-  if ((files = realloc (arg.files,
-			sizeof (struct ctf_dict *) * (arg.i + 1))) == NULL)
-    {
-      errloc = "ctf_dict reallocation";
-      goto err_no;
-    }
-  arg.files = files;
-  memmove (&(arg.files[1]), arg.files, sizeof (ctf_dict_t *) * (arg.i));
-  arg.files[0] = fp;
 
   if ((f = tmpfile ()) == NULL)
     {
@@ -1924,7 +2082,7 @@ ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
       goto err_no;
     }
 
-  if ((err = ctf_arc_write_fd (fileno (f), arg.files, arg.i + 1,
+  if ((err = ctf_arc_write_fd (fileno (f), arg.files, arg.i,
 			       threshold, flags)) != 0)
     {
       errloc = NULL;				/* errno is set for us.  */
@@ -1962,14 +2120,10 @@ ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
 	goto err_no;
       }
 
-  /* Turn off the is-linking flag on all the dicts in this link: if the strict enum
-     checking flag is off on the parent, turn it off on all the children too.  */
+  /* Turn off the is-linking flag, and any other flags we flipped, on all the
+     dicts in this link.  */
   for (i = 0; i < arg.i; i++)
-    {
-      arg.files[i]->ctf_flags &= ~LCTF_LINKING;
-      if (!(fp->ctf_flags & LCTF_STRICT_NO_DUP_ENUMERATORS))
-	arg.files[i]->ctf_flags &= ~LCTF_STRICT_NO_DUP_ENUMERATORS;
-    }
+    arg.files[i]->ctf_flags &= ~(LCTF_LINKING | LCTF_NO_STR_DEDUP);
 
   *size = fsize;
   free (arg.files);
@@ -1980,13 +2134,9 @@ ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
  err_no:
   ctf_set_errno (fp, errno);
  err_set:
-  /* Turn off the is-linking flag on all the dicts in this link, as above.  */
+  /* Turn off flags we flipped on all the dicts in this link, as above.  */
   for (i = 0; i < arg.i; i++)
-    {
-      arg.files[i]->ctf_flags &= ~LCTF_LINKING;
-      if (!(fp->ctf_flags & LCTF_STRICT_NO_DUP_ENUMERATORS))
-	arg.files[i]->ctf_flags &= ~LCTF_STRICT_NO_DUP_ENUMERATORS;
-    }
+    arg.files[i]->ctf_flags &= ~(LCTF_LINKING | LCTF_NO_STR_DEDUP);
  err:
   free (buf);
   if (f)
