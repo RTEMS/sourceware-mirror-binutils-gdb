@@ -3873,6 +3873,7 @@ s_float_space (int float_type)
   char temp[MAXIMUM_NUMBER_OF_CHARS_FOR_FLOAT];
   char *stop = NULL;
   char stopc = 0;
+  char *p;
 
 #ifdef md_cons_align
   md_cons_align (1);
@@ -3906,13 +3907,11 @@ s_float_space (int float_type)
       return;
     }
 
-  while (--count >= 0)
-    {
-      char *p;
-
-      p = frag_more (flen);
-      memcpy (p, temp, flen);
-    }
+  if (count == 1)
+    p = frag_more (flen);
+  else
+    p = frag_var (rs_fill, flen, flen, 0, NULL, count, NULL);
+  memcpy (p, temp, flen);
 
   demand_empty_rest_of_line ();
 
@@ -5173,12 +5172,11 @@ float_cons (/* Clobbers input_line-pointer, checks end-of-line.  */
 		count = count_exp.X_add_number;
 	    }
 #endif
-
-	  while (--count >= 0)
-	    {
-	      p = frag_more (length);
-	      memcpy (p, temp, length);
-	    }
+	  if (count == 1)
+	    p = frag_more (length);
+	  else
+	    p = frag_var (rs_fill, length, length, 0, NULL, count, NULL);
+	  memcpy (p, temp, length);
 	}
       SKIP_WHITESPACE ();
     }
