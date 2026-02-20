@@ -82,6 +82,14 @@ run_ld_link_tests [list \
 	 {nm "" ../ld-archive/nx.nd}} \
 	"abcx" \
     ] \
+    [list "CRIS regular archive link (implicit emulation)" \
+	"-e ff" "tmpdir/ab.a --verbose --print-map" \
+	"$asemul" {../ld-archive/abc.s} \
+	{{ld ../ld-archive/abc.vd} \
+	 {nm "" ../ld-archive/abc.nd} \
+	 {nm "" ../ld-archive/nx.nd}} \
+	"abci" \
+    ] \
 ]
 # PR binutils/33485 hits with the aout archive format and with this
 # test that format is used with non-aout targets, hence the reverse
@@ -97,5 +105,21 @@ run_ld_link_tests [list \
 	 {nm "" ../ld-archive/abc.nd} \
 	 {nm "" ../ld-archive/nx.nd}} \
 	"abtcx" \
+    ] \
+]
+# PR binutils/33485 hits with the aout archive format and with this
+# test that format is used with non-aout targets, hence the reverse
+# condition.  Cf. the note at the top.
+if { ![istarget cris-*-*aout*] } {
+    setup_xfail "binutils/33485" "*-*-*"
+}
+run_ld_link_tests [list \
+    [list "CRIS thin archive link (implicit emulation)" \
+	"-e ff" "tmpdir/abt.a --verbose --print-map" \
+	"$asemul" {../ld-archive/abc.s} \
+	{{ld ../ld-archive/abtc.vd} \
+	 {nm "" ../ld-archive/abc.nd} \
+	 {nm "" ../ld-archive/nx.nd}} \
+	"abtci" \
     ] \
 ]

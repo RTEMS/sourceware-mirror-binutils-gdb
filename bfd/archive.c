@@ -921,7 +921,8 @@ bfd_generic_archive_p (bfd *abfd)
       return NULL;
     }
 
-  if (abfd->target_defaulted && bfd_has_map (abfd))
+  if ((abfd->target_defaulted || abfd->is_linker_input)
+      && bfd_has_map (abfd))
     {
       bfd *first;
       unsigned int save;
@@ -944,6 +945,8 @@ bfd_generic_archive_p (bfd *abfd)
       if (first != NULL)
 	{
 	  first->target_defaulted = false;
+	  if (abfd->is_linker_input)
+	    first->plugin_format = bfd_plugin_no;
 	  if (!bfd_check_format (first, bfd_object)
 	      || first->xvec != abfd->xvec)
 	    bfd_set_error (bfd_error_wrong_object_format);
