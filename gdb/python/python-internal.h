@@ -495,7 +495,7 @@ gdb::unique_xmalloc_ptr<char> gdbpy_parse_command_name
 PyObject *gdbpy_register_tui_window (PyObject *self, PyObject *args,
 				     PyObject *kw);
 
-PyObject *symtab_and_line_to_sal_object (struct symtab_and_line sal);
+gdbpy_ref<> symtab_and_line_to_sal_object (struct symtab_and_line sal);
 PyObject *symtab_to_symtab_object (struct symtab *symtab);
 PyObject *symbol_to_symbol_object (struct symbol *sym);
 PyObject *block_to_block_object (const struct block *block,

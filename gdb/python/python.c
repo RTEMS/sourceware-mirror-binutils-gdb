@@ -1020,11 +1020,11 @@ gdbpy_decode_line (PyObject *self, PyObject *args)
 	return NULL;
       for (size_t i = 0; i < sals.size (); ++i)
 	{
-	  PyObject *obj = symtab_and_line_to_sal_object (sals[i]);
-	  if (obj == NULL)
-	    return NULL;
+	  gdbpy_ref<> obj = symtab_and_line_to_sal_object (sals[i]);
+	  if (obj == nullptr)
+	    return nullptr;
 
-	  PyTuple_SetItem (result.get (), i, obj);
+	  PyTuple_SetItem (result.get (), i, obj.release ());
 	}
     }
   else

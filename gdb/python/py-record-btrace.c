@@ -205,7 +205,7 @@ PyObject *
 recpy_bt_insn_sal (PyObject *self, void *closure)
 {
   const btrace_insn * const insn = btrace_insn_from_recpy_insn (self);
-  PyObject *result = NULL;
+  gdbpy_ref<> result;
 
   if (insn == NULL)
     return NULL;
@@ -219,7 +219,7 @@ recpy_bt_insn_sal (PyObject *self, void *closure)
       return gdbpy_handle_gdb_exception (nullptr, except);
     }
 
-  return result;
+  return result.release ();
 }
 
 /* Implementation of RecordInstruction.pc [int] for btrace.

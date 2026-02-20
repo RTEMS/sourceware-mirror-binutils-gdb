@@ -390,7 +390,7 @@ symtab_to_symtab_object (struct symtab *symtab)
 
 /* Create a new symtab and line (gdb.Symtab_and_line) object
    that encapsulates the symtab_and_line structure from GDB.  */
-PyObject *
+gdbpy_ref<>
 symtab_and_line_to_sal_object (struct symtab_and_line sal)
 {
   sal_object *sal_obj;
@@ -399,7 +399,7 @@ symtab_and_line_to_sal_object (struct symtab_and_line sal)
   if (sal_obj != nullptr)
     set_sal (sal_obj, sal);
 
-  return (PyObject *) sal_obj;
+  return gdbpy_ref<> (sal_obj);
 }
 
 /* Return struct symtab_and_line reference that is wrapped by this

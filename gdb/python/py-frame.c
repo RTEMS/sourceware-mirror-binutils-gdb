@@ -466,21 +466,18 @@ static PyObject *
 frapy_find_sal (PyObject *self, PyObject *args)
 {
   frame_info_ptr frame;
-  PyObject *sal_obj = NULL;   /* Initialize to appease gcc warning.  */
 
   try
     {
       FRAPY_REQUIRE_VALID (self, frame);
 
       symtab_and_line sal = find_frame_sal (frame);
-      sal_obj = symtab_and_line_to_sal_object (sal);
+      return symtab_and_line_to_sal_object (sal).release ();
     }
   catch (const gdb_exception &except)
     {
       return gdbpy_handle_gdb_exception (nullptr, except);
     }
-
-  return sal_obj;
 }
 
 /* Implementation of gdb.Frame.read_var_value (self, variable,

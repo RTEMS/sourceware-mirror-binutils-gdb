@@ -613,21 +613,17 @@ pending_framepy_find_sal (PyObject *self, PyObject *args)
 
   PENDING_FRAMEPY_REQUIRE_VALID (pending_frame);
 
-  PyObject *sal_obj = nullptr;
-
   try
     {
       frame_info_ptr frame = pending_frame->frame_info;
 
       symtab_and_line sal = find_frame_sal (frame);
-      sal_obj = symtab_and_line_to_sal_object (sal);
+      return symtab_and_line_to_sal_object (sal).release ();
     }
   catch (const gdb_exception &except)
     {
       return gdbpy_handle_gdb_exception (nullptr, except);
     }
-
-  return sal_obj;
 }
 
 /* Implement PendingFrame.block().  Return a gdb.Block for the pending
