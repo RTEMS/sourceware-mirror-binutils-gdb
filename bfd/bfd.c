@@ -280,6 +280,9 @@ CODE_FRAGMENT
 .  {* Have archive map.  *}
 .  unsigned int has_armap : 1;
 .
+.  {* Accept a mapless archive for link.  *}
+.  unsigned int link_mapless : 1;
+.
 .  {* Set if this is a thin archive.  *}
 .  unsigned int is_thin_archive : 1;
 .
@@ -523,6 +526,12 @@ EXTERNAL
 .}
 .
 .static inline bool
+.bfd_link_mapless (const bfd *abfd)
+.{
+.  return abfd->link_mapless;
+.}
+.
+.static inline bool
 .bfd_is_thin_archive (const bfd *abfd)
 .{
 .  return abfd->is_thin_archive;
@@ -540,6 +549,12 @@ EXTERNAL
 .{
 .  abfd->cacheable = val;
 .  return true;
+.}
+.
+.static inline void
+.bfd_set_link_mapless (bfd *abfd, bool val)
+.{
+.  abfd->link_mapless = val;
 .}
 .
 .static inline void
@@ -798,7 +813,7 @@ const char *const bfd_errmsgs[] =
   N_("invalid operation"),
   N_("memory exhausted"),
   N_("no symbols"),
-  N_("archive has no index; run ranlib to add one"),
+  N_("archive has no index; run ranlib to add one or use --link-mapless"),
   N_("no more archived files"),
   N_("malformed archive"),
   N_("DSO missing from command line"),

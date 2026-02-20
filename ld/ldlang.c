@@ -1209,6 +1209,7 @@ new_afile (const char *name,
   p->flags.add_DT_NEEDED_for_dynamic = input_flags.add_DT_NEEDED_for_dynamic;
   p->flags.add_DT_NEEDED_for_regular = input_flags.add_DT_NEEDED_for_regular;
   p->flags.whole_archive = input_flags.whole_archive;
+  p->flags.link_mapless = input_flags.link_mapless;
   p->flags.sysrooted = input_flags.sysrooted;
   p->sort_key = NULL;
 
@@ -3203,6 +3204,7 @@ load_symbols (lang_input_statement_type *entry,
     case bfd_archive:
       check_excluded_libs (entry->the_bfd);
 
+      bfd_set_link_mapless (entry->the_bfd, entry->flags.link_mapless);
       bfd_set_usrdata (entry->the_bfd, entry);
       if (entry->flags.whole_archive)
 	{

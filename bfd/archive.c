@@ -1046,6 +1046,12 @@ _bfd_make_armap (bfd *arch, bfd *first_one)
   bfd **last_one;
   bfd *next_one;
 
+  if (!bfd_link_mapless (arch))
+    {
+      bfd_set_error (bfd_error_no_armap);
+      return false;
+    }
+
   last_one = &(arch->archive_next);
   for (next_one = first_one;
        next_one;

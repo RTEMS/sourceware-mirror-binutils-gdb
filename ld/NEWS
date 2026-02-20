@@ -1,5 +1,11 @@
 -*- text -*-
 
+Changes in 2.47:
+
+* Add linker support for archives with no symbol index in their all formats,
+  not only XCOFF.  On by default and controlled with --no-link-mapless and
+  --link-mapless options, also for XCOFF.
+
 Changes in 2.46:
 
 * Add --gnu-tls-tag/--no-gnu-tls-tag options to i386 ELF linker to add

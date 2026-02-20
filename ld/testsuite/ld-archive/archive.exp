@@ -230,9 +230,9 @@ run_ld_link_tests [list \
     ] \
 ]
 
-# Single non-index archive tests.
+# Single non-index archive accept tests.
 run_ld_link_tests [list \
-    [list "Regular archive w/o index link" \
+    [list "Regular archive w/o index link accept" \
 	"-e ff" "tmpdir/abn.a" \
 	"" {abc.s} \
 	[ld_archive_filter_tests {{nm "" abc.nd} \
@@ -242,12 +242,38 @@ run_ld_link_tests [list \
 ]
 setup_xfail "binutils/33484" "alpha*-*-linux*ecoff*" "alpha*-*-osf*"
 run_ld_link_tests [list \
-    [list "Thin archive w/o index link" \
+    [list "Thin archive w/o index link accept" \
 	"-e ff" "tmpdir/abnt.a" \
 	"" {abc.s} \
 	[ld_archive_filter_tests {{nm "" abc.nd} \
 				  {nm "" nx.nd}}] \
 	"abntc" \
+    ] \
+]
+
+# Dual non-index archive accept tests.
+setup_xfail "binutils/33484" "alpha*-*-linux*ecoff*" "alpha*-*-osf*"
+setup_xfail "binutils/33485" "cris-*-*aout*" "i\[3-7\]86-*-bsd*" \
+    "i\[3-7\]86-*-msdos*" "ns32k-*-*" "pdp11-*-*"
+run_ld_link_tests [list \
+    [list "Regular archive w/o index plus thin link accept" \
+	"-e ff" "--no-link-mapless tmpdir/cdt.a --link-mapless tmpdir/abn.a" \
+	"" {abcde.s} \
+	[ld_archive_filter_tests {{nm "" abcde.nd} \
+				  {nm "" nx.nd} \
+				  {nm "" ny.nd}}] \
+	"abncdte" \
+    ] \
+]
+setup_xfail "binutils/33484" "alpha*-*-linux*ecoff*" "alpha*-*-osf*"
+run_ld_link_tests [list \
+    [list "Thin archive w/o index plus regular link accept" \
+	"-e ff" "--no-link-mapless tmpdir/cd.a --link-mapless tmpdir/abnt.a" \
+	"" {abcde.s} \
+	[ld_archive_filter_tests {{nm "" abcde.nd} \
+				  {nm "" nx.nd} \
+				  {nm "" ny.nd}}] \
+	"abntcde" \
     ] \
 ]
 
@@ -292,3 +318,36 @@ run_ld_link_tests [list \
 ]
 
 set LDFLAGS $old_ldflags
+
+# Alpha/VMS archives always have an index; we're done with the tests.
+if { [istarget "alpha*-*-*vms*"] } {
+    return
+}
+
+# Non-index archive reject tests.
+run_ld_link_tests [list \
+    [list "Regular archive w/o index link reject" \
+	"-e ff" "--no-link-mapless tmpdir/abn.a" \
+	"" {abc.s} \
+	{{ld abc.ed}} \
+	"abnc" \
+    ] \
+    [list "Thin archive w/o index link reject" \
+	"-e ff" "--no-link-mapless tmpdir/abnt.a" \
+	"" {abc.s} \
+	{{ld abc.ed}} \
+	"abntc" \
+    ] \
+    [list "Regular archive w/o index plus thin link reject" \
+	"-e ff" "--no-link-mapless tmpdir/abn.a --link-mapless tmpdir/cdt.a" \
+	"" {abcde.s} \
+	{{ld abc.ed}} \
+	"abncdte" \
+    ] \
+    [list "Thin archive w/o index plus regular link reject" \
+	"-e ff" "--no-link-mapless tmpdir/abnt.a --link-mapless tmpdir/cd.a" \
+	"" {abcde.s} \
+	{{ld abc.ed}} \
+	"abntcde" \
+    ] \
+]

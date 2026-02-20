@@ -2130,6 +2130,9 @@ struct bfd
   /* Have archive map.  */
   unsigned int has_armap : 1;
 
+  /* Accept a mapless archive for link.  */
+  unsigned int link_mapless : 1;
+
   /* Set if this is a thin archive.  */
   unsigned int is_thin_archive : 1;
 
@@ -2371,6 +2374,12 @@ bfd_has_map (const bfd *abfd)
 }
 
 static inline bool
+bfd_link_mapless (const bfd *abfd)
+{
+  return abfd->link_mapless;
+}
+
+static inline bool
 bfd_is_thin_archive (const bfd *abfd)
 {
   return abfd->is_thin_archive;
@@ -2388,6 +2397,12 @@ bfd_set_cacheable (bfd * abfd, bool val)
 {
   abfd->cacheable = val;
   return true;
+}
+
+static inline void
+bfd_set_link_mapless (bfd *abfd, bool val)
+{
+  abfd->link_mapless = val;
 }
 
 static inline void

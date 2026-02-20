@@ -1069,7 +1069,8 @@ restored with one corresponding @option{--pop-state} option.
 The option which are covered are: @option{-Bdynamic}, @option{-Bstatic},
 @option{-dn}, @option{-dy}, @option{-call_shared}, @option{-non_shared},
 @option{-static}, @option{-N}, @option{-n}, @option{--whole-archive},
-@option{--no-whole-archive}, @option{-r}, @option{-Ur},
+@option{--no-whole-archive}, @option{--link-mapless},
+@option{--no-link-mapless}, @option{-r}, @option{-Ur},
 @option{--copy-dt-needed-entries}, @option{--no-copy-dt-needed-entries},
 @option{--as-needed}, @option{--no-as-needed}, and @option{-a}.
 
@@ -2373,6 +2374,12 @@ library during a library search.  This option silences the warning.
 Turn off the effect of the @option{--whole-archive} option for subsequent
 archive files.
 
+@kindex --no-link-mapless
+@item --no-link-mapless
+Reject archives that lack an index aka symbol map for all the subsequent
+archives referred on the command line.  If such a file is encountered,
+a link error occurs.  This is the traditional behavior.
+
 @cindex output file after errors
 @kindex --noinhibit-exec
 @item --noinhibit-exec
@@ -3185,6 +3192,12 @@ about this option, so you have to use @option{-Wl,-whole-archive}.
 Second, don't forget to use @option{-Wl,-no-whole-archive} after your
 list of archives, because gcc will add its own list of archives to
 your link and you may not want this flag to affect those as well.
+
+@kindex --link-mapless
+@item --link-mapless
+Accept archives that lack an index aka symbol map for all the subsequent
+archives referred on the command line.  If missing, such an index is made
+internally on the fly at performance cost.  This is the default.
 
 @kindex --wrap=@var{symbol}
 @item --wrap=@var{symbol}

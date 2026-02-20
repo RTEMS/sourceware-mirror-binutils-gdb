@@ -276,6 +276,9 @@ struct lang_input_statement_flags
   /* Whether to include the entire contents of an archive.  */
   unsigned int whole_archive : 1;
 
+  /* Whether to accept archives without a symbol map.  */
+  unsigned int link_mapless : 1;
+
   /* Set when bfd opening is successful.  */
   unsigned int loaded : 1;
 

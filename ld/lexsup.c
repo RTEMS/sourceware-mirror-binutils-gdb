@@ -421,6 +421,8 @@ static const struct ld_option ld_options[] =
     TWO_DASHES},
   { {"no-whole-archive", no_argument, NULL, OPTION_NO_WHOLE_ARCHIVE},
     '\0', NULL, N_("Turn off --whole-archive"), TWO_DASHES },
+  { {"no-link-mapless", no_argument, NULL, OPTION_NO_LINK_MAPLESS},
+    '\0', NULL, N_("Reject archives without a symbol map"), TWO_DASHES },
   { {"noinhibit-exec", no_argument, NULL, OPTION_NOINHIBIT_EXEC},
     '\0', NULL, N_("Create an output file even if errors occur"),
     TWO_DASHES },
@@ -601,6 +603,9 @@ static const struct ld_option ld_options[] =
     '\0', NULL, N_("Report unresolved symbols as errors"), TWO_DASHES },
   { {"whole-archive", no_argument, NULL, OPTION_WHOLE_ARCHIVE},
     '\0', NULL, N_("Include all objects from following archives"),
+    TWO_DASHES },
+  { {"link-mapless", no_argument, NULL, OPTION_LINK_MAPLESS},
+    '\0', NULL, N_("Accept archives without a symbol map"),
     TWO_DASHES },
   { {"wrap", required_argument, NULL, OPTION_WRAP},
     '\0', N_("SYMBOL"), N_("Use wrapper functions for SYMBOL"), TWO_DASHES },
@@ -1177,6 +1182,9 @@ parse_args (unsigned argc, char **argv)
 	case OPTION_NO_WHOLE_ARCHIVE:
 	  input_flags.whole_archive = false;
 	  break;
+	case OPTION_NO_LINK_MAPLESS:
+	  input_flags.link_mapless = false;
+	  break;
 	case 'O':
 	  /* FIXME "-O<non-digits> <value>" used to set the address of
 	     section <non-digits>.  Was this for compatibility with
@@ -1656,6 +1664,9 @@ parse_args (unsigned argc, char **argv)
 	  break;
 	case OPTION_WHOLE_ARCHIVE:
 	  input_flags.whole_archive = true;
+	  break;
+	case OPTION_LINK_MAPLESS:
+	  input_flags.link_mapless = true;
 	  break;
 	case OPTION_ADD_DT_NEEDED_FOR_DYNAMIC:
 	  input_flags.add_DT_NEEDED_for_dynamic = true;
