@@ -480,7 +480,7 @@ pending_framepy_read_register (PyObject *self, PyObject *args, PyObject *kw)
   if (!gdbpy_parse_register_id (pending_frame->gdbarch, pyo_reg_id, &regnum))
     return nullptr;
 
-  PyObject *result = nullptr;
+  gdbpy_ref<> result;
   try
     {
       scoped_value_mark free_values;
@@ -504,7 +504,7 @@ pending_framepy_read_register (PyObject *self, PyObject *args, PyObject *kw)
       return gdbpy_handle_gdb_exception (nullptr, except);
     }
 
-  return result;
+  return result.release ();
 }
 
 /* Implement PendingFrame.is_valid().  Return True if this pending frame

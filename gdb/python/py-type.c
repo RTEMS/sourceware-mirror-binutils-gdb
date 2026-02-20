@@ -1045,7 +1045,7 @@ typy_template_argument (PyObject *self, PyObject *args)
       return NULL;
     }
 
-  PyObject *result = nullptr;
+  gdbpy_ref<> result;
   try
     {
       scoped_value_mark free_values;
@@ -1057,7 +1057,7 @@ typy_template_argument (PyObject *self, PyObject *args)
       return gdbpy_handle_gdb_exception (nullptr, except);
     }
 
-  return result;
+  return result.release ();
 }
 
 /* __repr__ implementation for gdb.Type.  */
@@ -1236,7 +1236,7 @@ typy_optimized_out (PyObject *self, PyObject *args)
   struct type *type = ((type_object *) self)->type;
 
   scoped_value_mark free_values;
-  return value_to_value_object (value::allocate_optimized_out (type));
+  return value_to_value_object (value::allocate_optimized_out (type)).release ();
 }
 
 /* Return a gdb.Field object for the field named by the argument.  */
