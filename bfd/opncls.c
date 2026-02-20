@@ -193,6 +193,7 @@ _bfd_free_cached_info (bfd *abfd)
   abfd->outsymbols = NULL;
   abfd->tdata.any = NULL;
   abfd->usrdata = NULL;
+  abfd->format = bfd_unknown;
 
   return true;
 }
@@ -1027,7 +1028,6 @@ bfd_make_readable (bfd *abfd)
   abfd->arch_info = &bfd_default_arch_struct;
 
   abfd->where = 0;
-  abfd->format = bfd_unknown;
   abfd->my_archive = NULL;
   abfd->origin = 0;
   abfd->opened_once = false;
