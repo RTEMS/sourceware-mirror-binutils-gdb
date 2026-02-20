@@ -1937,9 +1937,8 @@ xcoff64_archive_p (bfd *abfd)
 
   bfd_ardata (abfd)->tdata = (void *) ((struct artdata *) bfd_ardata (abfd) + 1);
 
-  bfd_ardata (abfd)->first_file_filepos = bfd_scan_vma (hdr.firstmemoff,
-							(const char **) NULL,
-							10);
+  bfd_ardata (abfd)->first_file.file_offset
+    = bfd_scan_vma (hdr.firstmemoff, (const char **) NULL, 10);
 
   memcpy (&x_artdata (abfd)->u.bhdr, &hdr, SIZEOF_AR_FILE_HDR_BIG);
 

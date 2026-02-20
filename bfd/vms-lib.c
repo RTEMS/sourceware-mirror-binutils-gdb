@@ -1553,7 +1553,7 @@ _bfd_vms_lib_openr_next_archived_file (bfd *archive,
   if (!last_file)
     idx = 0;
   else
-    idx = last_file->proxy_origin + 1;
+    idx = last_file->proxy_handle.file_offset + 1;
 
   if (idx >= bfd_libdata (archive)->nbr_modules)
     {
@@ -1564,7 +1564,7 @@ _bfd_vms_lib_openr_next_archived_file (bfd *archive,
   res = _bfd_vms_lib_get_module (archive, idx);
   if (res == NULL)
     return res;
-  res->proxy_origin = idx;
+  res->proxy_handle.file_offset = idx;
   return res;
 }
 
@@ -1890,11 +1890,13 @@ vms_write_index (bfd *abfd,
 		  struct vms_rfa *rfa;
 
 		  rfa = (struct vms_rfa *)(rblk[j]->keys + blk[j].len);
-		  bfd_putl32 ((idx->abfd->proxy_origin / VMS_BLOCK_SIZE) + 1,
-			      rfa->vbn);
+		  bfd_putl32
+		    (((idx->abfd->proxy_handle.file_offset / VMS_BLOCK_SIZE)
+		      + 1),
+		     rfa->vbn);
 		  bfd_putl16
-		    ((idx->abfd->proxy_origin % VMS_BLOCK_SIZE)
-		     + (is_elfidx ? 0 : DATA__DATA),
+		    (((idx->abfd->proxy_handle.file_offset % VMS_BLOCK_SIZE)
+		      + (is_elfidx ? 0 : DATA__DATA)),
 		     rfa->offset);
 
 		  if (is_elfidx)
@@ -2212,7 +2214,7 @@ _bfd_vms_lib_write_archive_contents (bfd *arch)
       unsigned int sz;
 
       current = modules[i].abfd;
-      current->proxy_origin = off;
+      current->proxy_handle.file_offset = off;
 
       if (is_elfidx)
 	sz = 0;

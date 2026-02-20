@@ -741,7 +741,7 @@ _bfd_get_elt_at_filepos (bfd *archive, file_ptr filepos,
 	  n_bfd = _bfd_get_elt_at_filepos (ext_arch, origin, info);
 	  if (n_bfd == NULL)
 	    return NULL;
-	  n_bfd->proxy_origin = bfd_tell (archive);
+	  n_bfd->proxy_handle.file_offset = bfd_tell (archive);
 
 	  /* Copy BFD_COMPRESS, BFD_DECOMPRESS and BFD_COMPRESS_GABI
 	     flags.  */
@@ -788,7 +788,7 @@ _bfd_get_elt_at_filepos (bfd *archive, file_ptr filepos,
       return NULL;
     }
 
-  n_bfd->proxy_origin = bfd_tell (archive);
+  n_bfd->proxy_handle.file_offset = bfd_tell (archive);
 
   if (bfd_is_thin_archive (archive))
     {
@@ -796,7 +796,7 @@ _bfd_get_elt_at_filepos (bfd *archive, file_ptr filepos,
     }
   else
     {
-      n_bfd->origin = n_bfd->proxy_origin;
+      n_bfd->origin = n_bfd->proxy_handle.file_offset;
       if (!bfd_set_filename (n_bfd, filename))
 	goto out;
     }
@@ -878,10 +878,10 @@ bfd_generic_openr_next_archived_file (bfd *archive, bfd *last_file)
   ufile_ptr filestart;
 
   if (!last_file)
-    filestart = bfd_ardata (archive)->first_file_filepos;
+    filestart = bfd_ardata (archive)->first_file.file_offset;
   else
     {
-      filestart = last_file->proxy_origin;
+      filestart = last_file->proxy_handle.file_offset;
       if (! bfd_is_thin_archive (archive))
 	{
 	  bfd_size_type size = arelt_size (last_file);
@@ -891,7 +891,7 @@ bfd_generic_openr_next_archived_file (bfd *archive, bfd *last_file)
 	     Note that last_file->origin can be odd in the case of
 	     BSD-4.4-style element with a long odd size.  */
 	  filestart += filestart % 2;
-	  if (filestart < last_file->proxy_origin)
+	  if (filestart < last_file->proxy_handle.file_offset)
 	    {
 	      /* Prevent looping.  See PR19256.  */
 	      bfd_set_error (bfd_error_malformed_archive);
@@ -937,7 +937,7 @@ bfd_generic_archive_p (bfd *abfd)
   if (bfd_ardata (abfd) == NULL)
     return NULL;
 
-  bfd_ardata (abfd)->first_file_filepos = SARMAG;
+  bfd_ardata (abfd)->first_file.file_offset = SARMAG;
 
   if (!BFD_SEND (abfd, _bfd_slurp_armap, (abfd))
       || !BFD_SEND (abfd, _bfd_slurp_extended_name_table, (abfd)))
@@ -1153,9 +1153,9 @@ do_slurp_bsd_armap (bfd *abfd)
       set->u.file_offset = H_GET_32 (abfd, rbase + BSD_SYMDEF_OFFSET_SIZE);
     }
 
-  ardata->first_file_filepos = bfd_tell (abfd);
+  ardata->first_file.file_offset = bfd_tell (abfd);
   /* Pad to an even boundary if you have to.  */
-  ardata->first_file_filepos += (ardata->first_file_filepos) % 2;
+  ardata->first_file.file_offset += (ardata->first_file.file_offset) % 2;
   /* FIXME, we should provide some way to free raw_ardata when
      we are done using the strings from it.  For now, it seems
      to be allocated on an objalloc anyway...  */
@@ -1260,10 +1260,10 @@ do_slurp_coff_armap (bfd *abfd)
     }
 
   ardata->symdef_count = nsymz;
-  ardata->first_file_filepos = bfd_tell (abfd);
+  ardata->first_file.file_offset = bfd_tell (abfd);
   /* Pad to an even boundary if you have to.  */
-  ardata->first_file_filepos += (ardata->first_file_filepos) % 2;
-  if (bfd_seek (abfd, ardata->first_file_filepos, SEEK_SET) != 0)
+  ardata->first_file.file_offset += (ardata->first_file.file_offset) % 2;
+  if (bfd_seek (abfd, ardata->first_file.file_offset, SEEK_SET) != 0)
     goto release_symdefs;
 
   abfd->has_armap = true;
@@ -1275,7 +1275,7 @@ do_slurp_coff_armap (bfd *abfd)
     {
       if (tmp->arch_header[0] == '/'
 	  && tmp->arch_header[1] == ' ')
-	ardata->first_file_filepos
+	ardata->first_file.file_offset
 	  += (tmp->parsed_size + sizeof (struct ar_hdr) + 1) & ~(unsigned) 1;
       free (tmp);
     }
@@ -1379,7 +1379,8 @@ _bfd_slurp_extended_name_table (bfd *abfd)
 
   /* FIXME:  Formatting sucks here, and in case of failure of BFD_READ,
      we probably don't want to return TRUE.  */
-  if (bfd_seek (abfd, bfd_ardata (abfd)->first_file_filepos, SEEK_SET) != 0)
+  if (bfd_seek (abfd, bfd_ardata (abfd)->first_file.file_offset,
+		SEEK_SET) != 0)
     return false;
 
   if (bfd_read (nextname, 16, abfd) == 16)
@@ -1453,9 +1454,9 @@ _bfd_slurp_extended_name_table (bfd *abfd)
       }
 
       /* Pad to an even boundary if you have to.  */
-      bfd_ardata (abfd)->first_file_filepos = bfd_tell (abfd);
-      bfd_ardata (abfd)->first_file_filepos +=
-	(bfd_ardata (abfd)->first_file_filepos) % 2;
+      bfd_ardata (abfd)->first_file.file_offset = bfd_tell (abfd);
+      bfd_ardata (abfd)->first_file.file_offset +=
+	(bfd_ardata (abfd)->first_file.file_offset) % 2;
 
       free (namedata);
     }

@@ -2176,12 +2176,13 @@ struct bfd
      contained in an archive.  */
   ufile_ptr origin;
 
-  /* The origin in the archive of the proxy entry.  This will
+  /* A reference in the archive for the proxy entry.  This will
      normally be the same as origin, except for thin archives,
      when it will contain the current offset of the proxy in the
      thin archive rather than the offset of the bfd in its actual
-     container.  */
-  ufile_ptr proxy_origin;
+     container.  Room for a BFD pointer is alternatively provided
+     for future use.  */
+  ufile_ptr_or_bfd proxy_handle;
 
   /* A hash table for section names.  */
   struct bfd_hash_table section_htab;

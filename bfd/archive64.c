@@ -138,9 +138,9 @@ _bfd_archive_64_bit_slurp_armap (bfd *abfd)
     }
 
   ardata->symdef_count = nsymz;
-  ardata->first_file_filepos = bfd_tell (abfd);
+  ardata->first_file.file_offset = bfd_tell (abfd);
   /* Pad to an even boundary if you have to.  */
-  ardata->first_file_filepos += (ardata->first_file_filepos) % 2;
+  ardata->first_file.file_offset += (ardata->first_file.file_offset) % 2;
 
   abfd->has_armap = true;
   bfd_release (abfd, raw_armap);

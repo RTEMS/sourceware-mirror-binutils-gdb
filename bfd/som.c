@@ -6163,7 +6163,7 @@ som_slurp_armap (bfd *abfd)
     }
 
   /* Save off the file offset of the first real user data.  */
-  ardata->first_file_filepos = bfd_tell (abfd) + parsed_size;
+  ardata->first_file.file_offset = bfd_tell (abfd) + parsed_size;
 
   /* Read in the library symbol table.  We'll make heavy use of this
      in just a minute.  */
@@ -6185,7 +6185,7 @@ som_slurp_armap (bfd *abfd)
     return false;
 
   /* Get back to the start of the library symbol table.  */
-  if (bfd_seek (abfd, (ardata->first_file_filepos - parsed_size
+  if (bfd_seek (abfd, (ardata->first_file.file_offset - parsed_size
 		       + sizeof (struct som_external_lst_header)),
 		SEEK_SET) != 0)
     return false;
@@ -6207,7 +6207,7 @@ som_slurp_armap (bfd *abfd)
 
   /* Seek back to the "first" file in the archive.  Note the "first"
      file may be the extended name table.  */
-  if (bfd_seek (abfd, ardata->first_file_filepos, SEEK_SET) != 0)
+  if (bfd_seek (abfd, ardata->first_file.file_offset, SEEK_SET) != 0)
     return false;
 
   /* Notify the generic archive code that we have a symbol map.  */

@@ -1542,7 +1542,7 @@ _bfd_xcoff_archive_p (bfd *abfd)
 	  goto error_ret;
 	}
 
-      GET_VALUE_IN_FIELD (bfd_ardata (abfd)->first_file_filepos,
+      GET_VALUE_IN_FIELD (bfd_ardata (abfd)->first_file.file_offset,
 			  hdr.firstmemoff, 10);
 
       memcpy (&x_artdata (abfd)->u.hdr, &hdr, SIZEOF_AR_FILE_HDR);
@@ -1564,9 +1564,8 @@ _bfd_xcoff_archive_p (bfd *abfd)
 	  goto error_ret;
 	}
 
-      bfd_ardata (abfd)->first_file_filepos = bfd_scan_vma (hdr.firstmemoff,
-							    (const char **) 0,
-							    10);
+      bfd_ardata (abfd)->first_file.file_offset
+	= bfd_scan_vma (hdr.firstmemoff, (const char **) 0, 10);
 
       memcpy (&x_artdata (abfd)->u.bhdr, &hdr, SIZEOF_AR_FILE_HDR_BIG);
     }
@@ -1780,7 +1779,7 @@ _bfd_xcoff_openr_next_archived_file (bfd *archive, bfd *last_file)
 	  x_artdata (archive)->ranges.end = SIZEOF_AR_FILE_HDR;
 	  x_artdata (archive)->ranges.next = NULL;
 	  x_artdata (archive)->ar_hdr_size = SIZEOF_AR_HDR;
-	  filestart = bfd_ardata (archive)->first_file_filepos;
+	  filestart = bfd_ardata (archive)->first_file.file_offset;
 	}
       else
 	GET_VALUE_IN_FIELD (filestart, arch_xhdr (last_file)->nextoff, 10);
@@ -1803,7 +1802,7 @@ _bfd_xcoff_openr_next_archived_file (bfd *archive, bfd *last_file)
 	  x_artdata (archive)->ranges.end = SIZEOF_AR_FILE_HDR_BIG;
 	  x_artdata (archive)->ranges.next = NULL;
 	  x_artdata (archive)->ar_hdr_size = SIZEOF_AR_HDR_BIG;
-	  filestart = bfd_ardata (archive)->first_file_filepos;
+	  filestart = bfd_ardata (archive)->first_file.file_offset;
 	}
       else
 	GET_VALUE_IN_FIELD (filestart, arch_xhdr_big (last_file)->nextoff, 10);
@@ -1825,7 +1824,7 @@ _bfd_xcoff_openr_next_archived_file (bfd *archive, bfd *last_file)
      archive element cache until the next element is opened.  */
   if (last_file != NULL)
     {
-      ufile_ptr laststart = last_file->proxy_origin;
+      ufile_ptr laststart = last_file->proxy_handle.file_offset;
       laststart -= x_artdata (archive)->ar_hdr_size;
       laststart -= arch_eltdata (last_file)->extra_size;
       if (filestart == laststart)
