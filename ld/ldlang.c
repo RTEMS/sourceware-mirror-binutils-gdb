@@ -2983,6 +2983,31 @@ check_section_callback (lang_wild_statement_type *ptr ATTRIBUTE_UNUSED,
     os->all_input_readonly = false;
 }
 
+/* Build a new input file node and arrange to splice the input statement
+   added into statement_list after the current input_file_chain tail.  */
+
+static lang_input_statement_type *
+insert_input_file (const char *name,
+		   lang_input_file_enum_type file_type,
+		   const char *target)
+{
+  lang_statement_union_type **tail = stat_ptr->tail;
+  lang_statement_union_type **after
+    = (void *) ((char *) input_file_chain.tail
+		- offsetof (lang_input_statement_type, next_real_file)
+		+ offsetof (lang_input_statement_type, header.next));
+  lang_statement_union_type *rest = *after;
+  lang_input_statement_type *p;
+
+  stat_ptr->tail = after;
+  p = new_afile (name, file_type, target, NULL);
+  *stat_ptr->tail = rest;
+  if (*tail == NULL)
+    stat_ptr->tail = tail;
+
+  return p;
+}
+
 /* This is passed a file name which must have been seen already and
    added to the statement tree.  We will see if it has been opened
    already and had its symbols read.  If not then we'll read it.  */
@@ -3008,23 +3033,11 @@ lookup_name (const char *name)
 
   if (search == NULL)
     {
-      /* Arrange to splice the input statement added by new_afile into
-	 statement_list after the current input_file_chain tail.
-	 We know input_file_chain is not an empty list, and that
+      /* We know input_file_chain is not an empty list, and that
 	 lookup_name was called via open_input_bfds.  Later calls to
 	 lookup_name should always match an existing input_statement.  */
-      lang_statement_union_type **tail = stat_ptr->tail;
-      lang_statement_union_type **after
-	= (void *) ((char *) input_file_chain.tail
-		    - offsetof (lang_input_statement_type, next_real_file)
-		    + offsetof (lang_input_statement_type, header.next));
-      lang_statement_union_type *rest = *after;
-      stat_ptr->tail = after;
-      search = new_afile (name, lang_input_file_is_search_file_enum,
-			  default_target, NULL);
-      *stat_ptr->tail = rest;
-      if (*tail == NULL)
-	stat_ptr->tail = tail;
+      search = insert_input_file (name, lang_input_file_is_search_file_enum,
+				  default_target);
       ASSERT (search != NULL);
     }
 
