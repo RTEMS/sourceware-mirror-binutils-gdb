@@ -673,7 +673,7 @@ char *
 _bfd_append_relative_path (bfd *arch, char *elt_name)
 {
   const char *arch_name = bfd_get_filename (arch);
-  const char *base_name = lbasename (arch_name);
+  const char *base_name = arch_name != NULL ? lbasename (arch_name) : NULL;
   size_t prefix_len;
   char *filename;
 

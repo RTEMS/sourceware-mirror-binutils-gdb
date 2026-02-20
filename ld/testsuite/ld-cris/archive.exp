@@ -90,6 +90,24 @@ run_ld_link_tests [list \
 	 {nm "" ../ld-archive/nx.nd}} \
 	"abci" \
     ] \
+    [list "CRIS fake archive link (explicit emulation)" \
+	"$ldemul -e ff" "--start-lib tmpdir/a.o tmpdir/b.o tmpdir/x.o\
+			 --end-lib --verbose --print-map" \
+	"$asemul" {../ld-archive/abc.s} \
+	{{ld ../ld-archive/abfc.vd} \
+	 {nm "" ../ld-archive/abc.nd} \
+	 {nm "" ../ld-archive/nx.nd}} \
+	"abfcx" \
+    ] \
+    [list "CRIS fake archive link (implicit emulation)" \
+	"-e ff" "--start-lib tmpdir/a.o tmpdir/b.o tmpdir/x.o --end-lib\
+		 --verbose --print-map" \
+	"$asemul" {../ld-archive/abc.s} \
+	{{ld ../ld-archive/abfc.vd} \
+	 {nm "" ../ld-archive/abc.nd} \
+	 {nm "" ../ld-archive/nx.nd}} \
+	"abfci" \
+    ] \
 ]
 # PR binutils/33485 hits with the aout archive format and with this
 # test that format is used with non-aout targets, hence the reverse

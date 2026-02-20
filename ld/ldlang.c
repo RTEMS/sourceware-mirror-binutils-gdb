@@ -21,6 +21,7 @@
 #include "sysdep.h"
 #include <limits.h>
 #include "bfd.h"
+#include "libbfd.h"
 #include "libiberty.h"
 #include "filenames.h"
 #include "safe-ctype.h"
@@ -1118,6 +1119,11 @@ lang_for_each_statement_worker (void (*func) (lang_statement_union_type *),
 					  s->group_statement.children.head,
 					  constrained);
 	  break;
+	case lang_lib_statement_enum:
+	  lang_for_each_statement_worker (func,
+					  s->lib_statement.children.head,
+					  constrained);
+	  break;
 	case lang_data_statement_enum:
 	case lang_reloc_statement_enum:
 	case lang_object_symbols_statement_enum:
@@ -1224,6 +1230,25 @@ new_afile (const char *name,
     case lang_input_file_is_fake_enum:
       p->filename = name;
       p->local_sym_name = name;
+      break;
+    case lang_input_file_is_fake_archive_enum:
+      p->filename = name;
+      p->flags.link_mapless = true;
+      break;
+    case lang_input_file_is_search_member_enum:
+      p->filename = name;
+      p->local_sym_name = name;
+      /* If name is a relative path, search the directory of the current linker
+	 script first. */
+      if (from_filename && !IS_ABSOLUTE_PATH (name))
+	p->extra_search_path = stat_ldirname (from_filename);
+      p->flags.member = true;
+      p->flags.search_dirs = true;
+      break;
+    case lang_input_file_is_member_enum:
+      p->filename = name;
+      p->local_sym_name = name;
+      p->flags.member = true;
       break;
     case lang_input_file_is_l_enum:
       if (name[0] == ':' && name[1] != '\0')
@@ -1998,6 +2023,7 @@ insert_os_after (lang_statement_union_type *after)
 	case lang_output_statement_enum:
 	case lang_group_statement_enum:
 	case lang_insert_statement_enum:
+	case lang_lib_statement_enum:
 	  continue;
 	case lang_input_matcher_enum:
 	  FAIL ();
@@ -3796,6 +3822,54 @@ open_input_bfds (lang_statement_union_type *s,
 	  if (s->assignment_statement.exp->type.node_class != etree_assert)
 	    exp_fold_tree_no_dot (s->assignment_statement.exp, os);
 	  break;
+	case lang_lib_statement_enum:
+	  {
+	    lang_statement_union_type *c;
+	    bfd *first_bfd = NULL, **next_bfd = &first_bfd;
+
+	    for (c = s->lib_statement.children.head;
+		 c != NULL;
+		 c = c->header.next)
+	      if (c->header.type == lang_input_statement_enum
+		  && c->input_statement.flags.member)
+		{
+		  bfd *abfd;
+
+		  c->input_statement.target = current_target;
+		  ldfile_open_file (&c->input_statement);
+		  abfd = c->input_statement.the_bfd;
+		  if (abfd != NULL)
+		    {
+		      *next_bfd = abfd;
+		      next_bfd = &abfd->proxy_handle.abfd;
+		    }
+		}
+
+	    if (first_bfd != NULL)
+	      {
+		lang_input_statement_type *h, *p;
+		bfd *fake_bfd;
+
+		h = &s->lib_statement.children.head->input_statement;
+		p = insert_input_file (NULL,
+				       lang_input_file_is_fake_archive_enum,
+				       h->target);
+		ASSERT (p != NULL);
+
+		fake_bfd = bfd_openr_fake_archive (first_bfd);
+		if (fake_bfd == NULL)
+		  fatal
+		    (_("cannot create --start-lib/--end-lib wrapper BFD:"
+		       " %E\n"));
+		p->the_bfd = fake_bfd;
+
+		if (!load_symbols (p, NULL))
+		  config.make_executable = false;
+	      }
+
+	    open_input_bfds (s->lib_statement.children.head, os, mode,
+			     nested_group_count_p);
+	  }
 	default:
 	  break;
 	}
@@ -4256,6 +4330,12 @@ check_input_sections
 	  if (!output_section_statement->all_input_readonly)
 	    return;
 	  break;
+	case lang_lib_statement_enum:
+	  check_input_sections (s->lib_statement.children.head,
+				output_section_statement);
+	  if (!output_section_statement->all_input_readonly)
+	    return;
+	  break;
 	default:
 	  break;
 	}
@@ -4378,6 +4458,8 @@ map_input_to_output_sections
 	  map_input_to_output_sections (s->group_statement.children.head,
 					target,
 					os);
+	  break;
+	case lang_lib_statement_enum:
 	  break;
 	case lang_data_statement_enum:
 	  if (os == NULL)
@@ -5421,6 +5503,17 @@ print_group (lang_group_statement_type *s,
   fprintf (config.map_file, "END GROUP\n");
 }
 
+/* Print a lib statement.  */
+
+static void
+print_lib (lang_lib_statement_type *s,
+	   lang_output_section_statement_type *os)
+{
+  fprintf (config.map_file, "START LIB\n");
+  print_statement_list (s->children.head, os);
+  fprintf (config.map_file, "END LIB\n");
+}
+
 /* Print the list of statements in S.
    This can be called for any statement type.  */
 
@@ -5502,6 +5595,9 @@ print_statement (lang_statement_union_type *s,
       break;
     case lang_group_statement_enum:
       print_group (&s->group_statement, os);
+      break;
+    case lang_lib_statement_enum:
+      print_lib (&s->lib_statement, os);
       break;
     case lang_insert_statement_enum:
       minfo ("INSERT %s %s\n",
@@ -6515,6 +6611,9 @@ lang_size_sections_1
 	case lang_address_statement_enum:
 	  break;
 
+	case lang_lib_statement_enum:
+	  break;
+
 	default:
 	  FAIL ();
 	  break;
@@ -6908,6 +7007,9 @@ lang_do_assignments_1 (lang_statement_union_type *s,
 	  break;
 
 	case lang_address_statement_enum:
+	  break;
+
+	case lang_lib_statement_enum:
 	  break;
 
 	default:
@@ -9197,6 +9299,35 @@ lang_enter_group (void)
 void
 lang_leave_group (void)
 {
+  pop_stat_ptr ();
+}
+
+/* Enter an artificial library.  This creates a new lang_lib_statement,
+   and sets stat_ptr to build new statements within the library.  */
+
+void
+lang_enter_lib (void)
+{
+  lang_lib_statement_type *l;
+
+  ASSERT (!input_flags.fake_archive);
+  l = new_stat (lang_lib_statement, stat_ptr);
+  lang_list_init (&l->children);
+  push_stat_ptr (&l->children);
+  input_flags.fake_archive = true;
+}
+
+/* Leave an artificial library.  This just resets stat_ptr to start
+   writing to the regular list of statements again.  We only support
+   a single level of artificial libraries (i.e. they can't be nested
+   in one another) and they need to be wholly contained in any group,
+   so there's no issue with getting stat_ptr messed up.  */
+
+void
+lang_leave_lib (void)
+{
+  ASSERT (input_flags.fake_archive);
+  input_flags.fake_archive = false;
   pop_stat_ptr ();
 }
 

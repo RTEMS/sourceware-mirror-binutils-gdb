@@ -1485,6 +1485,8 @@ _bfd_vms_lib_get_elt_at_index (bfd *abfd, symindex symidx)
   /* Check symidx.  */
   if (symidx > tdata->artdata.symdef_count)
     return NULL;
+  if (tdata->artdata.symdef_use_bfd)
+    return tdata->artdata.symdefs[symidx].u.abfd;
   file_off = tdata->artdata.symdefs[symidx].u.file_offset;
 
   /* Linear-scan.  */

@@ -86,6 +86,23 @@ run_ld_link_tests [list \
 				  {nm "" nx.nd}}] \
 	"abtc" \
     ] \
+    [list "Fake archive link" \
+	"-e ff" "--start-lib tmpdir/a.o tmpdir/b.o tmpdir/x.o --end-lib\
+		 --verbose --print-map" \
+	"" {abc.s} \
+	[ld_archive_filter_tests {{ld abfc.vd} \
+				  {nm "" abc.nd} \
+				  {nm "" nx.nd}}] \
+	"abfc" \
+    ] \
+    [list "Script fake archive link" \
+	"-e ff" "$srcdir/$subdir/ab.t --verbose --print-map" \
+	"" {abc.s} \
+	[ld_archive_filter_tests {{ld absc.vd} \
+				  {nm "" abc.nd} \
+				  {nm "" nx.nd}}] \
+	"absc" \
+    ] \
 ]
 
 # Single whole archive tests.
@@ -113,6 +130,24 @@ run_ld_link_tests [list \
 				  {nm "" x.nd}}] \
 	"abwtc" \
     ] \
+    [list "Fake whole archive link" \
+	"-e ff" "--whole-archive\
+		 --start-lib tmpdir/a.o tmpdir/b.o tmpdir/x.o --end-lib\
+		 --verbose --print-map" \
+	"" {abc.s} \
+	[ld_archive_filter_tests {{ld abwfc.vd} \
+				  {nm "" abc.nd} \
+				  {nm "" x.nd}}] \
+	"abwfc" \
+    ] \
+    [list "Script fake whole archive link" \
+	"-e ff" "--whole-archive $srcdir/$subdir/ab.t --verbose --print-map" \
+	"" {abc.s} \
+	[ld_archive_filter_tests {{ld abwsc.vd} \
+				  {nm "" abc.nd} \
+				  {nm "" x.nd}}] \
+	"abwsc" \
+    ] \
 ]
 
 # Group archive tests.
@@ -128,6 +163,19 @@ run_ld_link_tests [list \
 	"" {} \
 	{{ld abcn.ed}} \
 	"abtctn" \
+    ] \
+    [list "Fake non-group archive link reject" \
+	"-e ff --start-lib tmpdir/a.o tmpdir/b.o tmpdir/x.o --end-lib\
+	 --start-lib" "--end-lib" \
+	"" {abc.s} \
+	{{ld abcn.ed}} \
+	"abfcfn" \
+    ] \
+    [list "Script fake non-group archive link reject" \
+	"-e ff $srcdir/$subdir/ab.t --start-lib" "--end-lib" \
+	"" {abc.s} \
+	{{ld abcn.ed}} \
+	"abscfn" \
     ] \
     [list "Regular group archive link accept" \
 	"-e ff -\\( tmpdir/ab.a" "tmpdir/abc.a -\\) --verbose --print-map" \
@@ -154,6 +202,24 @@ run_ld_link_tests [list \
 				  {nm "" nx.nd}}] \
 	"abtctg" \
     ] \
+    [list "Fake group archive link accept" \
+	"-e ff -\\( --start-lib tmpdir/a.o tmpdir/b.o tmpdir/x.o --end-lib\
+	 --start-lib" "--end-lib -\\) --verbose --print-map" \
+	"" {abc.s} \
+	[ld_archive_filter_tests {{ld abfcfg.vd} \
+				  {nm "" abc.nd} \
+				  {nm "" nx.nd}}] \
+	"abfcfg" \
+    ] \
+    [list "Script fake group archive link accept" \
+	"-e ff -\\( $srcdir/$subdir/ab.t\
+	 --start-lib" "--end-lib -\\) --verbose --print-map" \
+	"" {abc.s} \
+	[ld_archive_filter_tests {{ld abscfg.vd} \
+				  {nm "" abc.nd} \
+				  {nm "" nx.nd}}] \
+	"abscfg" \
+    ] \
 ]
 
 # Dual archive tests.
@@ -178,6 +244,23 @@ run_ld_link_tests [list \
 				  {nm "" nx.nd} \
 				  {nm "" ny.nd}}] \
 	"abcdte" \
+    ] \
+    [list "Regular archive plus fake link" \
+	"-e ff" "tmpdir/ab.a\
+		 --start-lib tmpdir/c.o tmpdir/d.o tmpdir/y.o --end-lib" \
+	"" {abcde.s} \
+	[ld_archive_filter_tests {{nm "" abcde.nd} \
+				  {nm "" nx.nd} \
+				  {nm "" ny.nd}}] \
+	"abcdfe" \
+    ] \
+    [list "Regular archive plus script fake link" \
+	"-e ff" "tmpdir/ab.a $srcdir/$subdir/cd.t" \
+	"" {abcde.s} \
+	[ld_archive_filter_tests {{nm "" abcde.nd} \
+				  {nm "" nx.nd} \
+				  {nm "" ny.nd}}] \
+	"abcdse" \
     ] \
 ]
 setup_xfail "binutils/33484" "alpha*-*-linux*ecoff*" "alpha*-*-osf*"
@@ -206,6 +289,81 @@ run_ld_link_tests [list \
 	"abtcdte" \
     ] \
 ]
+setup_xfail "binutils/33484" "alpha*-*-linux*ecoff*" "alpha*-*-osf*"
+setup_xfail "binutils/33485" "cris-*-*aout*" "i\[3-7\]86-*-bsd*" \
+    "i\[3-7\]86-*-msdos*" "ns32k-*-*" "pdp11-*-*"
+run_ld_link_tests [list \
+    [list "Thin archive plus fake link" \
+	"-e ff" "tmpdir/abt.a\
+		 --start-lib tmpdir/c.o tmpdir/d.o tmpdir/y.o --end-lib" \
+	"" {abcde.s} \
+	[ld_archive_filter_tests {{nm "" abcde.nd} \
+				  {nm "" nx.nd} \
+				  {nm "" ny.nd}}] \
+	"abtcdfe" \
+    ] \
+]
+setup_xfail "binutils/33484" "alpha*-*-linux*ecoff*" "alpha*-*-osf*"
+setup_xfail "binutils/33485" "cris-*-*aout*" "i\[3-7\]86-*-bsd*" \
+    "i\[3-7\]86-*-msdos*" "ns32k-*-*" "pdp11-*-*"
+run_ld_link_tests [list \
+    [list "Thin archive plus script fake link" \
+	"-e ff" "tmpdir/abt.a $srcdir/$subdir/cd.t" \
+	"" {abcde.s} \
+	[ld_archive_filter_tests {{nm "" abcde.nd} \
+				  {nm "" nx.nd} \
+				  {nm "" ny.nd}}] \
+	"abtcdse" \
+    ] \
+    [list "Fake archive plus regular link" \
+	"-e ff" "--start-lib tmpdir/a.o tmpdir/b.o tmpdir/x.o --end-lib\
+		 tmpdir/cd.a" \
+	"" {abcde.s} \
+	[ld_archive_filter_tests {{nm "" abcde.nd} \
+				  {nm "" nx.nd} \
+				  {nm "" ny.nd}}] \
+	"abfcde" \
+    ] \
+    [list "Script fake archive plus regular link" \
+	"-e ff" "$srcdir/$subdir/ab.t tmpdir/cd.a" \
+	"" {abcde.s} \
+	[ld_archive_filter_tests {{nm "" abcde.nd} \
+				  {nm "" nx.nd} \
+				  {nm "" ny.nd}}] \
+	"abscde" \
+    ] \
+]
+setup_xfail "binutils/33484" "alpha*-*-linux*ecoff*" "alpha*-*-osf*"
+setup_xfail "binutils/33485" "cris-*-*aout*" "i\[3-7\]86-*-bsd*" \
+    "i\[3-7\]86-*-msdos*" "ns32k-*-*" "pdp11-*-*"
+run_ld_link_tests [list \
+    [list "Fake archive plus thin link" \
+	"-e ff" "--start-lib tmpdir/a.o tmpdir/b.o tmpdir/x.o --end-lib\
+		 tmpdir/cdt.a" \
+	"" {abcde.s} \
+	[ld_archive_filter_tests {{nm "" abcde.nd} \
+				  {nm "" nx.nd} \
+				  {nm "" ny.nd}}] \
+	"abfcdte" \
+    ] \
+    [list "Fake archive plus fake link" \
+	"-e ff" "--start-lib tmpdir/a.o tmpdir/b.o tmpdir/x.o --end-lib\
+		 --start-lib tmpdir/c.o tmpdir/d.o tmpdir/y.o --end-lib" \
+	"" {abcde.s} \
+	[ld_archive_filter_tests {{nm "" abcde.nd} \
+				  {nm "" nx.nd} \
+				  {nm "" ny.nd}}] \
+	"abfcdfe" \
+    ] \
+    [list "Script fake archive plus script fake link" \
+	"-e ff" "$srcdir/$subdir/ab.t $srcdir/$subdir/cd.t" \
+	"" {abcde.s} \
+	[ld_archive_filter_tests {{nm "" abcde.nd} \
+				  {nm "" nx.nd} \
+				  {nm "" ny.nd}}] \
+	"abscdse" \
+    ] \
+]
 
 # Dual whole archive tests.
 run_ld_link_tests [list \
@@ -228,6 +386,16 @@ run_ld_link_tests [list \
 				  {nm "" y.nd}}] \
 	"abcdwte" \
     ] \
+    [list "Regular archive plus whole fake link" \
+	"-e ff" "tmpdir/ab.a\
+		 --whole-archive\
+		 --start-lib tmpdir/c.o tmpdir/d.o tmpdir/y.o --end-lib" \
+	"" {abcde.s} \
+	[ld_archive_filter_tests {{nm "" abcde.nd} \
+				  {nm "" nx.nd} \
+				  {nm "" y.nd}}] \
+	"abcdwfe" \
+    ] \
 ]
 
 # Single non-index archive accept tests.
@@ -248,6 +416,21 @@ run_ld_link_tests [list \
 	[ld_archive_filter_tests {{nm "" abc.nd} \
 				  {nm "" nx.nd}}] \
 	"abntc" \
+    ] \
+    [list "Fake archive with --no-link-mapless link accept" \
+	"-e ff" "--no-link-mapless\
+		 --start-lib tmpdir/a.o tmpdir/b.o tmpdir/x.o --end-lib" \
+	"" {abc.s} \
+	[ld_archive_filter_tests {{nm "" abc.nd} \
+				  {nm "" nx.nd}}] \
+	"abnfc" \
+    ] \
+    [list "Script fake archive with --no-link-mapless link accept" \
+	"-e ff" "--no-link-mapless $srcdir/$subdir/ab.t" \
+	"" {abc.s} \
+	[ld_archive_filter_tests {{nm "" abc.nd} \
+				  {nm "" nx.nd}}] \
+	"abnsc" \
     ] \
 ]
 
