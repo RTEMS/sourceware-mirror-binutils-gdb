@@ -49,6 +49,8 @@ _bfd_archive_64_bit_slurp_armap (bfd *abfd)
   bfd_size_type amt;
   ufile_ptr filesize;
 
+  BFD_ASSERT (!bfd_is_fake_archive (abfd));
+
   ardata->symdefs = NULL;
 
   /* Get the name of the first element.  */

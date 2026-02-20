@@ -1550,6 +1550,8 @@ _bfd_vms_lib_openr_next_archived_file (bfd *archive,
   unsigned int idx;
   bfd *res;
 
+  BFD_ASSERT (!bfd_is_fake_archive (archive));
+
   if (!last_file)
     idx = 0;
   else
@@ -1701,6 +1703,8 @@ vms_write_index (bfd *abfd,
   unsigned int kbn_sz = 0;   /* Number of bytes available in the kbn block.  */
   unsigned int kbn_vbn = 0;  /* VBN of the kbn block.  */
   unsigned char *kbn_blk = NULL; /* Contents of the kbn block.  */
+
+  BFD_ASSERT (abfd == NULL || !bfd_is_fake_archive (abfd));
 
   if (nbr == 0)
     {
@@ -2143,6 +2147,8 @@ _bfd_vms_lib_write_archive_contents (bfd *arch)
   unsigned int sym_idx_vbn;
   bool is_elfidx = tdata->kind == vms_lib_ia64;
   unsigned int max_keylen = is_elfidx ? MAX_EKEYLEN : MAX_KEYLEN;
+
+  BFD_ASSERT (!bfd_is_fake_archive (arch));
 
   /* Count the number of modules (and do a first sanity check).  */
   nbr_modules = 0;

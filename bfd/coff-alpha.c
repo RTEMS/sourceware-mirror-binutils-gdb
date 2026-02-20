@@ -2202,6 +2202,8 @@ alpha_ecoff_openr_next_archived_file (bfd *archive, bfd *last_file)
 {
   ufile_ptr filestart;
 
+  BFD_ASSERT (!bfd_is_fake_archive (archive));
+
   if (last_file == NULL)
     filestart = bfd_ardata (archive)->first_file.file_offset;
   else

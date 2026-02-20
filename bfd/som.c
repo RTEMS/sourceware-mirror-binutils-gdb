@@ -6124,6 +6124,9 @@ som_slurp_armap (bfd *abfd)
   struct artdata *ardata = bfd_ardata (abfd);
   char nextname[17];
   size_t amt = 16;
+
+  BFD_ASSERT (!bfd_is_fake_archive (abfd));
+
   int i = bfd_read (nextname, amt, abfd);
 
   /* Special cases.  */

@@ -2928,6 +2928,8 @@ _bfd_ecoff_slurp_armap (bfd *abfd)
   char *stringbase;
   bfd_size_type amt;
 
+  BFD_ASSERT (!bfd_is_fake_archive (abfd));
+
   /* Get the name of the first element.  */
   i = bfd_read (nextname, 16, abfd);
   if (i == 0)

@@ -2136,6 +2136,9 @@ struct bfd
   /* Set if this is a thin archive.  */
   unsigned int is_thin_archive : 1;
 
+  /* Set if this is a collection of files pretending to be an archive.  */
+  unsigned int is_fake_archive : 1;
+
   /* Set if this archive should not cache element positions.  */
   unsigned int no_element_cache : 1;
 
@@ -2176,12 +2179,16 @@ struct bfd
      contained in an archive.  */
   ufile_ptr origin;
 
-  /* A reference in the archive for the proxy entry.  This will
-     normally be the same as origin, except for thin archives,
-     when it will contain the current offset of the proxy in the
-     thin archive rather than the offset of the bfd in its actual
-     container.  Room for a BFD pointer is alternatively provided
-     for future use.  */
+  /* A reference in the archive for the proxy entry as follows:
+
+     1. For regular archives this will be the same as origin.
+
+     2. For thin archives it will contain the current offset
+	of the proxy in the thin archive rather than the offset
+	of the bfd in its actual container.
+
+     3. For fake archives it will contain the next archive member's
+	BFD reference or a NULL pointer if this is the last member.  */
   ufile_ptr_or_bfd proxy_handle;
 
   /* A hash table for section names.  */
@@ -2386,6 +2393,12 @@ bfd_is_thin_archive (const bfd *abfd)
   return abfd->is_thin_archive;
 }
 
+static inline bool
+bfd_is_fake_archive (const bfd *abfd)
+{
+  return abfd->is_fake_archive;
+}
+
 static inline void *
 bfd_usrdata (const bfd *abfd)
 {
@@ -2410,6 +2423,12 @@ static inline void
 bfd_set_thin_archive (bfd *abfd, bool val)
 {
   abfd->is_thin_archive = val;
+}
+
+static inline void
+bfd_set_fake_archive (bfd *abfd, bool val)
+{
+  abfd->is_fake_archive = val;
 }
 
 static inline void
@@ -3029,6 +3048,8 @@ bfd *bfd_fdopenw (const char *filename, const char *target, int fd);
 
 bfd *bfd_openstreamr (const char * filename, const char * target,
     void * stream);
+
+bfd *bfd_openr_fake_archive (bfd *fbfd);
 
 bfd *bfd_openr_iovec (const char *filename, const char *target,
     void *(*open_func) (struct bfd *nbfd,

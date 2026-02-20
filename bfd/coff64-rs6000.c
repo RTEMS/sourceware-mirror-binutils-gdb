@@ -1905,6 +1905,8 @@ xcoff64_archive_p (bfd *abfd)
   struct xcoff_ar_file_hdr_big hdr;
   size_t amt = SXCOFFARMAG;
 
+  BFD_ASSERT (!bfd_is_fake_archive (abfd));
+
   if (bfd_read (magic, amt, abfd) != amt)
     {
       if (bfd_get_error () != bfd_error_system_call)

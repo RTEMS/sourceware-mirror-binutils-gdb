@@ -702,6 +702,8 @@ _bfd_get_elt_at_filepos (bfd *archive, file_ptr filepos,
   bfd *n_bfd;
   char *filename;
 
+  BFD_ASSERT (!bfd_is_fake_archive (archive));
+
   n_bfd = _bfd_look_for_bfd_in_cache (archive, filepos);
   if (n_bfd)
     return n_bfd;
@@ -868,14 +870,20 @@ bfd_openr_next_archived_file (bfd *archive, bfd *last_file)
       return NULL;
     }
 
-  return BFD_SEND (archive,
-		   openr_next_archived_file, (archive, last_file));
+  if (bfd_is_fake_archive (archive))
+    return (last_file ? last_file->proxy_handle.abfd
+	    : bfd_ardata (archive)->first_file.abfd);
+  else
+    return BFD_SEND (archive,
+		     openr_next_archived_file, (archive, last_file));
 }
 
 bfd *
 bfd_generic_openr_next_archived_file (bfd *archive, bfd *last_file)
 {
   ufile_ptr filestart;
+
+  BFD_ASSERT (!bfd_is_fake_archive (archive));
 
   if (!last_file)
     filestart = bfd_ardata (archive)->first_file.file_offset;
@@ -915,6 +923,8 @@ bfd_generic_archive_p (bfd *abfd)
 {
   char armag[SARMAG + 1];
   size_t amt;
+
+  BFD_ASSERT (!bfd_is_fake_archive (abfd));
 
   if (bfd_read (armag, SARMAG, abfd) != SARMAG)
     {
@@ -1098,6 +1108,8 @@ do_slurp_bsd_armap (bfd *abfd)
   size_t amt, string_size;
   carsym *set;
 
+  BFD_ASSERT (!bfd_is_fake_archive (abfd));
+
   mapdata = (struct areltdata *) _bfd_read_ar_hdr (abfd);
   if (mapdata == NULL)
     return false;
@@ -1188,6 +1200,8 @@ do_slurp_coff_armap (bfd *abfd)
   bfd_vma (*swap) (const void *);
   char int_buf[4];
   struct areltdata *tmp;
+
+  BFD_ASSERT (!bfd_is_fake_archive (abfd));
 
   mapdata = (struct areltdata *) _bfd_read_ar_hdr (abfd);
   if (mapdata == NULL)
@@ -1376,6 +1390,8 @@ bool
 _bfd_slurp_extended_name_table (bfd *abfd)
 {
   char nextname[17];
+
+  BFD_ASSERT (!bfd_is_fake_archive (abfd));
 
   /* FIXME:  Formatting sucks here, and in case of failure of BFD_READ,
      we probably don't want to return TRUE.  */

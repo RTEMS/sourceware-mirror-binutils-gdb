@@ -494,6 +494,47 @@ bfd_openstreamr (const char *filename, const char *target, void *streamarg)
 
 /*
 FUNCTION
+	bfd_openr_fake_archive
+
+SYNOPSIS
+	bfd *bfd_openr_fake_archive (bfd *fbfd);
+
+DESCRIPTION
+	Open a list of BFDs starting from @var{fbfd} as an artificial
+	archive.  Subsequent members of the archive are indicated by each
+	BFD's proxy_handle.abfd member, with the final one holding a NULL
+	pointer there.  The newly opened archive will necessarily also be
+	a thin archive as there will be member files only to refer to and
+	no containing archive file.
+*/
+
+bfd *
+bfd_openr_fake_archive (bfd *fbfd)
+{
+  bfd *abfd, *nbfd;
+
+  if (fbfd == NULL)
+    return NULL;
+
+  nbfd = _bfd_new_bfd ();
+  if (nbfd == NULL)
+    return NULL;
+
+  nbfd->xvec = fbfd->xvec;
+  bfd_set_format (nbfd, bfd_archive);
+  bfd_set_thin_archive (nbfd, true);
+  bfd_set_fake_archive (nbfd, true);
+  bfd_ardata (nbfd)->first_file.abfd = fbfd;
+  nbfd->direction = read_direction;
+
+  for (abfd = fbfd; abfd != NULL; abfd = abfd->proxy_handle.abfd)
+    abfd->my_archive = nbfd;
+
+  return nbfd;
+}
+
+/*
+FUNCTION
 	bfd_openr_iovec
 
 SYNOPSIS

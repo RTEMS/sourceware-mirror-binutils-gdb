@@ -1503,6 +1503,8 @@ _bfd_xcoff_archive_p (bfd *abfd)
   char magic[SXCOFFARMAG];
   size_t amt = SXCOFFARMAG;
 
+  BFD_ASSERT (!bfd_is_fake_archive (abfd));
+
   if (bfd_read (magic, amt, abfd) != amt)
     {
       if (bfd_get_error () != bfd_error_system_call)
@@ -1761,6 +1763,8 @@ bfd *
 _bfd_xcoff_openr_next_archived_file (bfd *archive, bfd *last_file)
 {
   ufile_ptr filestart;
+
+  BFD_ASSERT (!bfd_is_fake_archive (archive));
 
   if (x_artdata (archive) == NULL)
     {
