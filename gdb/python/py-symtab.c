@@ -377,10 +377,10 @@ symtab_to_symtab_object (struct symtab *symtab)
      and if so, return it.  */
   if (symtab != nullptr)
     {
-      symtab_obj = stpy_registry.lookup (symtab->compunit ()->objfile (),
-					 symtab);
-      if (symtab_obj != nullptr)
-	return gdbpy_ref<> (symtab_obj);
+      gdbpy_ref<> result
+	= stpy_registry.lookup (symtab->compunit ()->objfile (), symtab);
+      if (result != nullptr)
+	return result;
     }
 
   symtab_obj = PyObject_New (symtab_object, &symtab_object_type);

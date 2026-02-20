@@ -339,18 +339,17 @@ set_symbol (symbol_object *obj, struct symbol *symbol)
 gdbpy_ref<>
 symbol_to_symbol_object (struct symbol *sym)
 {
-  symbol_object *sym_obj;
-
   /* Look if there's already a gdb.Symbol object for given SYMBOL
      and if so, return it.  */
+  gdbpy_ref<> result;
   if (sym->is_objfile_owned ())
-    sym_obj = sympy_registry.lookup (sym->objfile (), sym);
+    result = sympy_registry.lookup (sym->objfile (), sym);
   else
-    sym_obj = sympy_registry.lookup (sym->arch (), sym);
-  if (sym_obj != nullptr)
-    return gdbpy_ref<> (sym_obj);
+    result = sympy_registry.lookup (sym->arch (), sym);
+  if (result != nullptr)
+    return result;
 
-  sym_obj = PyObject_New (symbol_object, &symbol_object_type);
+  symbol_object *sym_obj = PyObject_New (symbol_object, &symbol_object_type);
   if (sym_obj)
     set_symbol (sym_obj, sym);
 

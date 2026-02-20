@@ -1426,8 +1426,6 @@ typy_iterator_dealloc (PyObject *obj)
 gdbpy_ref<>
 type_to_type_object (struct type *type)
 {
-  type_object *type_obj;
-
   try
     {
       /* Try not to let stub types leak out to Python.  */
@@ -1445,18 +1443,20 @@ type_to_type_object (struct type *type)
 
   /* Look if there's already a gdb.Type object for given TYPE
      and if so, return it.  */
+  gdbpy_ref<> result;
   if (type->is_objfile_owned ())
-    type_obj = typy_registry.lookup (type->objfile_owner (), type);
+    result = typy_registry.lookup (type->objfile_owner (), type);
   else
-    type_obj = typy_registry.lookup (type->arch_owner (), type);
+    result = typy_registry.lookup (type->arch_owner (), type);
 
-  if (type_obj == nullptr)
+  if (result == nullptr)
     {
-      type_obj = PyObject_New (type_object, &type_object_type);
-      if (type_obj)
+      type_object *type_obj = PyObject_New (type_object, &type_object_type);
+      if (type_obj != nullptr)
 	set_type (type_obj, type);
+      result = gdbpy_ref<> (type_obj);
     }
-  return gdbpy_ref<> (type_obj);
+  return result;
 }
 
 struct type *
