@@ -149,12 +149,19 @@ extern int errno;
 
 /*
 EXTERNAL
+.{* Holds a file position or bfd* depending on context.  *}
+.typedef union ufile_ptr_or_bfd
+.{
+.  ufile_ptr file_offset;
+.  bfd *abfd;
+.}
+.ufile_ptr_or_bfd;
+.
 .{* A canonical archive symbol.  *}
-.{* This is a type pun with struct symdef/struct ranlib on purpose!  *}
 .typedef struct carsym
 .{
 .  const char *name;
-.  ufile_ptr file_offset;	{* Look here to find the file.  *}
+.  ufile_ptr_or_bfd u;	{* bfd* or file position.  *}
 .}
 .carsym;
 .
@@ -804,7 +811,7 @@ _bfd_generic_get_elt_at_index (bfd *abfd, symindex sym_index)
   carsym *entry;
 
   entry = bfd_ardata (abfd)->symdefs + sym_index;
-  return _bfd_get_elt_at_filepos (abfd, entry->file_offset, NULL);
+  return _bfd_get_elt_at_filepos (abfd, entry->u.file_offset, NULL);
 }
 
 bfd *
@@ -1041,7 +1048,7 @@ do_slurp_bsd_armap (bfd *abfd)
 	  goto release_armap;
 	}
       set->name = stringbase + nameoff;
-      set->file_offset = H_GET_32 (abfd, rbase + BSD_SYMDEF_OFFSET_SIZE);
+      set->u.file_offset = H_GET_32 (abfd, rbase + BSD_SYMDEF_OFFSET_SIZE);
     }
 
   ardata->first_file_filepos = bfd_tell (abfd);
@@ -1142,7 +1149,7 @@ do_slurp_coff_armap (bfd *abfd)
   for (i = 0; i < nsymz; i++)
     {
       rawptr = raw_armap + i;
-      carsyms->file_offset = swap ((bfd_byte *) rawptr);
+      carsyms->u.file_offset = swap ((bfd_byte *) rawptr);
       carsyms->name = stringbase;
       stringbase += strlen (stringbase);
       if (stringbase != stringend)

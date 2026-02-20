@@ -974,7 +974,7 @@ _bfd_generic_link_add_archive_symbols
 
 	  if (included[indx])
 	    continue;
-	  if (needed && arsym->file_offset == last_ar_offset)
+	  if (needed && arsym->u.file_offset == last_ar_offset)
 	    {
 	      included[indx] = 1;
 	      continue;
@@ -1003,9 +1003,9 @@ _bfd_generic_link_add_archive_symbols
 	      continue;
 	    }
 
-	  if (last_ar_offset != arsym->file_offset)
+	  if (last_ar_offset != arsym->u.file_offset)
 	    {
-	      last_ar_offset = arsym->file_offset;
+	      last_ar_offset = arsym->u.file_offset;
 	      element = _bfd_get_elt_at_filepos (abfd, last_ar_offset,
 						 info);
 	      if (element == NULL
@@ -1034,7 +1034,7 @@ _bfd_generic_link_add_archive_symbols
 		    break;
 		  --mark;
 		}
-	      while (arsyms[mark].file_offset == last_ar_offset);
+	      while (arsyms[mark].u.file_offset == last_ar_offset);
 
 	      if (undefs_tail != info->hash->undefs_tail)
 		loop = true;

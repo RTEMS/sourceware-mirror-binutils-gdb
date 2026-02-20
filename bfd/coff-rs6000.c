@@ -1411,7 +1411,7 @@ _bfd_xcoff_slurp_armap (bfd *abfd)
       for (i = 0, arsym = bfd_ardata (abfd)->symdefs, p = contents + 4;
 	   i < c;
 	   ++i, ++arsym, p += 4)
-	arsym->file_offset = H_GET_32 (abfd, p);
+	arsym->u.file_offset = H_GET_32 (abfd, p);
     }
   else
     {
@@ -1472,7 +1472,7 @@ _bfd_xcoff_slurp_armap (bfd *abfd)
       for (i = 0, arsym = bfd_ardata (abfd)->symdefs, p = contents + 8;
 	   i < c;
 	   ++i, ++arsym, p += 8)
-	arsym->file_offset = H_GET_64 (abfd, p);
+	arsym->u.file_offset = H_GET_64 (abfd, p);
     }
 
   /* After the file offsets come null terminated symbol names.  */

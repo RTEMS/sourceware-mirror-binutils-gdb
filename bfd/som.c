@@ -6042,7 +6042,7 @@ som_bfd_fill_in_ar_symbols (bfd *abfd,
 	  bfd_set_error (bfd_error_bad_value);
 	  goto error_return;
 	}
-      set->file_offset
+      set->u.file_offset
 	= bfd_getb32 (som_dict[ndx].location) - sizeof (struct ar_hdr);
 
       /* Go to the next symbol.  */
@@ -6093,7 +6093,7 @@ som_bfd_fill_in_ar_symbols (bfd *abfd,
 	      bfd_set_error (bfd_error_bad_value);
 	      goto error_return;
 	    }
-	  set->file_offset
+	  set->u.file_offset
 	    = bfd_getb32 (som_dict[ndx].location) - sizeof (struct ar_hdr);
 
 	  /* Go on to the next symbol.  */

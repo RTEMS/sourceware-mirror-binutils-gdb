@@ -3065,7 +3065,7 @@ _bfd_ecoff_slurp_armap (bfd *abfd)
       if (name_offset > stringsize)
 	goto error_malformed;
       symdef_ptr->name = stringbase + name_offset;
-      symdef_ptr->file_offset = file_offset;
+      symdef_ptr->u.file_offset = file_offset;
       ++symdef_ptr;
     }
 

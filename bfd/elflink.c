@@ -3708,7 +3708,7 @@ elf_link_is_defined_archive_symbol (bfd * abfd, carsym * symdef)
   Elf_Internal_Sym *isymend;
   bool result;
 
-  abfd = _bfd_get_elt_at_filepos (abfd, symdef->file_offset, NULL);
+  abfd = _bfd_get_elt_at_filepos (abfd, symdef->u.file_offset, NULL);
   if (abfd == NULL)
     return false;
 
@@ -6305,7 +6305,7 @@ elf_link_add_archive_symbols (bfd *abfd, struct bfd_link_info *info)
 
 	  if (included[i])
 	    continue;
-	  if (symdef->file_offset == last)
+	  if (symdef->u.file_offset == last)
 	    {
 	      included[i] = true;
 	      continue;
@@ -6390,7 +6390,7 @@ elf_link_add_archive_symbols (bfd *abfd, struct bfd_link_info *info)
 	    }
 
 	  /* We need to include this archive member.  */
-	  element = _bfd_get_elt_at_filepos (abfd, symdef->file_offset,
+	  element = _bfd_get_elt_at_filepos (abfd, symdef->u.file_offset,
 					     info);
 	  if (element == NULL)
 	    goto error_return;
@@ -6426,11 +6426,11 @@ elf_link_add_archive_symbols (bfd *abfd, struct bfd_link_info *info)
 		break;
 	      --mark;
 	    }
-	  while (symdefs[mark].file_offset == symdef->file_offset);
+	  while (symdefs[mark].u.file_offset == symdef->u.file_offset);
 
 	  /* We mark subsequent symbols from this object file as we go
 	     on through the loop.  */
-	  last = symdef->file_offset;
+	  last = symdef->u.file_offset;
 	}
     }
   while (loop);

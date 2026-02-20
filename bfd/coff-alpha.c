@@ -2240,7 +2240,7 @@ alpha_ecoff_get_elt_at_index (bfd *abfd, symindex sym_index)
   carsym *entry;
 
   entry = bfd_ardata (abfd)->symdefs + sym_index;
-  return alpha_ecoff_get_elt_at_filepos (abfd, entry->file_offset, NULL);
+  return alpha_ecoff_get_elt_at_filepos (abfd, entry->u.file_offset, NULL);
 }
 
 static void

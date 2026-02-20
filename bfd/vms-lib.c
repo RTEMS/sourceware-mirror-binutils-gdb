@@ -170,7 +170,7 @@ vms_add_index (struct carsym_mem *cs, char *name,
       cs->idx = n;
       cs->realloced = true;
     }
-  cs->idx[cs->nbr].file_offset = (idx_vbn - 1) * VMS_BLOCK_SIZE + idx_off;
+  cs->idx[cs->nbr].u.file_offset = (idx_vbn - 1) * VMS_BLOCK_SIZE + idx_off;
   cs->idx[cs->nbr].name = name;
   cs->nbr++;
   return true;
@@ -1385,7 +1385,7 @@ _bfd_vms_lib_get_module (bfd *abfd, unsigned int modidx)
     return tdata->cache[modidx];
 
   /* Build it.  */
-  file_off = tdata->modules[modidx].file_offset;
+  file_off = tdata->modules[modidx].u.file_offset;
   if (tdata->type != LBR__C_TYP_IOBJ)
     {
       res = _bfd_create_empty_archive_element_shell (abfd);
@@ -1485,12 +1485,12 @@ _bfd_vms_lib_get_elt_at_index (bfd *abfd, symindex symidx)
   /* Check symidx.  */
   if (symidx > tdata->artdata.symdef_count)
     return NULL;
-  file_off = tdata->artdata.symdefs[symidx].file_offset;
+  file_off = tdata->artdata.symdefs[symidx].u.file_offset;
 
   /* Linear-scan.  */
   for (modidx = 0; modidx < tdata->nbr_modules; modidx++)
     {
-      if (tdata->modules[modidx].file_offset == file_off)
+      if (tdata->modules[modidx].u.file_offset == file_off)
 	break;
     }
   if (modidx >= tdata->nbr_modules)

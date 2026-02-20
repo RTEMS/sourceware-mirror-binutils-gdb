@@ -1273,12 +1273,19 @@ void bfd_symbol_info (asymbol *symbol, symbol_info *ret);
 		 (ibfd, isymbol, obfd, osymbol))
 
 /* Extracted from archive.c.  */
+/* Holds a file position or bfd* depending on context.  */
+typedef union ufile_ptr_or_bfd
+{
+  ufile_ptr file_offset;
+  bfd *abfd;
+}
+ufile_ptr_or_bfd;
+
 /* A canonical archive symbol.  */
-/* This is a type pun with struct symdef/struct ranlib on purpose!  */
 typedef struct carsym
 {
   const char *name;
-  ufile_ptr file_offset;       /* Look here to find the file.  */
+  ufile_ptr_or_bfd u;  /* bfd* or file position.  */
 }
 carsym;
 

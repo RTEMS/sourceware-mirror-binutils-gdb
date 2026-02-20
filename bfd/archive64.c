@@ -129,7 +129,7 @@ _bfd_archive_64_bit_slurp_armap (bfd *abfd)
   *stringend = 0;
   for (i = 0; i < nsymz; i++)
     {
-      carsyms->file_offset = bfd_getb64 (raw_armap + i * 8);
+      carsyms->u.file_offset = bfd_getb64 (raw_armap + i * 8);
       carsyms->name = stringbase;
       stringbase += strlen (stringbase);
       if (stringbase != stringend)
