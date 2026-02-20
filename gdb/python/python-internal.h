@@ -498,8 +498,8 @@ PyObject *gdbpy_register_tui_window (PyObject *self, PyObject *args,
 gdbpy_ref<> symtab_and_line_to_sal_object (struct symtab_and_line sal);
 gdbpy_ref<> symtab_to_symtab_object (struct symtab *symtab);
 gdbpy_ref<> symbol_to_symbol_object (struct symbol *sym);
-PyObject *block_to_block_object (const struct block *block,
-				 struct objfile *objfile);
+gdbpy_ref<> block_to_block_object (const struct block *block,
+				   struct objfile *objfile);
 PyObject *value_to_value_object (struct value *v);
 PyObject *type_to_type_object (struct type *);
 PyObject *frame_info_to_frame_object (const frame_info_ptr &frame);

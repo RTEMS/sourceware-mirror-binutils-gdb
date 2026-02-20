@@ -188,7 +188,8 @@ stpy_global_block (PyObject *self, PyObject *args)
   blockvector = symtab->compunit ()->blockvector ();
   const struct block *block = blockvector->global_block ();
 
-  return block_to_block_object (block, symtab->compunit ()->objfile ());
+  return block_to_block_object (block,
+				symtab->compunit ()->objfile ()).release ();
 }
 
 /* Return the STATIC_BLOCK of the underlying symtab.  */
@@ -204,7 +205,8 @@ stpy_static_block (PyObject *self, PyObject *args)
   blockvector = symtab->compunit ()->blockvector ();
   const struct block *block = blockvector->static_block ();
 
-  return block_to_block_object (block, symtab->compunit ()->objfile ());
+  return block_to_block_object (block,
+				symtab->compunit ()->objfile ()).release ();
 }
 
 /* Implementation of gdb.Symtab.linetable (self) -> gdb.LineTable.

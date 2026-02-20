@@ -662,7 +662,8 @@ pending_framepy_block (PyObject *self, PyObject *args)
       return nullptr;
     }
 
-  return block_to_block_object (block, fn_block->function ()->objfile ());
+  return block_to_block_object (block,
+				fn_block->function ()->objfile ()).release ();
 }
 
 /* Implement gdb.PendingFrame.function().  Return a gdb.Symbol

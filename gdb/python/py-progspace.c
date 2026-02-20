@@ -522,7 +522,7 @@ pspy_block_for_pc (PyObject *o, PyObject *args)
     Py_RETURN_NONE;
 
   if (block)
-    return block_to_block_object (block, cust->objfile ());
+    return block_to_block_object (block, cust->objfile ()).release ();
 
   Py_RETURN_NONE;
 }
