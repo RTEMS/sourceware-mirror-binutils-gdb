@@ -220,7 +220,7 @@ stpy_get_linetable (PyObject *self, PyObject *args)
 
   STPY_REQUIRE_VALID (self, symtab);
 
-  return symtab_to_linetable_object (self);
+  return symtab_to_linetable_object (self).release ();
 }
 
 static PyObject *
