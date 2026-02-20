@@ -3025,6 +3025,7 @@ lookup_name (const char *name)
       *stat_ptr->tail = rest;
       if (*tail == NULL)
 	stat_ptr->tail = tail;
+      ASSERT (search != NULL);
     }
 
   /* If we have already added this file, or this file is not real
@@ -11170,8 +11171,7 @@ cmdline_load_object_only_section (const char *name)
   lang_input_statement_type *entry
     = new_afile (name, lang_input_file_is_file_enum, NULL, NULL);
 
-  if (!entry)
-    abort ();
+  ASSERT (entry != NULL);
 
   ldfile_open_file (entry);
 
