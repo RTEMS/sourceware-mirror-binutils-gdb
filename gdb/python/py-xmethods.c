@@ -123,7 +123,7 @@ gdbpy_get_matching_xmethod_workers
 
   gdbpy_enter enter_py;
 
-  gdbpy_ref<> py_type (type_to_type_object (obj_type));
+  gdbpy_ref<> py_type = type_to_type_object (obj_type);
   if (py_type == NULL)
     {
       gdbpy_print_stack ();

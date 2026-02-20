@@ -432,7 +432,7 @@ valpy_get_type (PyObject *self, void *closure)
 {
   value_object *obj = (value_object *) self;
 
-  return type_to_type_object (obj->value->type ());
+  return type_to_type_object (obj->value->type ()).release ();
 }
 
 /* Return dynamic type of the value.  */
@@ -484,7 +484,7 @@ valpy_get_dynamic_type (PyObject *self, void *closure)
       return gdbpy_handle_gdb_exception (nullptr, except);
     }
 
-  return type_to_type_object (type);
+  return type_to_type_object (type).release ();
 }
 
 /* Implementation of gdb.Value.lazy_string ([encoding] [, length]) ->

@@ -235,7 +235,7 @@ gdbpy_create_lazy_string_object (CORE_ADDR address, long length,
     str_obj->encoding = NULL;
   else
     str_obj->encoding = xstrdup (encoding);
-  str_obj->type = type_to_type_object (type);
+  str_obj->type = type_to_type_object (type).release ();
 
   return (PyObject *) str_obj;
 }

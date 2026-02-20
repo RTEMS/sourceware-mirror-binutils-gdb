@@ -314,7 +314,7 @@ archpy_integer_type (PyObject *self, PyObject *args, PyObject *kw)
       return nullptr;
     }
 
-  return type_to_type_object (type);
+  return type_to_type_object (type).release ();
 }
 
 /* Implementation of gdb.void_type.  */
@@ -324,7 +324,7 @@ archpy_void_type (PyObject *self, PyObject *args)
   struct gdbarch *gdbarch;
   ARCHPY_REQUIRE_VALID (self, gdbarch);
 
-  return type_to_type_object (builtin_type (gdbarch)->builtin_void);
+  return type_to_type_object (builtin_type (gdbarch)->builtin_void).release ();
 }
 
 /* __repr__ implementation for gdb.Architecture.  */

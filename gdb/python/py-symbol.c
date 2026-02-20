@@ -73,7 +73,7 @@ sympy_get_type (PyObject *self, void *closure)
       return Py_None;
     }
 
-  return type_to_type_object (symbol->type ());
+  return type_to_type_object (symbol->type ()).release ();
 }
 
 static PyObject *

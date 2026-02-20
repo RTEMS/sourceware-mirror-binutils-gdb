@@ -2105,7 +2105,7 @@ gdbpy_apply_type_printers (const struct extension_language_defn *extlang,
 
   gdbpy_enter enter_py;
 
-  gdbpy_ref<> type_obj (type_to_type_object (type));
+  gdbpy_ref<> type_obj = type_to_type_object (type);
   if (type_obj == NULL)
     {
       gdbpy_print_stack ();
