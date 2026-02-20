@@ -86,7 +86,7 @@ sympy_get_symtab (PyObject *self, void *closure)
   if (!symbol->is_objfile_owned ())
     Py_RETURN_NONE;
 
-  return symtab_to_symtab_object (symbol->symtab ());
+  return symtab_to_symtab_object (symbol->symtab ()).release ();
 }
 
 static PyObject *
