@@ -360,7 +360,7 @@ frapy_function (PyObject *self, PyObject *args)
 /* Convert a frame_info struct to a Python Frame object.
    Sets a Python exception and returns NULL on error.  */
 
-PyObject *
+gdbpy_ref<>
 frame_info_to_frame_object (const frame_info_ptr &frame)
 {
   gdbpy_ref<frame_object> frame_obj (PyObject_New (frame_object,
@@ -393,7 +393,7 @@ frame_info_to_frame_object (const frame_info_ptr &frame)
       return gdbpy_handle_gdb_exception (nullptr, except);
     }
 
-  return (PyObject *) frame_obj.release ();
+  return gdbpy_ref<> (frame_obj.release ());
 }
 
 /* Implementation of gdb.Frame.older (self) -> gdb.Frame.
@@ -404,7 +404,6 @@ static PyObject *
 frapy_older (PyObject *self, PyObject *args)
 {
   frame_info_ptr frame, prev = NULL;
-  PyObject *prev_obj = NULL;   /* Initialize to appease gcc warning.  */
 
   try
     {
@@ -417,15 +416,13 @@ frapy_older (PyObject *self, PyObject *args)
       return gdbpy_handle_gdb_exception (nullptr, except);
     }
 
+  gdbpy_ref<> prev_obj;
   if (prev)
     prev_obj = frame_info_to_frame_object (prev);
   else
-    {
-      Py_INCREF (Py_None);
-      prev_obj = Py_None;
-    }
+    prev_obj = gdbpy_ref<>::new_reference (Py_None);
 
-  return prev_obj;
+  return prev_obj.release ();
 }
 
 /* Implementation of gdb.Frame.newer (self) -> gdb.Frame.
@@ -436,7 +433,6 @@ static PyObject *
 frapy_newer (PyObject *self, PyObject *args)
 {
   frame_info_ptr frame, next = NULL;
-  PyObject *next_obj = NULL;   /* Initialize to appease gcc warning.  */
 
   try
     {
@@ -449,15 +445,13 @@ frapy_newer (PyObject *self, PyObject *args)
       return gdbpy_handle_gdb_exception (nullptr, except);
     }
 
+  gdbpy_ref<> next_obj;
   if (next)
     next_obj = frame_info_to_frame_object (next);
   else
-    {
-      Py_INCREF (Py_None);
-      next_obj = Py_None;
-    }
+    next_obj = gdbpy_ref<>::new_reference (Py_None);
 
-  return next_obj;
+  return next_obj.release ();
 }
 
 /* Implementation of gdb.Frame.find_sal (self) -> gdb.Symtab_and_line.
@@ -657,7 +651,7 @@ frapy_static_link (PyObject *self, PyObject *args)
   if (link == nullptr)
     Py_RETURN_NONE;
 
-  return frame_info_to_frame_object (link);
+  return frame_info_to_frame_object (link).release ();
 }
 
 /* Implementation of gdb.newest_frame () -> gdb.Frame.
@@ -677,7 +671,7 @@ gdbpy_newest_frame (PyObject *self, PyObject *args)
       return gdbpy_handle_gdb_exception (nullptr, except);
     }
 
-  return frame_info_to_frame_object (frame);
+  return frame_info_to_frame_object (frame).release ();
 }
 
 /* Implementation of gdb.selected_frame () -> gdb.Frame.
@@ -697,7 +691,7 @@ gdbpy_selected_frame (PyObject *self, PyObject *args)
       return gdbpy_handle_gdb_exception (nullptr, except);
     }
 
-  return frame_info_to_frame_object (frame);
+  return frame_info_to_frame_object (frame).release ();
 }
 
 /* Implementation of gdb.stop_reason_string (Integer) -> String.
