@@ -268,7 +268,7 @@ bpfinishpy_init (PyObject *self, PyObject *args, PyObject *kwargs)
 		  PyErr_Clear ();
 
 		  self_bpfinish->func_symbol
-		    = symbol_to_symbol_object (function);
+		    = symbol_to_symbol_object (function).release ();
 		  PyErr_Clear ();
 		}
 	    }

@@ -354,7 +354,7 @@ recpy_bt_func_symbol (PyObject *self, void *closure)
   if (func->sym == NULL)
     Py_RETURN_NONE;
 
-  return symbol_to_symbol_object (func->sym);
+  return symbol_to_symbol_object (func->sym).release ();
 }
 
 /* Implementation of RecordFunctionSegment.instructions [list] for btrace.

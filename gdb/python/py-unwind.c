@@ -692,7 +692,7 @@ pending_framepy_function (PyObject *self, PyObject *args)
     }
 
   if (sym != nullptr)
-    return symbol_to_symbol_object (sym);
+    return symbol_to_symbol_object (sym).release ();
 
   Py_RETURN_NONE;
 }
