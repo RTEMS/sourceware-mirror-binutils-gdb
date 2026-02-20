@@ -1278,7 +1278,7 @@ void bfd_symbol_info (asymbol *symbol, symbol_info *ret);
 typedef struct carsym
 {
   const char *name;
-  file_ptr file_offset;        /* Look here to find the file.  */
+  ufile_ptr file_offset;       /* Look here to find the file.  */
 }
 carsym;
 

@@ -960,7 +960,7 @@ _bfd_generic_link_add_archive_symbols
       carsym *arsym_end;
       carsym *arsym;
       unsigned int indx;
-      file_ptr last_ar_offset = -1;
+      ufile_ptr last_ar_offset = -1;
       bool needed = false;
       bfd *element = NULL;
 

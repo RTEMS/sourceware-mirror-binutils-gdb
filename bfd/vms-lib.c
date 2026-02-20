@@ -1479,7 +1479,7 @@ bfd *
 _bfd_vms_lib_get_elt_at_index (bfd *abfd, symindex symidx)
 {
   struct lib_tdata *tdata = bfd_libdata (abfd);
-  file_ptr file_off;
+  ufile_ptr file_off;
   unsigned int modidx;
 
   /* Check symidx.  */

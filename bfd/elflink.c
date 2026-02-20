@@ -6286,7 +6286,7 @@ elf_link_add_archive_symbols (bfd *abfd, struct bfd_link_info *info)
 
   do
     {
-      file_ptr last;
+      ufile_ptr last;
       symindex i;
       carsym *symdef;
       carsym *symdefend;
