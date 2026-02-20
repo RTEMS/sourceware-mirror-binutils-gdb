@@ -762,7 +762,7 @@ pending_framepy_architecture (PyObject *self, PyObject *args)
 
   PENDING_FRAMEPY_REQUIRE_VALID (pending_frame);
 
-  return gdbarch_to_arch_object (pending_frame->gdbarch);
+  return gdbarch_to_arch_object (pending_frame->gdbarch).release ();
 }
 
 /* Implementation of PendingFrame.level (self) -> Integer.  */

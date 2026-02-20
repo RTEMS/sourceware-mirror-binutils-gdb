@@ -201,7 +201,7 @@ frapy_arch (PyObject *self, PyObject *args)
       return gdbpy_handle_gdb_exception (nullptr, except);
     }
 
-  return gdbarch_to_arch_object (obj->gdbarch);
+  return gdbarch_to_arch_object (obj->gdbarch).release ();
 }
 
 /* Implementation of gdb.Frame.unwind_stop_reason (self) -> Integer.

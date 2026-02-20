@@ -1421,7 +1421,7 @@ gdbpy_colorize_disasm (const std::string &content, gdbarch *gdbarch)
       return {};
     }
 
-  gdbpy_ref<> gdbarch_arg (gdbarch_to_arch_object (gdbarch));
+  gdbpy_ref<> gdbarch_arg = gdbarch_to_arch_object (gdbarch);
   if (gdbarch_arg == nullptr)
     {
       gdbpy_print_stack ();

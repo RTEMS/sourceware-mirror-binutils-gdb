@@ -84,7 +84,7 @@ gdbpy_is_architecture (PyObject *obj)
    Returns a new reference to the arch_object associated as data with
    GDBARCH.  */
 
-PyObject *
+gdbpy_ref<>
 gdbarch_to_arch_object (struct gdbarch *gdbarch)
 {
   PyObject *new_ref = arch_object_data.get (gdbarch);
@@ -97,7 +97,7 @@ gdbarch_to_arch_object (struct gdbarch *gdbarch)
   /* new_ref could be NULL if creation failed.  */
   Py_XINCREF (new_ref);
 
-  return new_ref;
+  return gdbpy_ref<> (new_ref);
 }
 
 /* Implementation of gdb.Architecture.name (self) -> String.
