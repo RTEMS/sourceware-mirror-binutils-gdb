@@ -230,26 +230,65 @@ run_ld_link_tests [list \
     ] \
 ]
 
-set LDFLAGS $old_ldflags
-
-# Alpha/VMS archives always have an index and XCOFF targets currently
-# accept archives without one.
-if { [istarget "alpha*-*-*vms*"] || [is_xcoff_format] } {
-    return
-}
-
 # Single non-index archive tests.
 run_ld_link_tests [list \
     [list "Regular archive w/o index link" \
 	"-e ff" "tmpdir/abn.a" \
 	"" {abc.s} \
-	{{ld abc.ed}} \
+	[ld_archive_filter_tests {{nm "" abc.nd} \
+				  {nm "" nx.nd}}] \
 	"abnc" \
     ] \
+]
+setup_xfail "binutils/33484" "alpha*-*-linux*ecoff*" "alpha*-*-osf*"
+run_ld_link_tests [list \
     [list "Thin archive w/o index link" \
 	"-e ff" "tmpdir/abnt.a" \
 	"" {abc.s} \
-	{{ld abct.ed}} \
-	"abnct" \
+	[ld_archive_filter_tests {{nm "" abc.nd} \
+				  {nm "" nx.nd}}] \
+	"abntc" \
     ] \
 ]
+
+# Group non-index archive tests.
+run_ld_link_tests [list \
+    [list "Regular non-group archive w/o index link reject" \
+	"-e ff tmpdir/abn.a" "tmpdir/abcn.a" \
+	"" {} \
+	{{ld abcn.ed}} \
+	"abncnn" \
+    ] \
+    [list "Thin non-group archive w/o index link reject" \
+	"-e ff tmpdir/abnt.a" "tmpdir/abcnt.a" \
+	"" {} \
+	{{ld abcn.ed}} \
+	"abntcntn" \
+    ] \
+    [list "Regular group archive w/o index link accept" \
+	"-e ff -\\( tmpdir/abn.a" "tmpdir/abcn.a -\\) --verbose --print-map" \
+	"" {} \
+	[ld_archive_filter_tests {{ld abncng.vd} \
+				  {nm "" abc.nd} \
+				  {nm "" nx.nd}}] \
+	"abncng" \
+    ] \
+]
+setup_xfail "binutils/33484" "alpha*-*-linux*ecoff*" "alpha*-*-osf*"
+setup_xfail "binutils/33600" "alpha*-*-*vms*"
+if { [is_xcoff_format] } {
+    setup_xfail "binutils/33600" "*-*-*"
+}
+run_ld_link_tests [list \
+    [list "Thin group archive w/o index link accept" \
+	"-e ff\
+	 -\\( tmpdir/abnt.a" "tmpdir/abcnt.a -\\) --verbose --print-map" \
+	"" {} \
+	[ld_archive_filter_tests {{ld abntcntg.vd} \
+				  {nm "" abc.nd} \
+				  {nm "" nx.nd}}] \
+	"abntcntg" \
+    ] \
+]
+
+set LDFLAGS $old_ldflags

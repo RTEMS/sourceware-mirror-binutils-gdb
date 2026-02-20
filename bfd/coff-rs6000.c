@@ -2498,7 +2498,8 @@ xcoff_write_archive_contents_old (bfd *abfd)
       BFD_ASSERT (nextoff == bfd_tell (abfd));
       sprintf (fhdr->symoff, "%ld", (long) nextoff);
       bfd_ardata (abfd)->tdata = &xtdata;
-      bool ret = _bfd_compute_and_write_armap (abfd, 0);
+      bool ret = _bfd_compute_and_push_armap (abfd, 0, false,
+					      _bfd_write_armap);
       bfd_ardata (abfd)->tdata = NULL;
       if (!ret)
 	return false;
@@ -2766,7 +2767,8 @@ xcoff_write_archive_contents_big (bfd *abfd)
       PRINT20 (fhdr->symoff, nextoff);
 
       bfd_ardata (abfd)->tdata = &xtdata;
-      bool ret = _bfd_compute_and_write_armap (abfd, 0);
+      bool ret = _bfd_compute_and_push_armap (abfd, 0, false,
+					      _bfd_write_armap);
       bfd_ardata (abfd)->tdata = NULL;
       if (!ret)
 	return false;

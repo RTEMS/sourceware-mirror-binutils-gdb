@@ -205,9 +205,7 @@ subroutines.  Since libraries often will depend on other libraries,
 object modules in the archive when you specify the modifier @samp{s}.
 Once created, this index is updated in the archive whenever @command{ar}
 makes a change to its contents (save for the @samp{q} update operation).
-An archive with such an index speeds up linking to the library, and
-allows routines in the library to call each other without regard to
-their placement in the archive.
+An archive with such an index speeds up linking to the library.
 
 You may use @samp{nm -s} or @samp{nm --print-armap} to list this index
 table.  If an archive lacks the table, another form of @command{ar} called
@@ -501,10 +499,10 @@ archive is equivalent to running @samp{ranlib} on it.
 @item S
 @cindex not writing archive index
 Do not generate an archive symbol table.  This can speed up building a
-large library in several steps.  The resulting archive can not be used
-with the linker.  In order to build a symbol table, you must omit the
-@samp{S} modifier on the last execution of @samp{ar}, or you must run
-@samp{ranlib} on the archive.
+large library in several steps, but will negatively impact performance
+if the resulting archive is used with the linker.  In order to build a
+symbol table, you must omit the @samp{S} modifier on the last execution
+of @samp{ar}, or you must run @samp{ranlib} on the archive.
 
 @item T
 Deprecated alias for @option{--thin}.  @option{T} is not recommended because in
@@ -3191,9 +3189,7 @@ member of an archive that is a relocatable object file.
 
 You may use @samp{nm -s} or @samp{nm --print-armap} to list this index.
 
-An archive with such an index speeds up linking to the library and
-allows routines in the library to call each other without regard to
-their placement in the archive.
+An archive with such an index speeds up linking to the library.
 
 The @sc{gnu} @command{ranlib} program is another form of @sc{gnu} @command{ar}; running
 @command{ranlib} is completely equivalent to executing @samp{ar -s}.

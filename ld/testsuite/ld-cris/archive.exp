@@ -123,3 +123,35 @@ run_ld_link_tests [list \
 	"abtci" \
     ] \
 ]
+
+# Single non-index archive tests.
+run_ld_link_tests [list \
+    [list "CRIS regular archive w/o index link (explicit emulation)" \
+	"$ldemul -e ff" "tmpdir/abn.a" \
+	"$asemul" {../ld-archive/abc.s} \
+	{{nm "" ../ld-archive/abc.nd} \
+	 {nm "" ../ld-archive/nx.nd}} \
+	"abncx" \
+    ] \
+    [list "CRIS regular archive w/o index link (implicit emulation)" \
+	"-e ff" "tmpdir/abn.a" \
+	"$asemul" {../ld-archive/abc.s} \
+	{{nm "" ../ld-archive/abc.nd} \
+	 {nm "" ../ld-archive/nx.nd}} \
+	"abnci" \
+    ] \
+    [list "CRIS thin archive w/o index link (explicit emulation)" \
+	"$ldemul -e ff" "tmpdir/abnt.a" \
+	"$asemul" {../ld-archive/abc.s} \
+	{{nm "" ../ld-archive/abc.nd} \
+	 {nm "" ../ld-archive/nx.nd}} \
+	"abntcx" \
+    ] \
+    [list "CRIS thin archive w/o index link (implicit emulation)" \
+	"-e ff" "tmpdir/abnt.a" \
+	"$asemul" {../ld-archive/abc.s} \
+	{{nm "" ../ld-archive/abc.nd} \
+	 {nm "" ../ld-archive/nx.nd}} \
+	"abntci" \
+    ] \
+]

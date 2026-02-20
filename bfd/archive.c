@@ -179,6 +179,26 @@ INTERNAL
 .  int namidx;		{* Index into string table.  *}
 .};
 .
+.{* Return an inexistent element reference for archive ARCH.  *}
+.
+.static inline ufile_ptr_or_bfd
+._bfd_elt_nil (bfd *arch)
+.{
+.  return (bfd_ardata (arch)->symdef_use_bfd
+.	   ? (ufile_ptr_or_bfd) { .abfd = NULL }
+.	   : (ufile_ptr_or_bfd) { .file_offset = -1 });
+.}
+.
+.{* Tell if ELTREF1 and ELTREF2 refer the same element of archive ARCH.  *}
+.
+.static inline bool
+._bfd_elt_eq (bfd *arch, ufile_ptr_or_bfd eltref1, ufile_ptr_or_bfd eltref2)
+.{
+.  return (bfd_ardata (arch)->symdef_use_bfd
+.	   ? eltref1.abfd == eltref2.abfd
+.	   : eltref1.file_offset == eltref2.file_offset);
+.}
+.
 */
 
 /* We keep a cache of archive filepointers to archive elements to
@@ -811,7 +831,7 @@ _bfd_generic_get_elt_at_index (bfd *abfd, symindex sym_index)
   carsym *entry;
 
   entry = bfd_ardata (abfd)->symdefs + sym_index;
-  return _bfd_get_elt_at_filepos (abfd, entry->u.file_offset, NULL);
+  return _bfd_get_elt_from_symdef (abfd, entry, NULL);
 }
 
 bfd *
@@ -928,17 +948,15 @@ bfd_generic_archive_p (bfd *abfd)
       return NULL;
     }
 
-  if ((abfd->target_defaulted || abfd->is_linker_input)
-      && bfd_has_map (abfd))
+  if (abfd->target_defaulted || abfd->is_linker_input)
     {
       bfd *first;
       unsigned int save;
 
-      /* This archive has a map, so we may presume that the contents
-	 are object files.  Make sure that if the first file in the
-	 archive can be recognized as an object file, it is for this
-	 target.  If not, assume that this is the wrong format.  If
-	 the first file is not an object file, somebody is doing
+      /* Make sure that if the first file in the archive can be
+	 recognized as an object file, it is for this target.
+	 If not, assume that this is the wrong format.  If the
+	 first file is not an object file, somebody is doing
 	 something weird, and we permit it so that ar -t will work.
 
 	 This is done because any normal format will recognize any
@@ -962,6 +980,84 @@ bfd_generic_archive_p (bfd *abfd)
     }
 
   return _bfd_no_cleanup;
+}
+
+/* Given archive ARCH and symbol map MAP counting ORL_COUNT entries
+   load the symbols for use by the archive.  */
+
+static bool
+_bfd_load_armap (bfd *arch, unsigned int elength ATTRIBUTE_UNUSED,
+		 struct orl *map, unsigned int orl_count,
+		 int stridx ATTRIBUTE_UNUSED)
+{
+  struct artdata *ardata = bfd_ardata (arch);
+  size_t symdef_size;
+  size_t counter;
+  carsym *set;
+
+  if (_bfd_mul_overflow (orl_count, sizeof (carsym), &symdef_size))
+    {
+      bfd_set_error (bfd_error_no_memory);
+      return false;
+    }
+  ardata->symdefs = bfd_alloc (arch, symdef_size);
+  if (!ardata->symdefs)
+    {
+      bfd_set_error (bfd_error_no_memory);
+      return false;
+    }
+  ardata->symdef_count = orl_count;
+
+  for (counter = 0, set = ardata->symdefs;
+       counter < ardata->symdef_count;
+       counter++, set++)
+    {
+      bfd_size_type namelen = strlen (*map[counter].name) + 1;
+      char *name = bfd_alloc (arch, namelen);
+
+      if (name == NULL)
+	{
+	  bfd_set_error (bfd_error_no_memory);
+	  goto release_symdefs;
+	}
+
+      memcpy (name, *map[counter].name, namelen);
+      set->name = name;
+      set->u.abfd = map[counter].abfd;
+    }
+
+  ardata->symdef_use_bfd = true;
+  arch->has_armap = true;
+  return true;
+
+ release_symdefs:
+  bfd_release (arch, ardata->symdefs);
+  ardata->symdef_count = 0;
+  ardata->symdefs = NULL;
+  return false;
+}
+
+/* Iterate over members of archive ARCH starting from FIRST_ONE and
+   load their symbols for use by the archive.  */
+
+bool
+_bfd_make_armap (bfd *arch, bfd *first_one)
+{
+  bfd **last_one;
+  bfd *next_one;
+
+  last_one = &(arch->archive_next);
+  for (next_one = first_one;
+       next_one;
+       next_one = bfd_openr_next_archived_file (arch, next_one))
+    {
+      *last_one = next_one;
+      last_one = &next_one->archive_next;
+    }
+  *last_one = NULL;
+  bfd_set_archive_head (arch, first_one);
+
+  return _bfd_compute_and_push_armap (arch, 0, true, _bfd_load_armap);
 }
 
 /* Some constants for a 32 bit BSD archive structure.  We do not
@@ -2215,7 +2311,8 @@ _bfd_write_archive_contents (bfd *arch)
 
   if (makemap && hasobjects)
     {
-      if (! _bfd_compute_and_write_armap (arch, (unsigned int) elength))
+      if (!_bfd_compute_and_push_armap (arch, (unsigned int) elength, false,
+					_bfd_write_armap))
 	return false;
     }
 
@@ -2313,10 +2410,32 @@ _bfd_write_archive_contents (bfd *arch)
   return false;
 }
 
-/* Note that the namidx for the first symbol is 0.  */
+/* Given archive ARCH write symbol map MAP counting ORL_COUNT entries
+   and using STRIDX bytes for symbol names to the archive file, with
+   ELENGTH holding the length of any extended name table.  */
 
 bool
-_bfd_compute_and_write_armap (bfd *arch, unsigned int elength)
+_bfd_write_armap (bfd *arch, unsigned int elength,
+		  struct orl *map, unsigned int orl_count, int stridx)
+{
+  /* Dunno if this is the best place for this info...  */
+  if (elength != 0)
+    elength += sizeof (struct ar_hdr);
+  elength += elength % 2;
+
+  return BFD_SEND (arch, write_armap,
+		   (arch, elength, map, orl_count, stridx));
+}
+
+/* Iterate over members of archive ARCH retrieving their symbols and then
+   push the symbols out using PUSH_ARMAP handler, giving it extended name
+   table length ELENGTH.  Retain the information according to KEEP_SYMTAB.
+   Note that the namidx for the first symbol is 0.  */
+
+bool
+_bfd_compute_and_push_armap
+  (bfd *arch, unsigned int elength, bool keep_symtab,
+   bool (*push_armap) (bfd *, unsigned int, struct orl *, unsigned int, int))
 {
   char *first_name = NULL;
   bfd *current;
@@ -2329,11 +2448,6 @@ _bfd_compute_and_write_armap (bfd *arch, unsigned int elength)
   bool ret;
   size_t amt;
   static bool report_plugin_err = true;
-
-  /* Dunno if this is the best place for this info...  */
-  if (elength != 0)
-    elength += sizeof (struct ar_hdr);
-  elength += elength % 2;
 
   amt = orl_max * sizeof (struct orl);
   map = (struct orl *) bfd_malloc (amt);
@@ -2451,14 +2565,13 @@ _bfd_compute_and_write_armap (bfd *arch, unsigned int elength)
 
 	  /* Now ask the BFD to free up any cached information, so we
 	     don't fill all of memory with symbol tables.  */
-	  if (! bfd_free_cached_info (current))
+	  if (!keep_symtab && !bfd_free_cached_info (current))
 	    goto error_return;
 	}
     }
 
-  /* OK, now we have collected all the data, let's write them out.  */
-  ret = BFD_SEND (arch, write_armap,
-		  (arch, elength, map, orl_count, stridx));
+  /* OK, now we have collected all the data, let's push them out.  */
+  ret = push_armap (arch, elength, map, orl_count, stridx);
 
   free (syms);
   free (map);
