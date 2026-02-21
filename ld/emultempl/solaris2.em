@@ -41,42 +41,62 @@ fragment <<EOF
    Cf. Linker and Libraries Guide, Ch. 2, Link-Editor, Generating the Output
    File, p.63.  */
 
+#include "elf-solaris2.h"
+
+/* Set things up early so that global syms will be defined by PROVIDE
+   assignments in elf.sc.  The alternative to this is to modify elf.sc
+   for Solaris to not use PROVIDE for assignments to _etext, _edata,
+   and _end.  */
+static void
+elf_solaris2_after_open (void)
+{
+  if (is_elf_hash_table (link_info.hash)
+      && elf_hash_table (&link_info)->target_os == is_solaris
+      && !bfd_link_relocatable (&link_info))
+    {
+      const char *const *sym;
+
+      for (sym = elf_solaris2_global_syms; *sym != NULL; sym++)
+	{
+	  struct elf_link_hash_entry *h
+	    = elf_link_hash_lookup (elf_hash_table (&link_info), *sym,
+				    true, false, false);
+	  if (h)
+	    /* Otherwise elf_fix_symbol_flags sets ref_regular, which
+	       results in an abort when a script doesn't define the sym.  */
+	    h->non_elf = 0;
+	}
+    }
+  ${LDEMUL_AFTER_OPEN-gld${EMULATION_NAME}_after_open} ();
+}
+
 static void
 elf_solaris2_before_allocation (void)
 {
   if (is_elf_hash_table (link_info.hash)
       && elf_hash_table (&link_info)->target_os == is_solaris)
     {
-      /* Global symbols required by the Solaris 2 ABI.  */
-      static const char *global_syms[] = {
-	"_DYNAMIC",
-	"_GLOBAL_OFFSET_TABLE_",
-	"_PROCEDURE_LINKAGE_TABLE_",
-	"_edata",
-	"_end",
-	"_etext",
-	NULL
-      };
       /* Local symbols required by the Solaris 2 ABI.  Already emitted by
 	 emulparams/solaris2.sh.  */
-      static const char *local_syms[] = {
+      static const char *const local_syms[] = {
 	"_START_",
 	"_END_",
 	NULL
       };
-      const char **sym;
+      const char *const *sym;
 
       /* Do this for both executables and shared objects.  */
       if (!bfd_link_relocatable (&link_info))
 	{
-	  for (sym = global_syms; *sym != NULL; sym++)
+	  for (sym = elf_solaris2_global_syms; *sym != NULL; sym++)
 	    {
 	      struct elf_link_hash_entry *h;
 
 	      /* Lookup symbol.  */
 	      h = elf_link_hash_lookup (elf_hash_table (&link_info), *sym,
 					false, false, false);
-	      if (h == NULL)
+	      if (h == NULL
+		  || h->root.type == bfd_link_hash_new)
 		continue;
 
 	      /* Undo the hiding done by _bfd_elf_define_linkage_sym.  */
@@ -114,7 +134,7 @@ elf_solaris2_before_allocation (void)
 	  struct bfd_elf_version_tree *basever;
 	  const char *soname;
 
-	  for (sym = global_syms; *sym != NULL; sym++)
+	  for (sym = elf_solaris2_global_syms; *sym != NULL; sym++)
 	    {
 	      /* Create a version pattern for this symbol.  Some of them start
 		 off as local, others as global, so try both.  */
@@ -148,4 +168,5 @@ elf_solaris2_before_allocation (void)
 
 EOF
 
+LDEMUL_AFTER_OPEN=elf_solaris2_after_open
 LDEMUL_BEFORE_ALLOCATION=elf_solaris2_before_allocation
