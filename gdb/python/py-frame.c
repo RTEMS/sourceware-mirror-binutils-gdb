@@ -603,8 +603,6 @@ frapy_level (PyObject *self, PyObject *args)
     {
       return gdbpy_handle_gdb_exception (nullptr, except);
     }
-
-  Py_RETURN_NONE;
 }
 
 /* The language for this frame.  */
@@ -626,8 +624,6 @@ frapy_language (PyObject *self, PyObject *args)
     {
       return gdbpy_handle_gdb_exception (nullptr, except);
     }
-
-  Py_RETURN_NONE;
 }
 
 /* The static link for this frame.  */

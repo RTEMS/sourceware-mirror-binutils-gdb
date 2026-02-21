@@ -483,8 +483,6 @@ objfpy_lookup_global_symbol (PyObject *self, PyObject *args, PyObject *kw)
     {
       return gdbpy_handle_gdb_exception (nullptr, except);
     }
-
-  Py_RETURN_NONE;
 }
 
 /* Implementation of
@@ -518,8 +516,6 @@ objfpy_lookup_static_symbol (PyObject *self, PyObject *args, PyObject *kw)
     {
       return gdbpy_handle_gdb_exception (nullptr, except);
     }
-
-  Py_RETURN_NONE;
 }
 
 /* Implement repr() for gdb.Objfile.  */

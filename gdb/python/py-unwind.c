@@ -599,8 +599,6 @@ pending_framepy_language (PyObject *self, PyObject *args)
     {
       return gdbpy_handle_gdb_exception (nullptr, except);
     }
-
-  Py_RETURN_NONE;
 }
 
 /* Implement PendingFrame.find_sal().  Return the PendingFrame's symtab and
