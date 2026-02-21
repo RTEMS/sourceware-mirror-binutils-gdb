@@ -101,7 +101,9 @@ elf_solaris2_before_allocation (void)
 
 	      /* Undo the hiding done by _bfd_elf_define_linkage_sym.  */
 	      h->forced_local = 0;
-	      h->other &= ~STV_HIDDEN;
+	      h->type = STT_OBJECT;
+	      if (ELF_ST_VISIBILITY (h->other) != STV_INTERNAL)
+		h->other = (h->other & ~ELF_ST_VISIBILITY (-1)) | STV_PROTECTED;
 
 	      /* Emit it into the .dynamic section, too.  */
 	      bfd_elf_link_record_dynamic_symbol (&link_info, h);
@@ -110,6 +112,7 @@ elf_solaris2_before_allocation (void)
 	  for (sym = local_syms; *sym != NULL; sym++)
 	    {
 	      struct elf_link_hash_entry *h;
+	      elf_backend_data *bed;
 
 	      /* Lookup symbol.  */
 	      h = elf_link_hash_lookup (elf_hash_table (&link_info), *sym,
@@ -118,7 +121,9 @@ elf_solaris2_before_allocation (void)
 		continue;
 
 	      /* Turn it local.  */
-	      h->forced_local = 1;
+	      bed = get_elf_backend_data (link_info.output_bfd);
+	      bed->elf_backend_hide_symbol (&link_info, h, true);
+
 	      /* Type should be STT_OBJECT, not STT_NOTYPE.  */
 	      h->type = STT_OBJECT;
 	    }
