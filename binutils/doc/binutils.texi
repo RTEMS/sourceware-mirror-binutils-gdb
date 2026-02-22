@@ -1075,7 +1075,7 @@ first character will be used for global indirect function symbols and
 the second character, if present, will be used for local indirect
 function symbols.
 
-@item j
+@item -j
 The same as @option{--format=just-symbols}.
 
 @item -l
