@@ -9075,8 +9075,8 @@ display_debug_aranges (struct dwarf_section *section,
       printf (_("  Version:                  %d\n"), arange.ar_version);
       printf (_("  Offset into .debug_info:  %#" PRIx64 "\n"),
 	      arange.ar_info_offset);
-      printf (_("  Pointer Size:             %d\n"), arange.ar_address_size);
-      printf (_("  Segment Size:             %d\n"), arange.ar_segment_size);
+      printf (_("  Address size:             %d\n"), arange.ar_address_size);
+      printf (_("  Segment size:             %d\n"), arange.ar_segment_size);
 
       if (!address_size_ok (section->name, arange.ar_address_size,
 			    arange.ar_segment_size))
