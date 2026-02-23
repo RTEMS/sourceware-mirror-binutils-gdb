@@ -9057,7 +9057,7 @@ display_debug_aranges (struct dwarf_section *section,
 		" in %s section does not point to a CU header.\n"),
 	      arange.ar_info_offset, section->name);
 
-      SAFE_BYTE_GET_AND_INC (arange.ar_pointer_size, hdrptr, 1, end_ranges);
+      SAFE_BYTE_GET_AND_INC (arange.ar_address_size, hdrptr, 1, end_ranges);
       SAFE_BYTE_GET_AND_INC (arange.ar_segment_size, hdrptr, 1, end_ranges);
 
       if (arange.ar_version != 2 && arange.ar_version != 3)
@@ -9075,14 +9075,14 @@ display_debug_aranges (struct dwarf_section *section,
       printf (_("  Version:                  %d\n"), arange.ar_version);
       printf (_("  Offset into .debug_info:  %#" PRIx64 "\n"),
 	      arange.ar_info_offset);
-      printf (_("  Pointer Size:             %d\n"), arange.ar_pointer_size);
+      printf (_("  Pointer Size:             %d\n"), arange.ar_address_size);
       printf (_("  Segment Size:             %d\n"), arange.ar_segment_size);
 
-      if (!address_size_ok (section->name, arange.ar_pointer_size,
+      if (!address_size_ok (section->name, arange.ar_address_size,
 			    arange.ar_segment_size))
 	break;
 
-      tuple_size = 2 * arange.ar_pointer_size + arange.ar_segment_size;
+      tuple_size = 2 * arange.ar_address_size + arange.ar_segment_size;
 
       if (tuple_size > 8)
 	printf (_("\n    Address            Length\n"));
@@ -9096,13 +9096,13 @@ display_debug_aranges (struct dwarf_section *section,
 
       while (tuple_size <= end_ranges - addr_ranges)
 	{
-	  SAFE_BYTE_GET_AND_INC (address, addr_ranges, arange.ar_pointer_size,
+	  SAFE_BYTE_GET_AND_INC (address, addr_ranges, arange.ar_address_size,
 				 end_ranges);
-	  SAFE_BYTE_GET_AND_INC (length, addr_ranges, arange.ar_pointer_size,
+	  SAFE_BYTE_GET_AND_INC (length, addr_ranges, arange.ar_address_size,
 				 end_ranges);
 	  printf ("    ");
-	  print_hex (address, arange.ar_pointer_size);
-	  print_hex_ns (length, arange.ar_pointer_size);
+	  print_hex (address, arange.ar_address_size);
+	  print_hex_ns (length, arange.ar_address_size);
 	  putchar ('\n');
 	}
 
