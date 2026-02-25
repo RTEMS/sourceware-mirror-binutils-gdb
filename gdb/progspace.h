@@ -463,14 +463,19 @@ private:
    share an address space.  */
 extern address_space_ref_ptr maybe_new_address_space ();
 
-/* Update all program spaces matching to address spaces.  The user may
-   have created several program spaces, and loaded executables into
-   them before connecting to the target interface that will create the
-   inferiors.  All that happens before GDB has a chance to know if the
-   inferiors will share an address space or not.  Call this after
-   having connected to the target interface and having fetched the
-   target description, to fixup the program/address spaces
+/* Update all program spaces matching to address spaces.  This is done
+   for the inferiors that have TARGET as their process stratum target
+   and using GDBARCH to determine if there is a shared address space
+   and if solibs are global.
+
+   The user may have created several program spaces, and loaded
+   executables into them before connecting to the target interface
+   that will create the inferiors.  All that happens before GDB has a
+   chance to know if the inferiors will share an address space or not.
+   Call this after having connected to the target interface and having
+   fetched the target description, to fixup the program/address spaces
    mappings.  */
-extern void update_address_spaces (void);
+extern void update_address_spaces (process_stratum_target *target,
+				   gdbarch *gdbarch);
 
 #endif /* GDB_PROGSPACE_H */
