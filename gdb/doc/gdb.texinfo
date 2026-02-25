@@ -25527,6 +25527,17 @@ supported on @sc{gnu}/Linux, FreeBSD and NetBSD.
 Show the current working directory of the process.  This command is
 supported on @sc{gnu}/Linux, FreeBSD and NetBSD.
 
+@item info proc environ
+@cindex info proc environ
+Show the initial environment variables of the process.  This command
+is supported on @sc{gnu}/Linux.  Note that the information printed by
+@code{info proc environ} is not necessarily the same as @code{show
+environment}, which lists the environment variables that will be given
+to the program next time it is started by @value{GDBN}.  The two
+information may differ in particular when @value{GDBN} attached to a
+running program that was started in an environment different than
+@value{GDBN}'s.
+
 @item info proc exe
 @cindex info proc exe
 Show the name of executable of the process.  This command is supported
