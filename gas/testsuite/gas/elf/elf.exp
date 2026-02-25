@@ -20,7 +20,10 @@
 
 proc run_elf_list_test { name suffix opts readelf_opts readelf_pipe } {
     global READELF
-    global srcdir subdir
+    global srcdir subdir runtests
+    if ![runtest_file_p $runtests $name] then {
+	return
+    }
     set testname "elf $name list"
     set file $srcdir/$subdir/$name
     gas_run ${name}.s "$opts -o dump.o" ">&dump.out"
