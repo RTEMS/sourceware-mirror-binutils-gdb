@@ -48,20 +48,11 @@ struct solib;
 struct address_space : public refcounted_object
 {
   /* Create a new address space object, and add it to the list.  */
-  address_space ();
+  address_space () = default;
   DISABLE_COPY_AND_ASSIGN (address_space);
-
-  /* Returns the integer address space id of this address space.  */
-  int num () const
-  {
-    return m_num;
-  }
 
   /* Per aspace data-pointers required by other GDB modules.  */
   registry<address_space> registry_fields;
-
-private:
-  int m_num;
 };
 
 using address_space_ref_ptr

@@ -36,18 +36,6 @@ std::vector<struct program_space *> program_spaces;
 /* Pointer to the current program space.  */
 struct program_space *current_program_space;
 
-/* The last address space number assigned.  */
-static int highest_address_space_num;
-
-
-
-/* Create a new address space object, and add it to the list.  */
-
-address_space::address_space ()
-  : m_num (++highest_address_space_num)
-{
-}
-
 /* Maybe create a new address space object, and add it to the list, or
    return a pointer to an existing address space, in case inferiors
    share an address space on this target system.  */
@@ -66,16 +54,6 @@ maybe_new_address_space ()
 
   return new_address_space ();
 }
-
-/* Start counting over from scratch.  */
-
-static void
-init_address_spaces (void)
-{
-  highest_address_space_num = 0;
-}
-
-
 
 /* Remove a program space from the program spaces list.  */
 
@@ -483,8 +461,6 @@ update_address_spaces (void)
 {
   int shared_aspace
     = gdbarch_has_shared_address_space (current_inferior ()->arch ());
-
-  init_address_spaces ();
 
   if (shared_aspace)
     {
