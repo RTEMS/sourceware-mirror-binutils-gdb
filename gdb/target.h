@@ -991,8 +991,8 @@ struct target_ops
        target file descriptor, or -1 if an error occurs (and set
        *TARGET_ERRNO).  */
     virtual int fileio_open (struct inferior *inf, const char *filename,
-			     int flags, int mode, int warn_if_slow,
-			     fileio_error *target_errno);
+			     fileio_open_flags flags, fileio_mode_flags mode,
+			     int warn_if_slow, fileio_error *target_errno);
 
     /* Write up to LEN bytes from WRITE_BUF to FD on the target.
        Return the number of bytes written, or -1 if an error occurs
@@ -2265,8 +2265,10 @@ enum class target_fd : int
    message if the file is being accessed over a link that may be
    slow.  */
 extern target_fd target_fileio_open (struct inferior *inf,
-				     const char *filename, int flags,
-				     int mode, bool warn_if_slow,
+				     const char *filename,
+				     fileio_open_flags flags,
+				     fileio_mode_flags mode,
+				     bool warn_if_slow,
 				     fileio_error *target_errno);
 
 /* Write up to LEN bytes from WRITE_BUF to FD on the target.

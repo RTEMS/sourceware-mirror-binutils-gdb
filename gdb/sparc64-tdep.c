@@ -287,8 +287,10 @@ adi_tag_fd ()
   char cl_name[MAX_PROC_NAME_SIZE];
   snprintf (cl_name, sizeof(cl_name), "/proc/%ld/adi/tags", (long) pid);
   fileio_error target_errno;
-  proc->stat.tag_fd = target_fileio_open (NULL, cl_name, O_RDWR|O_EXCL,
-					  false, 0, &target_errno);
+  proc->stat.tag_fd = target_fileio_open (NULL, cl_name,
+					  FILEIO_O_RDWR | FILEIO_O_EXCL,
+					  0, false,
+					  &target_errno);
   return proc->stat.tag_fd;
 }
 

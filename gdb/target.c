@@ -3176,8 +3176,8 @@ fileio_fd_to_fh (target_fd fd)
 
 int
 target_ops::fileio_open (struct inferior *inf, const char *filename,
-			 int flags, int mode, int warn_if_slow,
-			 fileio_error *target_errno)
+			 fileio_open_flags flags, fileio_mode_flags mode,
+			 int warn_if_slow, fileio_error *target_errno)
 {
   *target_errno = FILEIO_ENOSYS;
   return -1;
@@ -3241,7 +3241,8 @@ target_ops::fileio_readlink (struct inferior *inf, const char *filename,
 
 target_fd
 target_fileio_open (struct inferior *inf, const char *filename,
-		    int flags, int mode, bool warn_if_slow, fileio_error *target_errno)
+		    fileio_open_flags flags, fileio_mode_flags mode,
+		    bool warn_if_slow, fileio_error *target_errno)
 {
   for (target_ops *t = default_fileio_target (); t != NULL; t = t->beneath ())
     {
@@ -3260,7 +3261,7 @@ target_fileio_open (struct inferior *inf, const char *filename,
       target_debug_printf_nofunc
 	("target_fileio_open (%d,%s,0x%x,0%o,%d) = %d (%d)",
 	 inf == NULL ? 0 : inf->num, filename,
-	 flags, mode, warn_if_slow, int (result),
+	 unsigned (flags), unsigned (mode), warn_if_slow, int (result),
 	 result != target_fd::INVALID ? 0 : *target_errno);
       return result;
     }
@@ -3480,7 +3481,8 @@ target_fileio_read_alloc_1 (struct inferior *inf, const char *filename,
   fileio_error target_errno;
 
   scoped_target_fd fd (target_fileio_open (inf, filename, FILEIO_O_RDONLY,
-					   0700, false, &target_errno));
+					   FILEIO_S_IRWXU, false,
+					   &target_errno));
   if (fd.get () == target_fd::INVALID)
     return -1;
 
