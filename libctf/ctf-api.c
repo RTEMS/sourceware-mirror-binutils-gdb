@@ -65,7 +65,12 @@ ctf_version (int ctf_version_, size_t btf_hdr_len, ctf_btf_mode_t btf_mode)
     {
       /*  Dynamic version switching is not presently supported. */
       if (ctf_version_ != _libctf_version)
-	goto err;
+	{
+	  ctf_err (err_locus (NULL), ENOTSUP,
+		   _("can only emit CTF version of %i, not %i as requested"),
+		   ctf_version_, _libctf_version);
+	  goto err;
+	}
 
       ctf_dprintf ("ctf_version: client using version %i\n", ctf_version_);
     }
@@ -74,7 +79,12 @@ ctf_version (int ctf_version_, size_t btf_hdr_len, ctf_btf_mode_t btf_mode)
     {
       /*  Dynamic version switching is not presently supported. */
       if (btf_hdr_len != _btf_hdr_len)
-	goto err;
+	{
+	  ctf_err (err_locus (NULL), ENOTSUP,
+		   _("can only emit BTF header length of %zi, not %zi as requested"),
+		   _btf_hdr_len, btf_hdr_len);
+	  goto err;
+	}
 
       ctf_dprintf ("ctf_version: client using BTF header length %zi\n", btf_hdr_len);
     }
