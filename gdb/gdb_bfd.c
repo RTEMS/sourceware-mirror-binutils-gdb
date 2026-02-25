@@ -365,7 +365,7 @@ gdb_bfd_open_from_target_memory (CORE_ADDR addr, ULONGEST size,
 
 struct target_fileio_stream : public gdb_bfd_iovec_base
 {
-  target_fileio_stream (bfd *nbfd, int fd)
+  target_fileio_stream (bfd *nbfd, target_fd fd)
     : m_bfd (nbfd),
       m_fd (fd)
   {
@@ -384,7 +384,7 @@ private:
   bfd *m_bfd;
 
   /* The file descriptor.  */
-  int m_fd;
+  target_fd m_fd;
 };
 
 /* Wrapper for target_fileio_open suitable for use as a helper
@@ -394,7 +394,7 @@ static target_fileio_stream *
 gdb_bfd_iovec_fileio_open (struct bfd *abfd, inferior *inf, bool warn_if_slow)
 {
   const char *filename = bfd_get_filename (abfd);
-  int fd;
+  target_fd fd;
   fileio_error target_errno;
 
   gdb_assert (is_target_filename (filename));
@@ -403,7 +403,7 @@ gdb_bfd_iovec_fileio_open (struct bfd *abfd, inferior *inf, bool warn_if_slow)
 			   filename + strlen (TARGET_SYSROOT_PREFIX),
 			   FILEIO_O_RDONLY, 0, warn_if_slow,
 			   &target_errno);
-  if (fd == -1)
+  if (fd == target_fd::INVALID)
     {
       errno = fileio_error_to_host (target_errno);
       bfd_set_error (bfd_error_system_call);
