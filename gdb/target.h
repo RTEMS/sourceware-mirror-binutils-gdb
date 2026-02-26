@@ -992,7 +992,7 @@ struct target_ops
        *TARGET_ERRNO).  */
     virtual int fileio_open (struct inferior *inf, const char *filename,
 			     fileio_open_flags flags, fileio_mode_flags mode,
-			     int warn_if_slow, fileio_error *target_errno);
+			     bool warn_if_slow, fileio_error *target_errno);
 
     /* Write up to LEN bytes from WRITE_BUF to FD on the target.
        Return the number of bytes written, or -1 if an error occurs

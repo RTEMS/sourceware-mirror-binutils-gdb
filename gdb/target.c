@@ -3177,7 +3177,7 @@ fileio_fd_to_fh (target_fd fd)
 int
 target_ops::fileio_open (struct inferior *inf, const char *filename,
 			 fileio_open_flags flags, fileio_mode_flags mode,
-			 int warn_if_slow, fileio_error *target_errno)
+			 bool warn_if_slow, fileio_error *target_errno)
 {
   *target_errno = FILEIO_ENOSYS;
   return -1;

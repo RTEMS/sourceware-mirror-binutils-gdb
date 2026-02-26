@@ -101,7 +101,7 @@ public:
 
   int fileio_open (struct inferior *inf, const char *filename,
 		   fileio_open_flags flags, fileio_mode_flags mode,
-		   int warn_if_slow, fileio_error *target_errno) override;
+		   bool warn_if_slow, fileio_error *target_errno) override;
 
   std::optional<std::string>
     fileio_readlink (struct inferior *inf,

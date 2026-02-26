@@ -75,7 +75,7 @@ public:
 
   int fileio_open (struct inferior *inf, const char *filename,
 		   fileio_open_flags flags, fileio_mode_flags mode,
-		   int warn_if_slow, fileio_error *target_errno) override;
+		   bool warn_if_slow, fileio_error *target_errno) override;
   int fileio_pwrite (int fd, const gdb_byte *write_buf, int len,
 		     ULONGEST offset, fileio_error *target_errno) override;
   int fileio_pread (int fd, gdb_byte *read_buf, int len,

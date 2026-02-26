@@ -1115,7 +1115,7 @@ public:
 
   int fileio_open (struct inferior *inf, const char *filename,
 		   fileio_open_flags flags, fileio_mode_flags mode,
-		   int warn_if_slow,
+		   bool warn_if_slow,
 		   fileio_error *target_errno) override;
 
   int fileio_pwrite (int fd, const gdb_byte *write_buf, int len,
@@ -1291,7 +1291,7 @@ public: /* Remote specific methods.  */
   /* We should get rid of this and use fileio_open directly.  */
   int remote_hostio_open (struct inferior *inf, const char *filename,
 			  fileio_open_flags flags, fileio_mode_flags mode,
-			  int warn_if_slow, fileio_error *remote_errno);
+			  bool warn_if_slow, fileio_error *remote_errno);
   int remote_hostio_close (int fd, fileio_error *remote_errno);
 
   int remote_hostio_unlink (inferior *inf, const char *filename,
@@ -13403,7 +13403,7 @@ int
 remote_target::remote_hostio_open (inferior *inf, const char *filename,
 				   fileio_open_flags flags,
 				   fileio_mode_flags mode,
-				   int warn_if_slow,
+				   bool warn_if_slow,
 				   fileio_error *remote_errno)
 {
   struct remote_state *rs = get_remote_state ();
@@ -13450,7 +13450,7 @@ remote_target::remote_hostio_open (inferior *inf, const char *filename,
 int
 remote_target::fileio_open (struct inferior *inf, const char *filename,
 			    fileio_open_flags flags, fileio_mode_flags mode,
-			    int warn_if_slow, fileio_error *remote_errno)
+			    bool warn_if_slow, fileio_error *remote_errno)
 {
   return remote_hostio_open (inf, filename, flags, mode, warn_if_slow,
 			     remote_errno);
