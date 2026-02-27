@@ -3959,11 +3959,14 @@ md_assemble (char *str)
 	}
     }
 
-  while (is_whitespace (*str))
-    ++str;
+  if (*opindex_ptr == 0)
+    {
+      while (is_whitespace (*str))
+	++str;
 
-  if (*str != '\0')
-    as_bad (_("junk at end of line: `%s'"), str);
+      if (*str != '\0')
+	as_bad (_("junk at end of line: `%s'"), str);
+    }
 
 #ifdef OBJ_ELF
   /* Do we need/want an APUinfo section? */
