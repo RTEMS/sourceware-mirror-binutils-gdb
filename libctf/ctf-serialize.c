@@ -26,7 +26,7 @@
 #include <elf.h>
 #include "elf-bfd.h"
 
-#include <ctf-ref.h>
+#include <ctf-util-ref.h>
 
 /* Functions in this file are roughly divided into two types: sizing functions,
    which work out the size of various structures in the final serialized
@@ -1631,8 +1631,8 @@ ctf_depreserialize (ctf_dict_t *fp)
 
 /* Emit a new CTF dict which is a serialized copy of this one: also reify the
    string table and update all offsets in the newly-serialized dict suitably.
-   (This simplifies ctf-string.c a little, at the cost of storing a second copy
-   of the strtab during serialization.)
+   (This simplifies ctf-util-string.c a little, at the cost of storing a second
+   copy of the strtab during serialization.)
 
    Other aspects of the existing dict are unchanged, although some static
    entries may be duplicated in the dynamic state (which should have no effect
