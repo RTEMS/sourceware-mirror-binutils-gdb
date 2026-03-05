@@ -22,7 +22,7 @@
 
 #include "config.h"
 #include <errno.h>
-#include "ctf-decls.h"
+#include "ctf-port.h"
 #include <ctf-api.h>
 #include <ctf-test-api.h>
 #include "ctf-sha1.h"
