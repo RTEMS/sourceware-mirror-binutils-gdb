@@ -1,4 +1,4 @@
-/* CTF ref system.
+/* Interface to endianness-neutrality functions.
    Copyright (C) 2019-2025 Free Software Foundation, Inc.
 
    This file is part of libctf.
@@ -17,25 +17,21 @@
    along with this program; see the file COPYING.  If not see
    <http://www.gnu.org/licenses/>.  */
 
-#ifndef	_CTF_REF_H
-#define	_CTF_REF_H
+#ifndef _CTF_ENDIAN_H
+#define _CTF_ENDIAN_H
 
-#include "ctf-impl.h"
+#include "config.h"
+#include <stdint.h>
+#include "ctf-util-swap.h"
 
-/* This is in a separate header because nothing but ctf-string.c and
-   ctf-serialize.c should use functions herein (and ctf-util.c, which defines
-   them).  */
+#if !defined (HAVE_ENDIAN_H) || !defined (htole64)
+#ifndef WORDS_BIGENDIAN
+# define htole64(x) (x)
+# define le64toh(x) (x)
+#else
+# define htole64(x) bswap_64 ((x))
+# define le64toh(x) bswap_64 ((x))
+#endif /* WORDS_BIGENDIAN */
+#endif /* !defined(HAVE_ENDIAN_H) */
 
-typedef struct ctf_ref
-{
-  ctf_list_t cre_list;		/* List forward/back pointers.  */
-  uint32_t *cre_ref;		/* A single ref to this string.  */
-} ctf_ref_t;
-
-extern uint32_t ctf_str_add_ref (ctf_dict_t *, const char *, uint32_t *ref);
-
-extern ctf_ref_t *ctf_create_ref (ctf_dict_t *, ctf_list_t *, uint32_t *ref);
-extern void ctf_purge_ref_list (ctf_dict_t *, ctf_list_t *);
-extern void ctf_update_refs (ctf_list_t *, uint32_t value);
-
-#endif /* _CTF_REF_H */
+#endif /* !defined(_CTF_ENDIAN_H) */

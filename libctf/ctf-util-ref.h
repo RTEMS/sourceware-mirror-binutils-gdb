@@ -1,4 +1,4 @@
-/* SHA-1 thunks.
+/* CTF ref system.
    Copyright (C) 2019-2025 Free Software Foundation, Inc.
 
    This file is part of libctf.
@@ -17,34 +17,25 @@
    along with this program; see the file COPYING.  If not see
    <http://www.gnu.org/licenses/>.  */
 
-#include <ctf-impl.h>
-#include <ctf-sha1.h>
+#ifndef	_CTF_REF_H
+#define	_CTF_REF_H
 
-static const char hex[] = "0123456789abcdef";
+#include "ctf-impl.h"
 
-char *
-ctf_sha1_fini (ctf_sha1_t *sha1, char *buf)
+/* This is in a separate header because nothing but ctf-util-string.c and
+   ctf-serialize.c should use functions herein (and ctf-util.c, which defines
+   them).  */
+
+typedef struct ctf_ref
 {
-  size_t i;
+  ctf_list_t cre_list;		/* List forward/back pointers.  */
+  uint32_t *cre_ref;		/* A single ref to this string.  */
+} ctf_ref_t;
 
-  /* Alignment suitable for a uint32_t. */
-  union
-  {
-    uint32_t align;
-    unsigned char digest[((CTF_SHA1_SIZE - 1) / 2) + 1];
-  } align;
+extern uint32_t ctf_str_add_ref (ctf_dict_t *, const char *, uint32_t *ref);
 
-  sha1_finish_ctx (sha1, align.digest);
+extern ctf_ref_t *ctf_create_ref (ctf_dict_t *, ctf_list_t *, uint32_t *ref);
+extern void ctf_purge_ref_list (ctf_dict_t *, ctf_list_t *);
+extern void ctf_update_refs (ctf_list_t *, uint32_t value);
 
-  if (!buf)
-    return NULL;
-
-  buf[CTF_SHA1_SIZE - 1] = '\0';
-
-  for (i = 0; i < (CTF_SHA1_SIZE - 1) / 2; i++)
-    {
-      buf[2 * i] = hex[align.digest[i] >> 4];
-      buf[2 * i + 1] = hex[align.digest[i] & 0xf];
-    }
-  return buf;
-}
+#endif /* _CTF_REF_H */

@@ -21,8 +21,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <elf.h>
-#include "ctf-endian.h"
-#include "swap.h"
+#include "ctf-util-endian.h"
+#include "ctf-util-swap.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>

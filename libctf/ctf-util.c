@@ -1,4 +1,4 @@
-/* Simple data structure utilities and helpers.
+/* Simple internal utilities and helpers.
    Copyright (C) 2019-2025 Free Software Foundation, Inc.
 
    This file is part of libctf.
@@ -18,9 +18,42 @@
    <http://www.gnu.org/licenses/>.  */
 
 #include <ctf-impl.h>
+#include <ctf-util-sha1.h>
 #include <string.h>
-#include "ctf-ref.h"
-#include "ctf-endian.h"
+#include "ctf-util-ref.h"
+#include "ctf-util-endian.h"
+
+static const char hex[] = "0123456789abcdef";
+
+/* Finish off an SHA-1 hash (see ctf-util-sha1.h for the inlined functions to
+   create and add to a hash).  */
+
+char *
+ctf_sha1_fini (ctf_sha1_t *sha1, char *buf)
+{
+  size_t i;
+
+  /* Alignment suitable for a uint32_t. */
+  union
+  {
+    uint32_t align;
+    unsigned char digest[((CTF_SHA1_SIZE - 1) / 2) + 1];
+  } align;
+
+  sha1_finish_ctx (sha1, align.digest);
+
+  if (!buf)
+    return NULL;
+
+  buf[CTF_SHA1_SIZE - 1] = '\0';
+
+  for (i = 0; i < (CTF_SHA1_SIZE - 1) / 2; i++)
+    {
+      buf[2 * i] = hex[align.digest[i] >> 4];
+      buf[2 * i + 1] = hex[align.digest[i] & 0xf];
+    }
+  return buf;
+}
 
 /* Simple doubly-linked list append routine.  This implementation assumes that
    each list element contains an embedded ctf_list_t as the first member.

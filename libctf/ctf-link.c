@@ -19,7 +19,7 @@
 
 #include <ctf-impl.h>
 #include <string.h>
-#include "ctf-endian.h"
+#include "ctf-util-endian.h"
 
 /* CTF linking consists of adding CTF archives full of content to be merged into
    this one to the current file (which must be writable) by calling
