@@ -19,7 +19,7 @@
 
 #include <assert.h>
 #include <ctf-impl.h>
-#include <ctf-ref.h>
+#include <ctf-util-ref.h>
 #include <string.h>
 
 static ctf_str_atom_t *
