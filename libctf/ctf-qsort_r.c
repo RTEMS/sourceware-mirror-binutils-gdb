@@ -27,7 +27,7 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
-#include "ctf-decls.h"
+#include "ctf-port.h"
 
 #ifndef _LIBC
 # define _quicksort ctf_qsort_r
