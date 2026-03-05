@@ -28,8 +28,8 @@
 #include <unistd.h>
 #include <elf.h>
 #include <bfd.h>
-#include "swap.h"
-#include "ctf-endian.h"
+#include "ctf-util-swap.h"
+#include "ctf-util-endian.h"
 
 #include "elf-bfd.h"
 

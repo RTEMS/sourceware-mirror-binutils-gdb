@@ -24,7 +24,7 @@
 #include <string.h>
 #include <stddef.h>
 #include "sframe-impl.h"
-#include "swap.h"
+#include "ctf-util-swap.h"
 
 struct sf_fde_tbl
 {

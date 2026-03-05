@@ -56,11 +56,12 @@ libctf_version_info = -version-info `grep -v '^\#' $(srcdir)/libtool-version`
 libctf_ldflags_nover = $(libctf_version_info) @SHARED_LDFLAGS@
 libctf_nobfd_la_LDFLAGS = $(libctf_ldflags_nover) @VERSION_FLAGS_NOBFD@
 libctf_nobfd_la_CPPFLAGS = $(AM_CPPFLAGS) -DNOBFD=1
-libctf_nobfd_la_SOURCES = ctf-api.c ctf-archive.c ctf-dump.c ctf-create.c ctf-decl.c ctf-error.c \
-			  ctf-hash.c ctf-dedup.c ctf-link.c ctf-lookup.c ctf-open.c ctf-port.c \
-			  ctf-serialize.c ctf-sha1.c ctf-string.c ctf-types.c ctf-util.c
+libctf_nobfd_la_SOURCES = ctf-api.c ctf-archive.c ctf-dump.c ctf-create.c ctf-error.c \
+			  ctf-dedup.c ctf-link.c ctf-lookup.c ctf-open.c ctf-serialize.c \
+			  ctf-types.c ctf-util.c ctf-util-decl.c ctf-util-hash.c \
+			  ctf-util-port.c ctf-util-string.c
 if NEED_CTF_QSORT_R
-libctf_nobfd_la_SOURCES += ctf-qsort_r.c
+libctf_nobfd_la_SOURCES += ctf-util-qsort_r.c
 endif
 
 # @CTF_LIBADD@ appears here twice: once, to force libiberty to get searched before

@@ -22,10 +22,10 @@
 
 #include "config.h"
 #include <errno.h>
-#include "ctf-port.h"
+#include "ctf-util-port.h"
 #include <ctf-api.h>
 #include <ctf-test-api.h>
-#include "ctf-sha1.h"
+#include "ctf-util-sha1.h"
 #include <sys/types.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -38,7 +38,7 @@
 #include <elf.h>
 #include <bfd.h>
 #include "hashtab.h"
-#include "ctf-intl.h"
+#include "ctf-util-intl.h"
 
 #ifdef	__cplusplus
 extern "C"
@@ -970,7 +970,7 @@ extern const char _CTF_SECTION[];	/* name of CTF ELF section */
 extern const char _CTF_NULLSTR[];	/* empty string */
 extern ctf_btf_mode_t _libctf_btf_mode; /* BTF writeout mode.  */
 
-#include "ctf-inlines.h"
+#include "ctf-util-inlines.h"
 
 #ifdef	__cplusplus
 }
