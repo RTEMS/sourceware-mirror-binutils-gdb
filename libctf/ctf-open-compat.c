@@ -22,7 +22,7 @@
 #include <stddef.h>
 #include <string.h>
 #include <sys/types.h>
-#include "swap.h"
+#include "ctf-util-swap.h"
 #include <bfd.h>
 #include <zlib.h>
 
