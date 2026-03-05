@@ -1,4 +1,4 @@
-/* Miscellaneous dict-and library-wide API functions.
+/* Miscellaneous API functions not dependent on types or dicts.
    Copyright (C) 2019-2025 Free Software Foundation, Inc.
 
    This file is part of libctf.
@@ -570,4 +570,73 @@ ctf_assert_fail_internal (ctf_dict_t *fp, const char *file, size_t line,
   ctf_err (ctf_err_locus_internal (fp, fp, -1, 0, func), ECTF_INTERNAL,
 	   _("%s: %lu: libctf assertion failed: %s"),
 	   file, (long unsigned int) line, exprstr);
+}
+
+/* Create a ctf_next_t.  */
+
+ctf_next_t *
+ctf_next_create (void)
+{
+  return calloc (1, sizeof (struct ctf_next));
+}
+
+/* Destroy a ctf_next_t, for early exit from iterators.  */
+
+void
+ctf_next_destroy (ctf_next_t *i)
+{
+  if (i == NULL)
+    return;
+
+  if (i->ctn_iter_fun == (void (*) (void)) ctf_dynhash_next_sorted)
+    free (i->u.ctn_sorted_hkv);
+  if (i->ctn_next)
+    ctf_next_destroy (i->ctn_next);
+  if (i->ctn_next_inner)
+    ctf_next_destroy (i->ctn_next_inner);
+  free (i);
+}
+
+/* Copy a ctf_next_t.  */
+
+ctf_next_t *
+ctf_next_copy (ctf_next_t *i)
+{
+  ctf_next_t *i2;
+
+  if ((i2 = ctf_next_create()) == NULL)
+    return NULL;
+  memcpy (i2, i, sizeof (struct ctf_next));
+
+  if (i2->ctn_next)
+    {
+      i2->ctn_next = ctf_next_copy (i2->ctn_next);
+      if (i2->ctn_next == NULL)
+	goto err_next;
+    }
+
+  if (i2->ctn_next_inner)
+    {
+      i2->ctn_next_inner = ctf_next_copy (i2->ctn_next_inner);
+      if (i2->ctn_next_inner == NULL)
+	goto err_next_inner;
+    }
+
+  if (i2->ctn_iter_fun == (void (*) (void)) ctf_dynhash_next_sorted)
+    {
+      size_t els = ctf_dynhash_elements ((ctf_dynhash_t *) i->cu.ctn_h);
+      if ((i2->u.ctn_sorted_hkv = calloc (els, sizeof (ctf_next_hkv_t))) == NULL)
+	goto err_sorted_hkv;
+      memcpy (i2->u.ctn_sorted_hkv, i->u.ctn_sorted_hkv,
+	      els * sizeof (ctf_next_hkv_t));
+    }
+  return i2;
+
+ err_sorted_hkv:
+  ctf_next_destroy (i2->ctn_next_inner);
+ err_next_inner:
+  ctf_next_destroy (i2->ctn_next);
+ err_next:
+  ctf_next_destroy (i2);
+  return NULL;
 }
