@@ -34,33 +34,6 @@
    requiring per-compilation-unit sub-CTF files) or CTF archives (otherwise) and
    returns it, suitable for addition in the .ctf section of the output.  */
 
-/* Return the name of the compilation unit this CTF dict or its parent applies
-   to, or a non-null string otherwise: prefer the parent.  Used in debugging
-   output.  Sometimes used for outputs too.  */
-const char *
-ctf_link_input_name (ctf_dict_t *fp)
-{
-  if (fp->ctf_parent && fp->ctf_parent->ctf_cu_name)
-    return fp->ctf_parent->ctf_cu_name;
-  else if (fp->ctf_cu_name)
-    return fp->ctf_cu_name;
-  else
-    return "(unnamed)";
-}
-
-/* Return the cuname of a dict, or the string "unnamed-CU" if none.  */
-
-static const char *
-ctf_unnamed_cuname (ctf_dict_t *fp)
-{
-  const char *cuname = ctf_dict_cuname (fp);
-
-  if (!cuname)
-    cuname = "unnamed-CU";
-
-  return cuname;
-}
-
 /* The linker inputs look like this.  clin_fp is used for short-circuited
    CU-mapped links that can entirely avoid the first link phase in some
    situations in favour of just passing on the contained ctf_dict_t: it is
@@ -75,6 +48,47 @@ typedef struct ctf_link_input
   char *cuname_prefix;
   int n;
 } ctf_link_input_t;
+
+/* Return the name of the compilation unit this CTF dict or its parent applies
+   to, or a non-null string otherwise: prefer the parent.  Used in debugging
+   output.  Sometimes used for outputs too.  */
+const char *
+ctf_link_input_name (ctf_dict_t *fp)
+{
+  if (fp->ctf_parent && fp->ctf_parent->ctf_cu_name)
+    return fp->ctf_parent->ctf_cu_name;
+  else if (fp->ctf_cu_name)
+    return fp->ctf_cu_name;
+  else
+    {
+      void *input;
+      ctf_next_t *it = NULL;
+
+      /* Try looking up the filename of some random input: it's better than
+	 nothing.  */
+      if (ctf_dynhash_next (fp->ctf_link_inputs, &it, NULL, &input) == 0)
+	{
+	  ctf_next_destroy (it);
+	  if (((ctf_link_input_t *) input)->clin_filename != NULL)
+	    return ((ctf_link_input_t *) input)->clin_filename;
+	}
+    }
+
+  return "(unnamed)";
+}
+
+/* Return the cuname of a dict, or the string "unnamed-CU" if none.  */
+
+static const char *
+ctf_unnamed_cuname (ctf_dict_t *fp)
+{
+  const char *cuname = ctf_dict_cuname (fp);
+
+  if (!cuname)
+    cuname = "unnamed-CU";
+
+  return cuname;
+}
 
 static void
 ctf_link_input_close (void *input)
