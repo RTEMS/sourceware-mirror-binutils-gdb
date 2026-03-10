@@ -1109,11 +1109,6 @@ linux_info_proc (struct gdbarch *gdbarch, const char *args,
 
    CBFD is the BFD of the core file.
 
-   PRE_LOOP_CB is the callback function to invoke prior to starting
-   the loop which processes individual entries.  This callback will
-   only be executed after the note has been examined in enough
-   detail to verify that it's not malformed in some way.
-
    LOOP_CB is the callback function that will be executed once
    for each mapping.  */
 
@@ -1121,7 +1116,6 @@ static void
 linux_read_core_file_mappings
   (struct gdbarch *gdbarch,
    struct bfd *cbfd,
-   read_core_file_mappings_pre_loop_ftype pre_loop_cb,
    read_core_file_mappings_loop_ftype  loop_cb)
 {
   /* Ensure that ULONGEST is big enough for reading 64-bit core files.  */
@@ -1207,7 +1201,6 @@ linux_read_core_file_mappings
     }
 
   cbfd->build_id = orig_build_id;
-  pre_loop_cb (count);
 
   /* Vector to collect proc mappings.  */
   struct proc_mapping
@@ -1249,11 +1242,8 @@ linux_read_core_file_mappings
 	       });
 
   /* Call loop_cb with sorted proc mappings.  */
-  for (int i = 0; i < count; i++)
-    {
-      const auto &m = proc_mappings[i];
-      loop_cb (m.start, m.end, m.file_ofs, m.filename, m.build_id);
-    }
+  for (const auto &m : proc_mappings)
+    loop_cb (m.start, m.end, m.file_ofs, m.filename, m.build_id);
 }
 
 /* Implement "info proc mappings" for corefile CBFD.  */
@@ -1265,21 +1255,22 @@ linux_core_info_proc_mappings (struct gdbarch *gdbarch, struct bfd *cbfd,
   std::optional<ui_out_emit_table> emitter;
 
   linux_read_core_file_mappings (gdbarch, cbfd,
-    [&] (ULONGEST count)
-      {
-	gdb_printf (_("Mapped address spaces:\n\n"));
-	emitter.emplace (current_uiout, 5, -1, "ProcMappings");
-	int width = gdbarch_addr_bit (gdbarch) == 32 ? 10 : 18;
-	current_uiout->table_header (width, ui_left, "start", "Start Addr");
-	current_uiout->table_header (width, ui_left, "end", "End Addr");
-	current_uiout->table_header (width, ui_left, "size", "Size");
-	current_uiout->table_header (width, ui_left, "offset", "Offset");
-	current_uiout->table_header (0, ui_left, "objfile", "File");
-	current_uiout->table_body ();
-      },
-    [=] (ULONGEST start, ULONGEST end, ULONGEST file_ofs,
+    [&] (ULONGEST start, ULONGEST end, ULONGEST file_ofs,
 	 const char *filename, const bfd_build_id *build_id)
       {
+	if (!emitter.has_value ())
+	  {
+	    gdb_printf (_("Mapped address spaces:\n\n"));
+	    emitter.emplace (current_uiout, 5, -1, "ProcMappings");
+	    int width = gdbarch_addr_bit (gdbarch) == 32 ? 10 : 18;
+	    current_uiout->table_header (width, ui_left, "start", "Start Addr");
+	    current_uiout->table_header (width, ui_left, "end", "End Addr");
+	    current_uiout->table_header (width, ui_left, "size", "Size");
+	    current_uiout->table_header (width, ui_left, "offset", "Offset");
+	    current_uiout->table_header (0, ui_left, "objfile", "File");
+	    current_uiout->table_body ();
+	  }
+
 	ui_out_emit_tuple tuple_emitter (current_uiout, nullptr);
 	current_uiout->field_core_addr ("start", gdbarch, start);
 	current_uiout->field_core_addr ("end", gdbarch, end);

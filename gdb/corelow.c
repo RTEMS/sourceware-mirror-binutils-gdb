@@ -2168,14 +2168,8 @@ gdb_read_core_file_mappings (struct gdbarch *gdbarch, struct bfd *cbfd)
   /* See linux_read_core_file_mappings() in linux-tdep.c for an example
      read_core_file_mappings method.  */
   gdbarch_read_core_file_mappings (gdbarch, cbfd,
-    /* After determining the number of mappings, read_core_file_mappings
-       will invoke this lambda.  */
-    [&] (ULONGEST)
-      {
-      },
-
-    /* read_core_file_mappings will invoke this lambda for each mapping
-       that it finds.  */
+    /* gdbarch_read_core_file_mappings will invoke this lambda for each
+       mapping that it finds.  */
     [&] (ULONGEST start, ULONGEST end, ULONGEST file_ofs,
 	 const char *filename, const bfd_build_id *build_id)
       {

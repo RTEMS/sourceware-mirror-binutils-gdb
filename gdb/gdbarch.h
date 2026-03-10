@@ -122,10 +122,7 @@ enum class memtag_type
   allocation,
 };
 
-/* Callback types for 'read_core_file_mappings' gdbarch method.  */
-
-using read_core_file_mappings_pre_loop_ftype =
-  gdb::function_view<void (ULONGEST count)>;
+/* Callback type for 'read_core_file_mappings' gdbarch method.  */
 
 using read_core_file_mappings_loop_ftype =
   gdb::function_view<void (ULONGEST start,
