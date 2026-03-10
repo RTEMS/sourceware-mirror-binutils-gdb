@@ -128,8 +128,7 @@ using read_core_file_mappings_pre_loop_ftype =
   gdb::function_view<void (ULONGEST count)>;
 
 using read_core_file_mappings_loop_ftype =
-  gdb::function_view<void (int num,
-			   ULONGEST start,
+  gdb::function_view<void (ULONGEST start,
 			   ULONGEST end,
 			   ULONGEST file_ofs,
 			   const char *filename,

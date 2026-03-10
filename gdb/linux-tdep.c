@@ -1212,7 +1212,6 @@ linux_read_core_file_mappings
   /* Vector to collect proc mappings.  */
   struct proc_mapping
   {
-    int num;
     ULONGEST start;
     ULONGEST end;
     ULONGEST file_ofs;
@@ -1224,7 +1223,7 @@ linux_read_core_file_mappings
   /* Collect proc mappings.  */
   for (int i = 0; i < count; i++)
     {
-      struct proc_mapping m = { .num = i };
+      struct proc_mapping m;
       m.start = bfd_get (addr_size_bits, cbfd, descdata);
       descdata += addr_size;
       m.end = bfd_get (addr_size_bits, cbfd, descdata);
@@ -1253,7 +1252,7 @@ linux_read_core_file_mappings
   for (int i = 0; i < count; i++)
     {
       const auto &m = proc_mappings[i];
-      loop_cb (m.num, m.start, m.end, m.file_ofs, m.filename, m.build_id);
+      loop_cb (m.start, m.end, m.file_ofs, m.filename, m.build_id);
     }
 }
 
@@ -1278,7 +1277,7 @@ linux_core_info_proc_mappings (struct gdbarch *gdbarch, struct bfd *cbfd,
 	current_uiout->table_header (0, ui_left, "objfile", "File");
 	current_uiout->table_body ();
       },
-    [=] (int num, ULONGEST start, ULONGEST end, ULONGEST file_ofs,
+    [=] (ULONGEST start, ULONGEST end, ULONGEST file_ofs,
 	 const char *filename, const bfd_build_id *build_id)
       {
 	ui_out_emit_tuple tuple_emitter (current_uiout, nullptr);
