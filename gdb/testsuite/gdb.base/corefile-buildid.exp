@@ -21,6 +21,10 @@
 
 standard_testfile .c -shlib-shr.c -shlib.c
 
+# Reuse the Python script from another test.  This provides a command
+# to remove a particular note from a core file.
+set pyfile [gdb_remote_download host ${srcdir}/${subdir}/corefile-no-threads.py]
+
 # Create a corefile from PROGNAME.  Return the name of the generated
 # corefile, or the empty string if anything goes wrong.
 #
@@ -345,6 +349,21 @@ foreach_with_prefix mode { exec shared } {
 	return
     }
 
+    if { [allow_python_tests] } {
+	# Create a corefile with no NT_FILE notes.
+	gdb_start
+	set corefile_no_nt_file [standard_output_file ${corefile}-no-nt_file]
+	remote_exec build "cp $corefile $corefile_no_nt_file"
+	gdb_test_no_output "source $::pyfile" "import python scripts"
+	gdb_test "modify-core-file \"$corefile_no_nt_file\" NT_FILE" \
+	    [multi_line \
+		 "Located PT_NOTE segment: \[^\r\n\]+" \
+		 "\\s+Found note with type $hex at file offset $hex\\..*" \
+		 "Successfully updated $decimal note\\(s\\) in \[^\r\n\]+"] \
+	    "update core file"
+	gdb_exit
+    }
+
     # Create a directory for the non-stripped test, copy every build
     # artefact into this directory.
     set combined_dirname [standard_output_file ${mode}_not-stripped]
@@ -394,6 +413,14 @@ foreach_with_prefix mode { exec shared } {
 	    locate_exec_from_core_build_id $corefile $dirname \
 		$build_artefacts $sepdebug $symlink \
 		[expr {$mode eq "shared"}]
+
+	    if { [allow_python_tests] } {
+		with_test_prefix "NT_FILE removed" {
+		    locate_exec_from_core_build_id $corefile_no_nt_file $dirname \
+			$build_artefacts $sepdebug $symlink \
+			[expr {$mode eq "shared"}]
+		}
+	    }
 	}
     }
 }
