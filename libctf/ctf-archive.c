@@ -86,11 +86,9 @@ ctf_arc_preserialize (ctf_dict_t **ctf_dicts, ssize_t ctf_dict_cnt,
   ctf_dprintf ("Preserializing %zi dicts.\n", ctf_dict_cnt);
 
   /* Preserialize everything, doing everything but strtab generation and things
-     that depend on that.  Any archive with more than one dict in it must
-     be CTF.  */
+     that depend on that.  */
   for (i = 0; i < ctf_dict_cnt; i++)
-    if (ctf_preserialize (ctf_dicts[i], threshold != (size_t) -1
-			  || ctf_dict_cnt > 1) < 0)
+    if (ctf_preserialize (ctf_dicts[i], threshold != (size_t) -1) < 0)
       goto err;
 
   for (i = 0; i < ctf_dict_cnt; i++)
