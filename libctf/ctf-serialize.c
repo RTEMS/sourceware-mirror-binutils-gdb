@@ -898,7 +898,11 @@ ctf_type_sect_is_btf (ctf_dict_t *fp, int force_ctf)
 	    if (!fp->ctf_write_suppressions
 		|| ctf_dynset_lookup (fp->ctf_write_suppressions,
 				      (const void *) (ctf_kind_t) prefix_kind) == NULL)
-	    return 0;
+	      {
+		ctf_dprintf ("Type %lx is prefixed with a nonelidable CTF-specific prefix %i: dict is CTF",
+			     dtd->dtd_type, kind);
+		return 0;
+	      }
 
 	  tp++;
 	}
@@ -912,7 +916,10 @@ ctf_type_sect_is_btf (ctf_dict_t *fp, int force_ctf)
 	continue;
 
       if (kind == CTF_K_FLOAT)
-	return 0;
+	{
+	  ctf_dprintf ("Type %lx is a float: dict is CTF", dtd->dtd_type);
+	  return 0;
+	}
     }
 
   return 1;
@@ -1315,9 +1322,6 @@ ctf_serialize_output_format (ctf_dict_t *fp, int force_ctf)
 {
   int ctf_needed = 0;
 
-  if (fp->ctf_flags & LCTF_NO_STR)
-    return (ctf_set_errno (fp, ECTF_NOPARENT));
-
   /* If CTF is forced for some other reason, or the global BTF emission mode has
      changed, recheck everything except the expensive type-section scans, which
      are only shortcut by force_ctf, not otherwise changed.  */
@@ -1325,6 +1329,9 @@ ctf_serialize_output_format (ctf_dict_t *fp, int force_ctf)
   if (fp->ctf_serialize.cs_initialized && !force_ctf
       && fp->ctf_serialize.cs_btf_mode == _libctf_btf_mode)
     return 0;
+
+  if (fp->ctf_flags & LCTF_NO_STR)
+    return (ctf_set_errno (fp, ECTF_NOPARENT));
 
   /* Complain if we're asked to emit BTF only, but we have types that call for
      CTFv4 extensions, or we are forced to emit CTF because the caller requested
@@ -1516,11 +1523,8 @@ ctf_preserialize (ctf_dict_t *fp, int force_ctf)
       || funcidx_size != 0)
     force_ctf = 1;
 
-  if (!fp->ctf_serialize.cs_initialized)
-    {
-      if (ctf_serialize_output_format (fp, force_ctf) < 0)
-	return -1;					/* errno is set for us.  */
-    }
+  if (ctf_serialize_output_format (fp, force_ctf) < 0)
+    return -1;					/* errno is set for us.  */
 
   type_size = ctf_type_sect_size (fp);
 
