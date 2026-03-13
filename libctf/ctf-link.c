@@ -1941,18 +1941,36 @@ ctf_elf64_to_link_sym (ctf_dict_t *fp, ctf_link_sym_t *dst, const Elf64_Sym *src
 ctf_ret_t
 ctf_link_output_is_btf (ctf_dict_t *fp)
 {
+  ctf_error_t err;
+  ctf_next_t *i = NULL;
+  void *out;
+
   /* Can't call when nothing has been linked yet.  */
 
   if (!fp->ctf_link_outputs)
     return (ctf_set_errno (fp, EINVAL));
 
-  /* Cannot be BTF if child dicts are present.  */
-
-  if (ctf_dynhash_elements (fp->ctf_link_outputs) != 0)
-    return 0;
-
   if (ctf_serialize_output_format (fp, 0) < 0)
     return -1;					/* errno is set for us.  */
+
+  while ((err = ctf_dynhash_next (fp->ctf_link_outputs, &i, NULL, &out)) == 0)
+    {
+      ctf_dict_t *dict = (ctf_dict_t *) out;
+
+      if (ctf_serialize_output_format (dict, 0) < 0)
+	{
+	  ctf_next_destroy (i);
+	  return -1;					/* errno is set for us.  */
+	}
+
+      /* If any dict is not BTF, the set as a whole is not BTF.  */
+
+      if (dict->ctf_serialize.cs_is_btf == 0)
+	{
+	  ctf_next_destroy (i);
+	  return 0;
+	}
+    }
 
   return fp->ctf_serialize.cs_is_btf;
 }
@@ -2022,6 +2040,7 @@ ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
   const char *errloc;
   unsigned char *buf = NULL;
   ctf_arc_write_flags_t flags = 0;
+  ctf_dict_t *btf_check = fp;
 
   memset (&arg, 0, sizeof (ctf_name_list_accum_cb_arg_t));
   arg.fp = fp;
@@ -2093,6 +2112,8 @@ ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
       arg.files[0] = fp;
       arg.i++;
     }
+  else
+    btf_check = arg.files[0];
 
   /* Only one member?  Don't bother writing out a name table at all.  */
   if (arg.i == 1)
@@ -2141,6 +2162,12 @@ ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
 	errloc = "reading archive from temporary file";
 	goto err_no;
       }
+
+  if (is_btf && (*is_btf = ctf_link_output_is_btf (btf_check)) < 0)
+    {
+      errloc = "determining if archive is BTF";
+      goto err;			/* errno is set for us.  */
+    }
 
   /* Turn off the is-linking flag, and any other flags we flipped, on all the
      dicts in this link.  */
