@@ -1444,11 +1444,6 @@ static void
 build_ctf_archive_member (ctf_dict_t *ctf, const char *name,
 			  struct ctf_per_tu_data *tup)
 {
-  ctf_dict_t *parent = tup->dict;
-
-  if (strcmp (name, ".ctf") != 0)
-    ctf_import (ctf, parent);
-
   if (info_verbose)
     {
       gdb_printf (_("Scanning archive member %s..."), name);
