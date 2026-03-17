@@ -28,10 +28,7 @@ test (int empty_parent, int unserialized_parent)
   printf ("Testing with %s, %s parent\n", empty_parent ? "empty" : "nonempty",
 	  unserialized_parent ? "unserialized" : "serialized");
 
-  if ((parent = ctf_create (&err)) == NULL)
-    goto create_err;
-
-  if ((child = ctf_create (&err)) == NULL)
+  if ((parent = ctf_create (NULL, &err)) == NULL)
     goto create_err;
 
   /* Try some tests with a parent that already has some types in it (thus, a
@@ -50,7 +47,7 @@ test (int empty_parent, int unserialized_parent)
 
       ctf_dict_close (parent);
 
-      if ((parent = ctf_simple_open ((char *) pbuf, psize, NULL, 0, 0, NULL, 0, &err)) == NULL)
+      if ((parent = ctf_simple_open ((char *) pbuf, psize, NULL, 0, 0, NULL, 0, NULL, &err)) == NULL)
 	goto parent_open_err;
 
       if (!empty_parent)
@@ -64,8 +61,8 @@ test (int empty_parent, int unserialized_parent)
 	}
     }
 
-  if (ctf_import (child, parent) < 0)
-    goto import_err;
+  if ((child = ctf_create (parent, &err)) == NULL)
+    goto create_err;
 
   /* Add some types that should end up with provisional IDs and be reassigned on
      writeout, with all references to them in all dicts following along.  */
@@ -204,14 +201,13 @@ test (int empty_parent, int unserialized_parent)
   free (pbuf);
   free (cbuf);
 
-  if ((parent = ctf_simple_open ((char *) pbuf2, psize, NULL, 0, 0, NULL, 0, &err)) == NULL)
+  if ((parent = ctf_simple_open ((char *) pbuf2, psize, NULL, 0, 0, NULL, 0,
+				 NULL, &err)) == NULL)
     goto parent_open_err;
 
-  if ((child = ctf_simple_open ((char *) cbuf2, csize, NULL, 0, 0, NULL, 0, &err)) == NULL)
+  if ((child = ctf_simple_open ((char *) cbuf2, csize, NULL, 0, 0, NULL,
+				0, parent, &err)) == NULL)
     goto child_open_err;
-
-  if (ctf_import (child, parent) < 0)
-    goto import_err;
 
   if (!empty_parent)
     {
@@ -468,11 +464,7 @@ test (int empty_parent, int unserialized_parent)
   exit (1);
 
  child_open_err:
-  fprintf (stderr, "Cannot open chile: %s\n", ctf_errmsg (err));
-  exit (1);
-
- import_err:
-  fprintf (stderr, "Cannot import: %s\n", ctf_errmsg (ctf_errno (child)));
+  fprintf (stderr, "Cannot open child: %s\n", ctf_errmsg (err));
   exit (1);
 
  parent_add_err:

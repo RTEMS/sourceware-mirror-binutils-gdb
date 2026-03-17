@@ -366,9 +366,6 @@ ctf_lookup_by_name_internal (ctf_dict_t *fp, ctf_dict_t *child,
 ctf_id_t
 ctf_lookup_by_name (ctf_dict_t *fp, const char *name)
 {
-  if (fp->ctf_flags & LCTF_NO_STR)
-    return (ctf_set_typed_errno (fp, ECTF_NOPARENT));
-
   return ctf_lookup_by_name_internal (fp, NULL, name);
 }
 
@@ -485,9 +482,6 @@ ctf_lookup_enumerator (ctf_dict_t *fp, const char *name, ctf_enum_value_t *enum_
   ctf_id_t type;
   ctf_enum_value_t val;
 
-  if (fp->ctf_flags & LCTF_NO_STR)
-    return (ctf_set_typed_errno (fp, ECTF_NOPARENT));
-
   if (ctf_dynset_lookup (fp->ctf_conflicting_enums, name))
     return (ctf_set_typed_errno (fp, ECTF_DUPLICATE));
 
@@ -529,9 +523,6 @@ ctf_lookup_enumerator_next (ctf_dict_t *fp, const char *name,
   ctf_next_t *i = *it;
   int found = 0;
   ctf_error_t err;
-
-  if (fp->ctf_flags & LCTF_NO_STR)
-    return (ctf_set_typed_errno (fp, ECTF_NOPARENT));
 
   /* We use ctf_type_next() to iterate across all types, but then traverse each
      enumerator found by hand: traversing enumerators is very easy, and it would
@@ -938,9 +929,6 @@ ctf_symbol_next (ctf_dict_t *fp, ctf_next_t **it, const char **name,
   ctf_next_t *i = *it;
   ctf_error_t err;
 
-  if (fp->ctf_flags & LCTF_NO_STR)
-    return (ctf_set_typed_errno (fp, ECTF_NOPARENT));
-
   if (!i)
     {
       if ((i = ctf_next_create ()) == NULL)
@@ -1329,17 +1317,11 @@ ctf_lookup_by_sym_or_name (ctf_dict_t *fp, unsigned long symidx,
 
   if (fp->ctf_objtidx_names && is_function != 1)
     {
-      if (fp->ctf_flags & LCTF_NO_STR)
-	return (ctf_set_typed_errno (fp, ECTF_NOPARENT));
-
       if ((type = ctf_try_lookup_indexed (fp, symidx, symname, 0)) == CTF_ERR)
 	return CTF_ERR;				/* errno is set for us.  */
     }
   if (type == 0 && fp->ctf_funcidx_names && is_function != 0)
     {
-      if (fp->ctf_flags & LCTF_NO_STR)
-	return (ctf_set_typed_errno (fp, ECTF_NOPARENT));
-
       if ((type = ctf_try_lookup_indexed (fp, symidx, symname, 1)) == CTF_ERR)
 	return CTF_ERR;				/* errno is set for us.  */
     }
