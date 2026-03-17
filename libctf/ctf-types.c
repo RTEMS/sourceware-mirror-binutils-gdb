@@ -175,9 +175,6 @@ ctf_member_next (ctf_dict_t *fp, ctf_id_t type, ctf_next_t **it,
   const ctf_type_t *prefix, *tp;
   ctf_error_t err;
 
-  if (fp->ctf_flags & LCTF_NO_STR)
-    return (ctf_set_errno (fp, ECTF_NOPARENT));
-
   if (!i)
     {
       const ctf_type_t *tp;
@@ -379,12 +376,6 @@ ctf_enum_next (ctf_dict_t *fp, ctf_id_t type, ctf_next_t **it,
   ctf_next_t *i = *it;
   ctf_error_t err;
   ctf_enum_value_t val;
-
-  if (fp->ctf_flags & LCTF_NO_STR)
-    {
-      ctf_set_errno (fp, ECTF_NOPARENT);
-      return NULL;
-    }
 
   if (!i)
     {
@@ -868,12 +859,6 @@ ctf_type_data (ctf_dict_t *fp, ctf_id_t type, int prefix)
 {
   const ctf_type_t *tp, *suffix, *big;
 
-  if (fp->ctf_flags & LCTF_NO_STR)
-    {
-      ctf_set_errno (fp, ECTF_NOPARENT);
-      return NULL;
-    }
-
   if ((tp = ctf_lookup_by_id (&fp, type, &suffix)) == NULL)
     return NULL;				/* errno is set for us.  */
 
@@ -905,12 +890,6 @@ ctf_type_aname (ctf_dict_t *fp, ctf_id_t type)
 
   if (fp == NULL && type == CTF_ERR)
     return NULL;	/* Simplify caller code by permitting CTF_ERR.  */
-
-  if (fp->ctf_flags & LCTF_NO_STR)
-    {
-      ctf_set_errno (fp, ECTF_NOPARENT);
-      return NULL;
-    }
 
   ctf_decl_init (&cd);
   ctf_decl_push (&cd, fp, type);
@@ -1176,12 +1155,6 @@ const char *
 ctf_type_name_raw (ctf_dict_t *fp, ctf_id_t type)
 {
   const ctf_type_t *tp;
-
-  if (fp->ctf_flags & LCTF_NO_STR)
-    {
-      ctf_set_errno (fp, ECTF_NOPARENT);
-      return NULL;
-    }
 
   if (ctf_lookup_by_id (&fp, type, &tp) == NULL)
     return NULL;		/* errno is set for us.  */
@@ -1867,12 +1840,6 @@ ctf_type_compat (ctf_dict_t *lfp, ctf_id_t ltype,
   ctf_kind_t lkind, rkind;
   int same_names = 0;
 
-  if (lfp->ctf_flags & LCTF_NO_STR)
-    return (ctf_set_errno (lfp, ECTF_NOPARENT));
-
-  if (rfp->ctf_flags & LCTF_NO_STR)
-    return (ctf_set_errno (rfp, ECTF_NOPARENT));
-
   if (ctf_type_isparent (lfp, ltype) && (lfp->ctf_flags & LCTF_CHILD)
       && !lfp->ctf_parent)
     return (ctf_set_errno (lfp, ECTF_NOPARENT));
@@ -2023,9 +1990,6 @@ ctf_member_info (ctf_dict_t *fp, ctf_id_t type, const char *name,
   ctf_kind_t kind;
   size_t i, n;
 
-  if (fp->ctf_flags & LCTF_NO_STR)
-    return (ctf_set_errno (fp, ECTF_NOPARENT));
-
   if ((type = ctf_type_resolve (fp, type)) == CTF_ERR)
     return -1;			/* errno is set for us.  */
 
@@ -2141,12 +2105,6 @@ ctf_enum_name (ctf_dict_t *fp, ctf_id_t type, ctf_enum_value_t value)
   ctf_kind_t kind;
   size_t n;
 
-  if (fp->ctf_flags & LCTF_NO_STR)
-    {
-      ctf_set_errno (fp, ECTF_NOPARENT);
-      return NULL;
-    }
-
   if ((type = ctf_type_resolve_unsliced (fp, type)) == CTF_ERR)
     return NULL;		/* errno is set for us.  */
 
@@ -2211,9 +2169,6 @@ ctf_enum_value (ctf_dict_t *fp, ctf_id_t type, const char *name,
   unsigned char *vlen;
   ctf_kind_t kind;
   size_t n;
-
-  if (fp->ctf_flags & LCTF_NO_STR)
-    return (ctf_set_errno (fp, ECTF_NOPARENT));
 
   if ((type = ctf_type_resolve_unsliced (fp, type)) == CTF_ERR)
     return -1;			/* errno is set for us.  */
@@ -2590,9 +2545,6 @@ ctf_type_rvisit (ctf_dict_t *fp, ctf_id_t type, ctf_visit_f *func,
   size_t this_offset;
   int this_bit_width;
   int rc;
-
-  if (fp->ctf_flags & LCTF_NO_STR)
-    return (ctf_set_errno (fp, ECTF_NOPARENT));
 
   if ((type = ctf_type_resolve (fp, type)) == CTF_ERR) {
     if (ctf_errno (fp) != ECTF_NONREPRESENTABLE)
