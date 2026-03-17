@@ -13,14 +13,11 @@ main (int argc, char *argv[])
   char *type_name;
   int err;
 
-  if ((pfp = ctf_create (&err)) == NULL)
+  if ((pfp = ctf_create (NULL, &err)) == NULL)
     goto create_err;
 
-  if ((cfp = ctf_create (&err)) == NULL)
+  if ((cfp = ctf_create (pfp, &err)) == NULL)
     goto create_err;
-
-  if (ctf_import (cfp, pfp) < 0)
-    goto create_child;
 
   /* First, try an int in the parent with a pointer in the child.  Also make
      another pair of types we will chain to later: these end up before the
