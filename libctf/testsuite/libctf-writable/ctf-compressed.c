@@ -30,13 +30,13 @@ main (int argc, char *argv[])
      https://github.com/msys2/MINGW-packages/issues/18878).  Simply skip for
      now.  */
 
-  if ((fp = ctf_create (&err)) == NULL)
+  if ((fp = ctf_create (NULL, &err)) == NULL)
     goto create_err;
 
-  if ((in1 = ctf_create (&err)) == NULL)
+  if ((in1 = ctf_create (NULL, &err)) == NULL)
     goto create_err;
 
-  if ((in2 = ctf_create (&err)) == NULL)
+  if ((in2 = ctf_create (NULL, &err)) == NULL)
     goto create_err;
 
   /* Force a conflict to get an archive created.  */

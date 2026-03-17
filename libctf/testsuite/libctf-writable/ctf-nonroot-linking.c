@@ -24,10 +24,10 @@ main (int argc, char *argv[])
   ctf_next_t *i = NULL;
   int err;
 
-  if ((fp = ctf_create (&err)) == NULL)
+  if ((fp = ctf_create (NULL, &err)) == NULL)
     goto create_err;
 
-  if ((in1 = ctf_create (&err)) == NULL)
+  if ((in1 = ctf_create (NULL, &err)) == NULL)
     goto create_err;
 
   /* A non-root addition. */
