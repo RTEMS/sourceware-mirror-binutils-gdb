@@ -65,24 +65,22 @@ int main (void)
   ctf_id_t bar;
   int err;
 
-  if ((parent = ctf_create (&err)) == NULL
-      || (child = ctf_create (&err)) == NULL
-      || (wrong = ctf_create (&err)) == NULL
-      || (blank = ctf_create (&err)) == NULL)
+  if ((parent = ctf_create (NULL, &err)) == NULL
+      || (wrong = ctf_create (NULL, &err)) == NULL)
     {
-      fprintf (stderr, "Cannot create dicts: %s\n", ctf_errmsg (err));
+      fprintf (stderr, "Cannot create dict: %s\n", ctf_errmsg (err));
       return 1;
     }
 
-  if ((ctf_import (child, parent)) < 0)
+  if ((child = ctf_create (parent, &err)) == NULL)
     {
-      fprintf (stderr, "cannot import: %s\n", ctf_errmsg (ctf_errno (child)));
+      fprintf (stderr, "cannot create child: %s\n", ctf_errmsg (err));
       return 1;
     }
 
-  if ((ctf_import (blank, wrong)) < 0)
+  if ((blank = ctf_create (wrong, &err)) == NULL)
     {
-      fprintf (stderr, "cannot import wrong-types dict: %s\n", ctf_errmsg (ctf_errno (blank)));
+      fprintf (stderr, "cannot create wrong-types dict: %s\n", ctf_errmsg (err));
       return 1;
     }
 
@@ -193,6 +191,7 @@ int main (void)
   ctf_dict_close (child);
   ctf_dict_close (parent);
   ctf_dict_close (wrong);
+  ctf_dict_close (blank);
   fprintf (stderr, "All done.\n");
   return 0;
 

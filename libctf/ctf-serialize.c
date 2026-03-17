@@ -1340,9 +1340,6 @@ ctf_serialize_output_format (ctf_dict_t *fp, int force_ctf)
       && fp->ctf_serialize.cs_btf_mode == _libctf_btf_mode)
     return 0;
 
-  if (fp->ctf_flags & LCTF_NO_STR)
-    return (ctf_set_errno (fp, ECTF_NOPARENT));
-
   /* Complain if we're asked to emit BTF only, but we have types that call for
      CTFv4 extensions, or we are forced to emit CTF because the caller requested
      compression.  */
@@ -1411,10 +1408,10 @@ ctf_serialize_output_dict_is_btf (ctf_dict_t *fp)
 }
 
 /* Do all aspects of serialization up to strtab writeout, including final type
-   ID assignment.  The resulting dict will have the LCTF_PRESERIALIZED flag on
-   and must not be modified in any way before serialization.  (This is only
-   lightly enforced, as this feature is internal-only, employed by the linker
-   machinery.)
+   ID assignment.  The resulting dict must not be modified in any way before
+   serialization.  (This is not enforced, as this feature is internal-only,
+   employed by the archive writeout machinery, which does a serialization right
+   after preserialization and string dedup.)
 
    If FORCE_CTF is enabled, always emit CTF in LIBCTF_BTM_POSSIBLE mode, and
    error in LIBCTF_BTM_BTF mode.  */
@@ -1437,9 +1434,6 @@ ctf_preserialize (ctf_dict_t *fp, int force_ctf)
   memset (&symstate, 0, sizeof (emit_symtypetab_state_t));
 
   ctf_dprintf ("Preserializing dict for %s\n", ctf_dict_cuname (fp));
-
-  if (fp->ctf_flags & LCTF_NO_STR)
-    return (ctf_set_errno (fp, ECTF_NOPARENT));
 
   /* Make sure that any parents have been serialized at least once since the
      last type was added to them, so we have known final IDs for all their
@@ -1627,11 +1621,6 @@ ctf_preserialize (ctf_dict_t *fp, int force_ctf)
 
   ctf_type_purge_refs (fp);
 
-  /* Prohibit type and string additions from this point on.  */
-
-  fp->ctf_serialize.cs_old_flags = fp->ctf_flags;
-  fp->ctf_flags |= LCTF_NO_STR | LCTF_NO_TYPE;
-
   return 0;
 
  err:
@@ -1652,9 +1641,6 @@ ctf_depreserialize (ctf_dict_t *fp)
 {
   ctf_str_purge_refs (fp);
   ctf_type_purge_refs (fp);
-
-  if (fp->ctf_serialize.cs_initialized)
-    fp->ctf_flags = fp->ctf_serialize.cs_old_flags;
 
   fp->ctf_serialize.cs_initialized = 0;
   free (fp->ctf_serialize.cs_buf);
@@ -1694,9 +1680,6 @@ ctf_serialize (ctf_dict_t *fp, size_t *bufsiz, int force_ctf)
   if (!fp->ctf_serialize.cs_buf)
     if (ctf_preserialize (fp, force_ctf) < 0)
       return NULL;				/* errno is set for us.  */
-
-  /* Allow string and type lookup again.  */
-  fp->ctf_flags = fp->ctf_serialize.cs_old_flags;
 
   /* Freshly-created parent and child during linking.  Construct the final
      string table and fill out all the string refs with the final offsets.  At

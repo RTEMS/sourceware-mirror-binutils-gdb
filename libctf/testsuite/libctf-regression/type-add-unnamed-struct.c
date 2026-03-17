@@ -27,7 +27,7 @@ main (int argc, char *argv[])
   if ((fp = ctf_dict_open (ctf, NULL, &err)) == NULL)
     goto open_err;
 
-  if ((dyn = ctf_create (&err)) == NULL)
+  if ((dyn = ctf_create (NULL, &err)) == NULL)
     goto create_err;
 
   /* Copy 'struct foo' into the dynamic dict, then make sure we can look up a

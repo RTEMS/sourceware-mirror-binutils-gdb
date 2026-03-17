@@ -21,7 +21,7 @@ dtd_crash (enum crash_method method, int parent_bigger)
   /* Maybe make the relevant type IDs in the parent much bigger than those
      in the child, or maybe vice versa.  */
 
-  if ((pfp = ctf_create (&err)) == NULL)
+  if ((pfp = ctf_create (NULL, &err)) == NULL)
     goto create_err;
 
   if (parent_bigger)
@@ -62,11 +62,8 @@ dtd_crash (enum crash_method method, int parent_bigger)
   if ((ftype = ctf_add_forward (pfp, "foo", forward_kind)) == CTF_ERR)
     goto create_parent;
 
-  if ((cfp = ctf_create (&err)) == NULL)
+  if ((cfp = ctf_create (pfp, &err)) == NULL)
     goto create_err;
-
-  if (ctf_import (cfp, pfp) < 0)
-    goto create_child;
 
   if (!parent_bigger)
     {

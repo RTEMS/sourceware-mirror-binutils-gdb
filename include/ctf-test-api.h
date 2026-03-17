@@ -30,6 +30,6 @@ extern ctf_dict_t *ctf_simple_open (const char *ctfsect, size_t ctfsect_size,
 				    const char *symsect, size_t symsect_size,
 				    size_t symsect_entsize,
 				    const char *strsect, size_t strsect_size,
-				    ctf_error_t *errp);
+				    ctf_dict_t *parent, ctf_error_t *errp);
 
 #endif				/* _CTF_TEST_API_H */

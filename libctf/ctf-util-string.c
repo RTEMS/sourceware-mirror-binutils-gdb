@@ -99,12 +99,6 @@ ctf_strraw (ctf_dict_t *fp, uint32_t name)
 
   if (stid_tab == CTF_STRTAB_0)
     {
-      if (_libctf_unlikely_ (fp->ctf_flags & LCTF_NO_STR))
-	{
-	  ctf_err (err_locus (fp), ECTF_NOPARENT, _("internal error: attempt to look up strings in child before parent is imported"));
-	  return NULL;
-	}
-
       if (fp->ctf_parent
 	  && _libctf_unlikely_ (fp->ctf_header->cth_parent_strlen != 0
 				&& fp->ctf_header->cth_parent_strlen !=

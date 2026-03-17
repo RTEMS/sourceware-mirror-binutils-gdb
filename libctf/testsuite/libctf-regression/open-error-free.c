@@ -123,7 +123,7 @@ int main (void)
     }
 #endif
 
-  if ((fp = ctf_create (&err)) == NULL)
+  if ((fp = ctf_create (NULL, &err)) == NULL)
     goto open_err;
 
   /* Define an integer, then a pile of unconnected pointers to it, just to
@@ -156,7 +156,8 @@ int main (void)
   malloc_count = 0;
   free_count = 0;
 
-  if ((ctf_simple_open (written, written_size, NULL, 0, 0, NULL, 0, &err)) != NULL)
+  if ((ctf_simple_open (written, written_size, NULL, 0, 0, NULL, 0,
+			NULL, &err)) != NULL)
     {
       fprintf (stderr, "wildly corrupted dict still opened OK?!\n");
       exit (1);
