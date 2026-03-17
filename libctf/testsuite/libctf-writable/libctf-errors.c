@@ -18,7 +18,7 @@ main (int argc, char *argv[])
   size_t ret;
   int err;
 
-  if ((fp = ctf_create (&err)) == NULL)
+  if ((fp = ctf_create (NULL, &err)) == NULL)
     {
       fprintf (stderr, "%s: cannot create: %s\n", argv[0], ctf_errmsg (err));
       return 1;

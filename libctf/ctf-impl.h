@@ -413,7 +413,6 @@ typedef struct ctf_serialize
   unsigned char *cs_buf;	/* CTF buffer in mid-serialization.  */
   size_t cs_buf_size;		/* Length of that buffer.  */
   int cs_is_btf;
-  uint32_t cs_old_flags;
 } ctf_serialize_t;
 
 /* The ctf_dict is the structure used to represent a CTF dictionary to library
@@ -506,7 +505,7 @@ struct ctf_dict
   const char *ctf_cu_name;	  /* Compilation unit name (if any).  */
   char *ctf_dyn_cu_name;	  /* Dynamically allocated name of CU.  */
   struct ctf_dict *ctf_parent;	  /* Parent CTF dict (if any).  */
-  int ctf_parent_unreffed;	  /* Parent set by ctf_import_unref?  */
+  int ctf_parent_unreffed;	  /* Parent set with CTF_IMPORT_UNREF.  */
   const char *ctf_parent_name;	  /* Basename of parent (if any).  */
   uint32_t ctf_refcnt;		  /* Reference count (for parent links).  */
   uint32_t ctf_flags;		  /* Libctf flags (see below).  */
@@ -704,10 +703,7 @@ extern ctf_id_t ctf_index_to_type (const ctf_dict_t *, uint32_t);
 #define LCTF_CHILD		0x0001	/* CTF dict is a child.  */
 #define LCTF_LINKING		0x0002  /* CTF link is underway: respect ctf_link_flags.  */
 #define LCTF_STRICT_NO_DUP_ENUMERATORS 0x0004 /* Duplicate enums prohibited.  */
-#define LCTF_NO_STR		0x0008  /* No string lookup possible yet.  */
-#define LCTF_NO_STR_DEDUP	0x0010	/* Suppress string deduplication.  */
-#define LCTF_NO_TYPE		0x0020	/* No type additions possible.  */
-#define LCTF_PRESERIALIZED	0x0040  /* Already serialized all but the strtab.  */
+#define LCTF_NO_STR_DEDUP	0x0008	/* Suppress string deduplication.  */
 
 extern ctf_dynhash_t *ctf_name_table (ctf_dict_t *, ctf_kind_t);
 extern const ctf_type_t *ctf_lookup_by_id (ctf_dict_t **, ctf_id_t,
@@ -878,6 +874,16 @@ extern struct ctf_archive_internal *
 ctf_arc_open_internal (int fd, const char *filename, ctf_error_t *errp);
 extern const ctf_preamble_t *ctf_arc_bufpreamble_v1 (const ctf_sect_t *);
 extern void ctf_arc_close_free (struct ctf_archive_internal *arci);
+
+typedef enum ctf_import_flags
+  {
+    CTF_IMPORT_UNREF = 0x01,
+    CTF_IMPORT_NEW   = 0x02
+  } ctf_import_flags_t;
+
+extern ctf_dict_t *ctf_create_internal (ctf_dict_t *parent,
+					ctf_import_flags_t import_flags,
+					ctf_error_t *errp);
 extern void *ctf_set_open_errno (ctf_error_t *, ctf_error_t);
 extern ssize_t ctf_buflen (const ctf_sect_t *ctfsect, ctf_error_t *errp);
 extern ctf_ret_t ctf_flip_header (void *, int, int, int);
@@ -886,11 +892,11 @@ extern ctf_error_t ctf_flip (ctf_dict_t *, ctf_header_t *, unsigned char *,
 extern ctf_dict_t *ctf_bufopen_len (const ctf_sect_t *ctfsect,
 				    const ctf_sect_t *symsect,
 				    const ctf_sect_t *strsect,
-				    ssize_t *len, int fresh,
+				    ssize_t *len, ctf_dict_t *parent,
+				    ctf_archive_t *ctf_archive,
+				    ctf_import_flags_t import_flags,
 				    ctf_error_t *errp);
 extern void ctf_symsect_endianness (ctf_dict_t *fp, int little_endian);
-
-extern ctf_ret_t ctf_import_unref (ctf_dict_t *fp, ctf_dict_t *pfp);
 
 extern ctf_ret_t ctf_write_thresholded (ctf_dict_t *fp, int fd, size_t threshold);
 
