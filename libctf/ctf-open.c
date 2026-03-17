@@ -26,6 +26,10 @@
 #include <bfd.h>
 #include <zlib.h>
 
+ctf_ret_t
+ctf_import_internal (ctf_dict_t *fp, ctf_dict_t *pfp, int is_btf,
+		     ctf_import_flags_t flags);
+
 static const ctf_dmodel_t _libctf_models[] = {
   {"ILP32", CTF_MODEL_ILP32, 4, 1, 2, 4, 4},
   {"LP64", CTF_MODEL_LP64, 8, 1, 2, 4, 8},
@@ -543,8 +547,10 @@ ctf_set_base (ctf_dict_t *fp, const ctf_header_t *hp, unsigned char *base)
 }
 
 static ctf_error_t
-init_static_types_names (ctf_dict_t *fp, ctf_header_t *cth, int fresh,
-			 int is_btf);
+init_static_types_names (ctf_dict_t *fp, ctf_header_t *cth,
+			 int child_types, int is_btf,
+			 ctf_dynset_t *all_enums);
+
 
 /* Populate statically-defined types (those loaded from a saved buffer).
 
@@ -559,7 +565,8 @@ init_static_types_names (ctf_dict_t *fp, ctf_header_t *cth, int fresh,
    function that does all the actual work.  */
 
 static ctf_error_t
-init_static_types (ctf_dict_t *fp, ctf_header_t *cth, int fresh, int is_btf)
+init_static_types (ctf_dict_t *fp, ctf_header_t *cth, ctf_dict_t *parent,
+		   ctf_import_flags_t import_flags, int is_btf)
 {
   const ctf_type_t *tbuf;
   const ctf_type_t *tend;
@@ -568,23 +575,50 @@ init_static_types (ctf_dict_t *fp, ctf_header_t *cth, int fresh, int is_btf)
   int pop_enumerators = 0;
   const ctf_type_t *tp;
   unsigned long typemax = 0;
+  ctf_dynset_t *all_enums;
+  ctf_error_t err;
+  int child_types;
 
   /* Provisional types always start from the top of the type space and work
      down.  */
 
   fp->ctf_provtypemax = (uint32_t) -1;
 
-  /* We determine whether the dict is a child or a parent based on the first
-     byte of the strtab, which is always 0 for parents and never 0 for children
-     (indeed, for children, it may be empty).  UPTODO make more resilient when
-     ctf_import is redone.  Freshly created dictionaries are always parents.  */
+  /* We determine whether existing dicts are a child or a parent based on the
+     first byte of the strtab, which is always 0 for parents and never 0 for
+     children (indeed, for children, it may be empty).  Dicts with parent
+     strlens (CTF dicts) unambiguously know: dicts with a nonzero parent strlen
+     or ntypes are children.
 
-  int child = (fp->ctf_str[CTF_STRTAB_0].cts_len == 0
-	       || (fp->ctf_str[CTF_STRTAB_0].cts_len > 0
-		   && fp->ctf_str[CTF_STRTAB_0].cts_strs[0] != 0));
+     Freshly-created dictionaries may be parents or children depending solely on
+     whether a parent is passed in.  */
 
-  if (fresh)
-    child = 0;
+  if (cth->cth_parent_strlen != 0 || cth->cth_parent_ntypes != 0)
+    child_types = 1;
+  else if (!(import_flags & CTF_IMPORT_NEW))
+    child_types = (fp->ctf_str[CTF_STRTAB_0].cts_len == 0
+		   || (fp->ctf_str[CTF_STRTAB_0].cts_len > 0
+		       && fp->ctf_str[CTF_STRTAB_0].cts_strs[0] != 0));
+  else						/* New dict.  */
+    child_types = 0;
+
+  if (child_types && parent == NULL)
+    {
+      ctf_err (err_locus (NULL), ECTF_WRONGPARENT,
+	       _("dict needs a parent, but none provided"));
+      return ECTF_WRONGPARENT;
+    }
+
+  /* Archive member opens, in particular, always pass in the first member as a
+     possible parent: but this may be provably untrue (going by the first char
+     of the strtab and the parent strlen/ntypes header fields), in which case we
+     can drop the parent again.
+
+     XXX invalid for CTFv3 and below.  */
+
+  else if (!child_types && parent != NULL && !(import_flags & CTF_IMPORT_NEW)
+	   && cth->cth_parent_strlen == 0 && cth->cth_parent_ntypes == 0)
+    parent = NULL;
 
   if (fp->ctf_version < CTF_VERSION_4)
     {
@@ -605,7 +639,7 @@ init_static_types (ctf_dict_t *fp, ctf_header_t *cth, int fresh, int is_btf)
   /* We make two passes through the entire type section, and more passes through
      parts of it: but only the first is guaranteed to happen at this stage.  The
      later passes require working string lookup, so in child dicts can only
-     happen at ctf_import time.
+     happen after the parent is imported.
 
      For prefixed kinds, we are interested in the thing we are prefixing:
      that is the true type.
@@ -683,14 +717,6 @@ init_static_types (ctf_dict_t *fp, ctf_header_t *cth, int fresh, int is_btf)
       tp = (ctf_type_t *) ((uintptr_t) tp + increment + vbytes);
     }
 
-  if (child)
-    {
-      ctf_dprintf ("CTF dict %p is a child\n", (void *) fp);
-      fp->ctf_flags |= LCTF_CHILD;
-    }
-  else
-    ctf_dprintf ("CTF dict %p is a parent\n", (void *) fp);
-
   /* Now that we've counted up the number of each type, we can allocate
      the hash tables, type translation table, and pointer table.  */
 
@@ -762,35 +788,26 @@ init_static_types (ctf_dict_t *fp, ctf_header_t *cth, int fresh, int is_btf)
   if (fp->ctf_txlate == NULL || fp->ctf_ptrtab == NULL)
     return ENOMEM;		/* Memory allocation failed.  */
 
-  if (child || cth->cth_parent_strlen != 0)
+  if (parent)
     {
-      fp->ctf_flags |= LCTF_NO_STR;
-      return 0;
+      ctf_dprintf ("CTF dict %p is a child\n", (void *) fp);
+      fp->ctf_flags |= LCTF_CHILD;
+
+      if (ctf_import_internal (fp, parent, is_btf, import_flags))
+	return ctf_errno (fp);
     }
+  else if (import_flags & CTF_IMPORT_NEW)
+    ctf_dprintf ("CTF dict %p is freshly-created\n", (void *) fp);
+  else
+    ctf_dprintf ("CTF dict %p is a parent\n", (void *) fp);
 
-  ctf_dprintf ("%u types initialized (other than names)\n", fp->ctf_typemax);
-
-  return init_static_types_names (fp, cth, fresh, is_btf);
-}
-
-static ctf_error_t
-init_static_types_names_internal (ctf_dict_t *fp, ctf_header_t *cth, int fresh,
-				  int is_btf, ctf_dynset_t *all_enums);
-
-/* A wrapper to simplify memory allocation.  */
-
-static ctf_error_t
-init_static_types_names (ctf_dict_t *fp, ctf_header_t *cth, int fresh,
-			 int is_btf)
-{
-  ctf_dynset_t *all_enums;
-  ctf_error_t err;
+  ctf_dprintf ("%u types initialized\n", fp->ctf_typemax);
 
   if ((all_enums = ctf_dynset_create (htab_hash_pointer, htab_eq_pointer,
 				      NULL)) == NULL)
     return ENOMEM;
 
-  err = init_static_types_names_internal (fp, cth, fresh, is_btf, all_enums);
+  err = init_static_types_names (fp, cth, child_types, is_btf, all_enums);
   ctf_dynset_destroy (all_enums);
   return err;
 }
@@ -807,8 +824,8 @@ init_void (ctf_dict_t *fp);
    set the ctf_errno, but instead returns a positive error code.  */
 
 static ctf_error_t
-init_static_types_names_internal (ctf_dict_t *fp, ctf_header_t *cth, int fresh,
-				  int is_btf, ctf_dynset_t *all_enums)
+init_static_types_names (ctf_dict_t *fp, ctf_header_t *cth, int child_types,
+			 int is_btf, ctf_dynset_t *all_enums)
 {
   ctf_type_t *tbuf, *tend, *tp;
   ctf_type_t **xp;
@@ -821,18 +838,8 @@ init_static_types_names_internal (ctf_dict_t *fp, ctf_header_t *cth, int fresh,
   ctf_error_t err;
   ctf_ret_t hash_err;
 
-  /* See init_static_types.  */
-  int child = (fp->ctf_str[CTF_STRTAB_0].cts_len == 0
-	       || (fp->ctf_str[CTF_STRTAB_0].cts_len > 0
-		   && fp->ctf_str[CTF_STRTAB_0].cts_strs[0] != 0));
-
-  if (fresh)
-    child = 0;
-
   tbuf = (ctf_type_t *) (fp->ctf_buf + cth->btf.bth_type_off);
   tend = (ctf_type_t *) ((uintptr_t) tbuf + cth->btf.bth_type_len);
-
-  assert (!(fp->ctf_flags & LCTF_NO_STR));
 
   /* Note: archive members will already have a cuname at this point, set from
      the archive member name, but it may well be an object file name in /tmp or
@@ -1100,7 +1107,7 @@ init_static_types_names_internal (ctf_dict_t *fp, ctf_header_t *cth, int fresh,
 	     store the index of the pointer type in fp->ctf_ptrtab[ index of
 	     referenced type ].  */
 
-	  if (ctf_type_ischild (fp, suffix->ctt_type) == child
+	  if (ctf_type_ischild (fp, suffix->ctt_type) == child_types
 	      && ctf_type_to_index (fp, suffix->ctt_type) <= fp->ctf_typemax)
 	    fp->ctf_ptrtab[ctf_type_to_index (fp, suffix->ctt_type)] = id;
 
@@ -1614,7 +1621,7 @@ ctf_dict_t *ctf_simple_open (const char *ctfsect, size_t ctfsect_size,
 			     const char *symsect, size_t symsect_size,
 			     size_t symsect_entsize,
 			     const char *strsect, size_t strsect_size,
-			     ctf_error_t *errp)
+			     ctf_dict_t *parent, ctf_error_t *errp)
 {
   ctf_sect_t skeleton;
 
@@ -1651,7 +1658,7 @@ ctf_dict_t *ctf_simple_open (const char *ctfsect, size_t ctfsect_size,
       strsectp = &str_sect;
     }
 
-  return ctf_bufopen (ctfsectp, symsectp, strsectp, errp);
+  return ctf_bufopen (ctfsectp, symsectp, strsectp, parent, errp);
 }
 
 /* Decode the specified CTF or BTF buffer and optional symbol table, and create
@@ -1661,9 +1668,11 @@ ctf_dict_t *ctf_simple_open (const char *ctfsect, size_t ctfsect_size,
 
 ctf_dict_t *
 ctf_bufopen (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
-	     const ctf_sect_t *strsect, ctf_error_t *errp)
+	     const ctf_sect_t *strsect, ctf_dict_t *parent,
+	     ctf_error_t *errp)
 {
-  return ctf_bufopen_len (ctfsect, symsect, strsect, NULL, 0, errp);
+  return ctf_bufopen_len (ctfsect, symsect, strsect, NULL, parent, NULL,
+			  0, errp);
 }
 
 /* Get the length of a CTF buffer, without returning it.  The length includes
@@ -1675,21 +1684,21 @@ ctf_buflen (const ctf_sect_t *ctfsect, ctf_error_t *errp)
 {
   ssize_t len;
 
-  ctf_bufopen_len (ctfsect, NULL, NULL, &len, 0, errp);
+  ctf_bufopen_len (ctfsect, NULL, NULL, &len, NULL, NULL, 0, errp);
   return len;
 }
 
-/* Internal workings of ctf_bufopen and ctf_buflen.
+/* Internal workings of ctf_bufopen, ctf_buflen, ctf_create, and ctf_dict_open*
+   in ctf-archive.c.
 
    The return value is somewhat strange.  If LEN is non-null, it is set to -1
    on error, and the return value of the function itself is always NULL;
-   if LEN is NULL, the dict is returned in ctf_dict_t, or NULL on error.
-
-   If FRESH, this is a newly-created dictionary.  */
+   if LEN is NULL, the dict is returned in ctf_dict_t, or NULL on error.  */
 
 ctf_dict_t *
 ctf_bufopen_len (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
-		 const ctf_sect_t *strsect, ssize_t *len, int fresh,
+		 const ctf_sect_t *strsect, ssize_t *len, ctf_dict_t *parent,
+		 ctf_archive_t *ctf_archive, ctf_import_flags_t import_flags,
 		 ctf_error_t *errp)
 {
   const ctf_preamble_v3_t *pp;
@@ -2312,7 +2321,8 @@ ctf_bufopen_len (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
 
   ctf_set_base (fp, hp, fp->ctf_base);
 
-  if ((err = init_static_types (fp, hp, fresh, format == IS_BTF)) != 0)
+  if ((err = init_static_types (fp, hp, parent, import_flags,
+				format == IS_BTF)) != 0)
     goto bad;
 
   /* Allocate and initialize the symtab translation table, pointed to by
@@ -2345,15 +2355,37 @@ ctf_bufopen_len (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
 
   ctf_set_ctl_hashes (fp);
 
-  if (symsect != NULL)
+  /* Set the data model from the archive (if recorded: V1 archives only), or
+     failing that from the symtab.  v2 may need to adjust this post facto: if we
+     opened from an archive, we force-set the model of the child to that of the
+     parent.  (This pathway is also used for low-level manual opens of dicts
+     without a symtab, where the only evidence for the data model of the dict at
+     open time is the data model of the parent.)  */
+
+  fp->ctf_archive = ctf_archive;
+  if (fp->ctf_archive && fp->ctf_archive->ctfi_v1_hdr)
+    ctf_dict_set_model (fp, fp->ctf_archive->ctfi_v1_hdr->model);
+  else if (symsect != NULL)
     {
       if (symsect->cts_entsize == sizeof (Elf64_Sym))
 	ctf_dict_set_model (fp, CTF_MODEL_LP64);
       else
 	ctf_dict_set_model (fp, CTF_MODEL_ILP32);
     }
+  else if (parent)
+    ctf_dict_set_model (fp, parent->ctf_dmodel->ctd_code);
   else
     ctf_dict_set_model (fp, CTF_MODEL_NATIVE);
+
+  if (parent && parent->ctf_dmodel != fp->ctf_dmodel)
+    {
+      ctf_err (err_locus (NULL), EINVAL,
+	       _("data model %s of parent differs from model %s of child"),
+	       parent->ctf_dmodel->ctd_name, fp->ctf_dmodel->ctd_name);
+      err = EINVAL;
+      fp->ctf_archive = NULL;
+      goto bad;
+    }
 
   fp->ctf_refcnt = 1;
   return fp;
@@ -2399,7 +2431,7 @@ ctf_dict_close (ctf_dict_t *fp)
 
   /* It is possible to recurse back in here, notably if dicts in the
      ctf_link_inputs or ctf_link_outputs cite this dict as a parent without
-     using ctf_import_unref.  Do nothing in that case.  */
+     using an unreffed ctf_import.  Do nothing in that case.  */
   if (fp->ctf_refcnt == 0)
     return;
 
@@ -2701,48 +2733,25 @@ ctf_dict_set_cuname (ctf_dict_t *fp, const char *name)
   return 0;
 }
 
-static ctf_ret_t
-ctf_import_internal (ctf_dict_t *fp, ctf_dict_t *pfp, int unreffed)
+/* Import the types from the specified parent dict by storing a pointer to it in
+   ctf_parent and incrementing its reference count.  You can only call this
+   function once: the parent cannot be replaced once set.  */
+
+ctf_ret_t
+ctf_import_internal (ctf_dict_t *fp, ctf_dict_t *pfp, int is_btf,
+		     ctf_import_flags_t flags)
 {
-  ctf_error_t err;
-  int no_strings = fp->ctf_flags & LCTF_NO_STR;
-  int old_flags = fp->ctf_flags;
-  ctf_dict_t *old_parent = fp->ctf_parent;
-  int old_unreffed = fp->ctf_parent_unreffed;
+  size_t parent_ntypes = fp->ctf_header->cth_parent_ntypes;
 
-  if (pfp == NULL || pfp == fp->ctf_parent)
-    return 0;
+  if (!ctf_assert (fp, fp->ctf_parent == NULL))
+    return -1;					/* errno is set for us.  */
 
-  if (fp == NULL || fp == pfp || pfp->ctf_refcnt == 0)
-    return (ctf_set_errno (fp, EINVAL));
+  if (!ctf_assert (fp, fp->ctf_flags & LCTF_CHILD))
+    return -1;					/* errno is set for us.  */
 
-  if (pfp->ctf_dmodel != fp->ctf_dmodel)
-    return (ctf_set_errno (fp, ECTF_DMODEL));
-
-  if (fp->ctf_parent && fp->ctf_header->cth_parent_strlen != 0)
-    return (ctf_set_errno (fp, ECTF_HASPARENT));
-
-  /* Fail if the child has so many types that it overlaps the parent's
-     provisional type range.  */
-  if (fp->ctf_idmax + fp->ctf_header->cth_parent_ntypes >= pfp->ctf_provtypemax)
-    return ctf_set_errno (fp, ECTF_FULL);
-
-  /* Complain if the strlen of the parent is wrong, since this will corrupt all
-     child dicts: if the expected strlen is zero, this must be a freshly-created
-     dict or a v3 dict; if there are no strings in the child either, this is a
-     freshly-created dict, so set the strlen we expect in the parent to the value
-     we find there.  */
-
-  if (fp->ctf_header->cth_parent_strlen != 0)
-    {
-      if (pfp->ctf_header->btf.bth_str_len != fp->ctf_header->cth_parent_strlen)
-	return ctf_err (err_locus (fp), ECTF_WRONGPARENT,
-			_("incorrect parent dict: %u bytes of strings expected, %u found"),
-			fp->ctf_header->cth_parent_strlen,
-			pfp->ctf_header->btf.bth_str_len);
-    }
-  else if (fp->ctf_str[CTF_STRTAB_0].cts_len == 0) /* Freshly-created dict.  */
-    fp->ctf_header->cth_parent_strlen = pfp->ctf_str[CTF_STRTAB_0].cts_len;
+  if (pfp->ctf_refcnt == 0)
+    return ctf_err (err_locus (fp), ECTF_WRONGPARENT,
+		    _("cannot import a dict with a zero refcount"));
 
   /* If the child dict expects the parent to have types, make sure it has that
      number of types.  (Provisional types excepted: they go at the top of the
@@ -2760,125 +2769,99 @@ ctf_import_internal (ctf_dict_t *fp, ctf_dict_t *pfp, int unreffed)
 	return ctf_err (err_locus (fp), ECTF_WRONGPARENT,
 			_("incorrect parent dict: %u types expected, %u found"),
 			fp->ctf_header->cth_parent_ntypes, pfp->ctf_idmax);
-      else if (fp->ctf_opened_btf)
+      else if (flags & CTF_IMPORT_NEW)
+	{
+	  /* If this is a new import (of an unserialized child), set the child
+	     dict's starting type ID, which need not be zero: the parent can
+	     already have types.  We assign typemax rather than idmax because
+	     when this is a new dict we want the types to count up from the
+	     number of types currently in the parent, not the number in the
+	     parent when it was opened.  New types added to the parent from now
+	     on will get provisional IDs, count down from the top of the range,
+	     and be renumbered on serialization, as will all the types in the
+	     child.
+
+	     The new unserialized child cannot have any types in -- except the
+	     void type, which has a type ID of zero and does not contribute to
+	     ctf_typemax.  */
+
+	  if (!ctf_assert (fp, fp->ctf_typemax == 0))
+	    return -1;				/* errno is set for us.  */
+	  parent_ntypes = pfp->ctf_typemax;
+	}
+      else if (is_btf)
 	{
 	  /* A pure BTF dict does not track the number of types in the parent:
 	     just update and hope.  */
 
-	  fp->ctf_header->cth_parent_ntypes = pfp->ctf_idmax;
-	}
-      else if (fp->ctf_header->cth_parent_ntypes == 0)
-	{
-	  /* If we are importing into a parent dict, the child dict had better
-	     be empty.  Set its starting type ID, which need not be zero: the
-	     parent can already have types.  We assign typemax rather than
-	     idmax because when this is a new dict we want the types to count
-	     up from the number of types currently in the parent, not the number
-	     in the parent when it was opened.  */
-
-	  if (fp->ctf_typemax != 0)
-	    return ctf_err (err_locus (fp), ECTF_RANGE,
-			    _("dict already has %u types, cannot turn into a new child"),
-			    fp->ctf_typemax);
-	  fp->ctf_header->cth_parent_ntypes = pfp->ctf_typemax;
+	  parent_ntypes = pfp->ctf_idmax;
 	}
     }
+
+  /* Fail if the child has so many types that it overlaps the parent's
+     provisional type range.  */
+
+  if (fp->ctf_idmax + parent_ntypes >= pfp->ctf_provtypemax)
+    return ctf_err (err_locus (fp), ECTF_FULL,
+		    _("cannot import: dict is full: child dict has %x types, "
+		      "which runs into the parent's provisional types, "
+		      "starting at %x"), fp->ctf_idmax, pfp->ctf_provtypemax);
+
+  /* Complain if the strlen of the parent is wrong, since this will corrupt all
+     child dicts.  If the expected strlen is zero, this must be a freshly-created
+     dict or a v3 dict; if there are no strings in the child either, this is a
+     freshly-created dict, so set the strlen we expect in the parent to the value
+     we find there.  */
+
+  if (fp->ctf_header->cth_parent_strlen != 0)
+    {
+      if (pfp->ctf_header->btf.bth_str_len != fp->ctf_header->cth_parent_strlen)
+	return ctf_err (err_locus (fp), ECTF_WRONGPARENT,
+			_("incorrect parent dict: %u bytes of strings expected, %u found"),
+			fp->ctf_header->cth_parent_strlen,
+			pfp->ctf_header->btf.bth_str_len);
+    }
+  else if (flags & CTF_IMPORT_NEW)		/* Freshly-created dict.  */
+    fp->ctf_header->cth_parent_strlen = pfp->ctf_str[CTF_STRTAB_0].cts_len;
+
+  /* BTF dicts don't have any parent strlen in the header, but we need to know
+     it to dereference strings.  (We already handled the corresponding case for
+     newly-created dicts imported into pre-existing parents above.)  */
+
+  if (is_btf)
+    fp->ctf_header->cth_parent_strlen = pfp->ctf_str[CTF_STRTAB_0].cts_len;
+
+  fp->ctf_header->cth_parent_ntypes = parent_ntypes;
 
   if (pfp->ctf_max_child_typemax
       < (fp->ctf_idmax + fp->ctf_header->cth_parent_ntypes))
     pfp->ctf_max_child_typemax = fp->ctf_idmax
       + fp->ctf_header->cth_parent_ntypes;
 
-  /* No importing dicts with provisional strings in (except for the void one
-     added to all new dicts).  We might in time be able to lift this
-     restriction, but it is unlikely to be something anyone would want to do, so
-     let's not bother for now.  If we have a system-created void type, it might
-     have instantiated a new string.  */
+  /* No importing dicts with provisional strings in (except for "void", in new
+     dicts).  This should be impossible anyway, since either the parent was
+     imported when the dict was created (with a void type), or it was imported
+     when the dict was opened (and newly-opened dicts never have provisional
+     types).  */
 
-  if ((fp->ctf_void_type == NULL
-       && ctf_dynhash_elements (fp->ctf_prov_strtab) != 0)
-      || (fp->ctf_void_type != NULL
-	  && ctf_dynhash_elements (fp->ctf_prov_strtab) > 1))
-    return ctf_err (err_locus (fp), ECTF_RANGE,
-		    _("dict already has %zi strings, cannot import"),
-		    ctf_dynhash_elements (fp->ctf_prov_strtab));
+  if (!ctf_assert (fp, (fp->ctf_void_type == NULL
+			&& ctf_dynhash_elements (fp->ctf_prov_strtab) == 0)
+		   || (fp->ctf_void_type != NULL
+		       && ctf_dynhash_elements (fp->ctf_prov_strtab) <= 1)))
+    return -1;
 
-  fp->ctf_parent = NULL;
-  free (fp->ctf_pptrtab);
-  fp->ctf_pptrtab = NULL;
-  fp->ctf_pptrtab_len = 0;
-  fp->ctf_pptrtab_typemax = 0;
+  if (!ctf_assert (fp, fp->ctf_pptrtab == NULL && fp->ctf_pptrtab_len == 0
+		   && fp->ctf_pptrtab_typemax == 0))
+    return -1;					/* errno is set for us.  */
 
-  if (!unreffed)
+  if (flags & CTF_IMPORT_UNREF)
+    fp->ctf_parent_unreffed = 1;
+  else
     pfp->ctf_refcnt++;
-
-  fp->ctf_parent_unreffed = unreffed;
   fp->ctf_parent = pfp;
-
-  /* BTF dicts don't have any parent strlen in the header, but we need to know
-     it to dereference strings.  (We already handled the corresponding case for
-     newly-created CTF dicts imported into pre-existing parents above.)  */
-
-  if (fp->ctf_opened_btf)
-    fp->ctf_header->cth_parent_strlen = pfp->ctf_str[CTF_STRTAB_0].cts_len;
-
-  /* If this is a dict that hasn't previously allowed string lookups,
-     we can allow them now, and finish initialization.  (This requires us to
-     figure out whether the buffer contains pure BTF or not: we can do that by
-     checking the CTF-specific magic number in the header we read in.)  */
-
-  fp->ctf_flags |= LCTF_CHILD;
-  fp->ctf_flags &= ~LCTF_NO_STR;
-
-  if (no_strings && ((err = init_static_types_names (fp, fp->ctf_header, 0,
-						     fp->ctf_opened_btf)) != 0))
-    {
-      /* Undo everything other than cache flushing.  */
-
-      fp->ctf_flags = old_flags;
-      fp->ctf_parent_unreffed = old_unreffed;
-      fp->ctf_parent = old_parent;
-
-      if (fp->ctf_parent_unreffed)
-	old_parent->ctf_refcnt++;
-
-      return (ctf_set_errno (fp, err));		/* errno is set for us.  */
-    }
-
-  /* Failure can now no longer happen, so we can close the old parent (which may
-     deallocate it and is not easily reversible).  */
-
-  if (old_parent && !old_unreffed)
-    ctf_dict_close (old_parent);
 
   fp->ctf_parent->ctf_max_children++;
   return 0;
-}
-
-/* Import the types from the specified parent dict by storing a pointer to it in
-   ctf_parent and incrementing its reference count.  You can only call this
-   function once on serialized dicts: the parent cannot be replaced once set.
-   (You can call it on unserialized dicts as often as you like.)
-
-   The pptrtab is wiped, and will be refreshed by the next ctf_lookup_by_name
-   call.
-
-   You can call this with a parent of NULL as many times as you like (but
-   it doesn't do much).  */
-ctf_ret_t
-ctf_import (ctf_dict_t *fp, ctf_dict_t *pfp)
-{
-  return ctf_import_internal (fp, pfp, 0);
-}
-
-/* Like ctf_import, but does not increment the refcount on the imported parent
-   or close it at any point: as a result it can go away at any time and the
-   caller must do all freeing itself.  Used internally to avoid refcount
-   loops.  */
-ctf_ret_t
-ctf_import_unref (ctf_dict_t *fp, ctf_dict_t *pfp)
-{
-  return ctf_import_internal (fp, pfp, 1);
 }
 
 /* Set the data model constant for the CTF dict.  */
