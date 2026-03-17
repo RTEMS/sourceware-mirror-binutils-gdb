@@ -44,7 +44,7 @@ try_maybe_reporting (int report)
   size_t bufsiz;
   ctf_error_t err;
 
-  if ((fp = ctf_create (&err)) == NULL)
+  if ((fp = ctf_create (NULL, &err)) == NULL)
     goto create_err;
 
   /* Add a couple of sets of types to hang symbols off.  We use multiple
@@ -168,7 +168,7 @@ try_maybe_reporting (int report)
 
   /* Read back in.  */
   if ((fp = ctf_simple_open ((const char *) buf, bufsiz, NULL, 0, 0, NULL,
-			     0, &err)) == NULL)
+			     0, NULL, &err)) == NULL)
     goto open_err;
 
   /* Verify symbol order against the order we expect if this dict is sorted and

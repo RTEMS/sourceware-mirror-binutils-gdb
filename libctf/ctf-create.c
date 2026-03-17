@@ -169,7 +169,18 @@ ctf_add_prefix (ctf_dict_t *fp, ctf_dtdef_t *dtd, size_t vbytes)
    type ID 0 is used as a sentinel and a not-found indicator.  */
 
 ctf_dict_t *
-ctf_create (ctf_error_t *errp)
+ctf_create (ctf_dict_t *parent, ctf_error_t *errp)
+{
+  return ctf_create_internal (parent, 0, errp);
+}
+
+/* Implementation of ctf_create().  Allows the caller to specify specific import
+   flags.  Not public, because these flags are an internal implementation
+   detail.  */
+
+ctf_dict_t *
+ctf_create_internal (ctf_dict_t *parent, ctf_import_flags_t import_flags,
+		     ctf_error_t *errp)
 {
   static ctf_header_t hdr =
     {
@@ -209,7 +220,8 @@ ctf_create (ctf_error_t *errp)
   cts.cts_size = sizeof (hdr);
   cts.cts_entsize = 1;
 
-  if ((fp = ctf_bufopen_len (&cts, NULL, NULL, NULL, 1, errp)) == NULL)
+  if ((fp = ctf_bufopen_len (&cts, NULL, NULL, NULL, parent, NULL, import_flags
+			     | CTF_IMPORT_NEW, errp)) == NULL)
     goto err;
 
   /* These hashes will have been initialized with a starting size of zero,
@@ -408,9 +420,6 @@ ctf_rollback (ctf_dict_t *fp, ctf_snapshot_id_t id)
 {
   ctf_dtdef_t *dtd, *ntd;
 
-  if (fp->ctf_flags & LCTF_NO_STR)
-    return (ctf_set_errno (fp, ECTF_NOPARENT));
-
   if (id.snapshot_id < fp->ctf_stypes)
     return (ctf_set_errno (fp, ECTF_RDONLY));
 
@@ -580,19 +589,7 @@ ctf_add_generic (ctf_dict_t *fp, const char *name, ctf_kind_t kind,
       return NULL;
     }
 
-  /* Prohibit addition of types in the middle of serialization.  */
-
-  if (fp->ctf_flags & LCTF_NO_TYPE)
-    {
-      ctf_set_errno (fp, ECTF_NOTSERIALIZED);
-      return NULL;
-    }
-
-  if (fp->ctf_flags & LCTF_NO_STR)
-    {
-      ctf_set_errno (fp, ECTF_NOPARENT);
-      return NULL;
-    }
+  /* Outright paranoia.  */
 
   if (fp->ctf_flags & LCTF_CHILD && fp->ctf_parent == NULL)
     {
@@ -1222,9 +1219,6 @@ ctf_add_struct (ctf_dict_t *fp, const char *name,
   size_t initial_vbytes = sizeof (ctf_member_t) * INITIAL_VLEN;
   int kind_flag = (bitfield == CTF_STRUCT_BITFIELD);
 
-  if (fp->ctf_flags & LCTF_NO_STR)
-    return (ctf_set_errno (fp, ECTF_NOPARENT));
-
   if (struct_union_unknown != CTF_K_UNKNOWN
       && struct_union_unknown != CTF_K_STRUCT
       && struct_union_unknown != CTF_K_UNION)
@@ -1300,9 +1294,6 @@ ctf_add_enum (ctf_dict_t *fp, const char *name, ctf_kind_t enum_64_unknown,
   else
     initial_vbytes = sizeof (ctf_enum64_t) * INITIAL_VLEN;
 
-  if (fp->ctf_flags & LCTF_NO_STR)
-    return (ctf_set_errno (fp, ECTF_NOPARENT));
-
   /* Promote root-visible forwards to enums.  */
   if (name != NULL && !fp->ctf_add_conflicting)
     type = ctf_lookup_by_rawname (fp, kind, name);
@@ -1358,9 +1349,6 @@ ctf_add_forward (ctf_dict_t *fp, const char *name, ctf_kind_t kind)
   if (name == NULL || name[0] == '\0')
     return (ctf_set_typed_errno (fp, ECTF_NONAME));
 
-  if (fp->ctf_flags & LCTF_NO_STR)
-    return (ctf_set_errno (fp, ECTF_NOPARENT));
-
   /* If the type is already defined or exists as a forward tag, just return
      the ctf_id_t of the existing definition.  Since this changes nothing,
      it's safe to do even on the read-only portion of the dict.  */
@@ -1390,9 +1378,6 @@ ctf_add_unknown (ctf_dict_t *fp, const char *name)
 {
   ctf_dtdef_t *dtd;
   ctf_id_t type = 0;
-
-  if (fp->ctf_flags & LCTF_NO_STR)
-    return (ctf_set_errno (fp, ECTF_NOPARENT));
 
   /* If a type is already defined with this name, error (if not CTF_K_UNKNOWN)
      or just return it.  */
@@ -1475,9 +1460,6 @@ ctf_add_enumerator (ctf_dict_t *fp, ctf_id_t enid, const char *name,
 
   if (enid < fp->ctf_stypes)
     return (ctf_set_errno (ofp, ECTF_RDONLY));
-
-  if (fp->ctf_flags & LCTF_NO_STR)
-    return (ctf_set_errno (fp, ECTF_NOPARENT));
 
   if (dtd == NULL)
     return (ctf_set_errno (ofp, ECTF_BADID));
@@ -1601,12 +1583,6 @@ ctf_add_member_bitfield (ctf_dict_t *fp, ctf_id_t souid, const char *name,
   size_t i;
   int is_incomplete = 0;
   ctf_member_t *memb;
-
-  if (fp->ctf_flags & LCTF_NO_STR)
-    return (ctf_set_errno (fp, ECTF_NOPARENT));
-
-  if (fp->ctf_flags & LCTF_NO_TYPE)
-    return (ctf_set_errno (fp, ECTF_NOTSERIALIZED));
 
   if ((fp->ctf_flags & LCTF_CHILD) && ctf_type_isparent (fp, souid))
     {
@@ -1873,9 +1849,6 @@ ctf_add_section_variable (ctf_dict_t *fp, const char *datasec,
   int is_incomplete = 0;
   ctf_snapshot_id_t err_snap = ctf_snapshot (fp);
 
-  if (fp->ctf_flags & LCTF_NO_STR)
-    return (ctf_set_typed_errno (fp, ECTF_NOPARENT));
-
   if (name == NULL || name[0] == '\0')
     return (ctf_set_typed_errno (fp, ECTF_NONAME));
 
@@ -2031,12 +2004,6 @@ ctf_add_funcobjt_sym_forced (ctf_dict_t *fp, int is_function, const char *name, 
   ctf_dict_t *tmp = fp;
   char *dupname;
   ctf_dynhash_t *h = is_function ? fp->ctf_funchash : fp->ctf_objthash;
-
-  if (fp->ctf_flags & LCTF_NO_STR)
-    return (ctf_set_errno (fp, ECTF_NOPARENT));
-
-  if (fp->ctf_flags & LCTF_NO_TYPE)
-    return (ctf_set_errno (fp, ECTF_NOTSERIALIZED));
 
   if (ctf_lookup_by_id (&tmp, id, NULL) == NULL)
     return -1;				/* errno is set for us.  */
@@ -2837,11 +2804,6 @@ ctf_id_t
 ctf_add_type (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type)
 {
   ctf_id_t id;
-
-  if ((src_fp->ctf_flags & LCTF_NO_STR) || (dst_fp->ctf_flags & LCTF_NO_STR)
-      || ((src_fp->ctf_flags & LCTF_CHILD) && (src_fp->ctf_parent == NULL))
-      || ((dst_fp->ctf_flags & LCTF_CHILD) && (dst_fp->ctf_parent == NULL)))
-    return (ctf_set_typed_errno (dst_fp, ECTF_NOPARENT));
 
   if (!src_fp->ctf_add_processing)
     src_fp->ctf_add_processing = ctf_dynhash_create (ctf_hash_integer,

@@ -3359,24 +3359,29 @@ ctf_dedup_emit_type (const char *hval, ctf_dict_t *output, ctf_dict_t **inputs,
       else
 	{
 	  ctf_error_t err;
+	  ctf_dict_t *parent;
+	  ctf_import_flags_t import_flags = 0;
 
-	  if ((target = ctf_create (&err)) == NULL)
+	  /* In against-first mode, the parent is the unmodified first dict in
+	     the link: in that mode we can use a normal import because the
+	     parent does not hold a ref to any dicts.  In other modes, the same
+	     considerations apply here as in ctf_create_per_cu: OUTPUT is the
+	     dict doing the dedupping and already holds a ref to all the
+	     inputs.  */
+
+	  if (output->ctf_link_flags & CTF_LINK_DEDUP_AGAINST_FIRST)
+	    parent = inputs[0];
+	  else
+	    {
+	      parent = output;
+	      import_flags = CTF_IMPORT_UNREF;
+	    }
+
+	  if ((target = ctf_create_internal (parent, import_flags, &err)) == NULL)
 	    return ctf_err (link_err_locus (output, input, input_num), err,
 			    _("cannot create per-CU CTF archive"));
 
 	  target->ctf_flags |= LCTF_STRICT_NO_DUP_ENUMERATORS;
-
-	  /* In against-first mode, the parent is the unmodified first dict in
-	     the link.  */
-
-	  if (output->ctf_link_flags & CTF_LINK_DEDUP_AGAINST_FIRST)
-	    err = ctf_import (target, inputs[0]);
-	  else
-	    err = ctf_import_unref (target, output);
-
-	  if (err != 0)
-	    return ctf_err (link_err_locus (output, input, input_num), err,
-			    _("cannot import parent into per-CU CTF archive"));
 
 	  if (ctf_dict_cuname (input) != NULL)
 	    ctf_dict_set_cuname (target, ctf_dict_cuname (input));

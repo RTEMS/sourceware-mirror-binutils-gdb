@@ -3919,7 +3919,7 @@ ldlang_open_ctf (void)
 	}
     }
 
-  if ((ctf_output = ctf_create (&err)) != NULL)
+  if ((ctf_output = ctf_create (NULL, &err)) != NULL)
     {
       ld_stop_phase (PHASE_CTF);
       return;

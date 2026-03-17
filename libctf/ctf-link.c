@@ -321,7 +321,11 @@ ctf_create_per_cu (ctf_dict_t *fp, ctf_dict_t *input, const char *cu_name)
     {
       ctf_error_t err;
 
-      if ((cu_fp = ctf_create (&err)) == NULL)
+      /* The parent is unreffed to avoid a circular reference, since fp holds a
+	 reference to cu_fp itself, and ctf_create doesn't provide a way to pass
+	 internal flags to the importing machinery.  */
+
+      if ((cu_fp = ctf_create_internal (fp, CTF_IMPORT_UNREF, &err)) == NULL)
 	{
 	  ctf_err (err_locus (fp), err, _("cannot create per-CU CTF archive for "
 			    "input CU %s"), cu_name);
@@ -330,7 +334,6 @@ ctf_create_per_cu (ctf_dict_t *fp, ctf_dict_t *input, const char *cu_name)
 
       /* The deduplicator is ready for strict enumerator value checking.  */
       cu_fp->ctf_flags |= LCTF_STRICT_NO_DUP_ENUMERATORS;
-      ctf_import_unref (cu_fp, fp);
 
       if ((dynname = ctf_new_per_cu_name (fp, ctf_name)) == NULL)
 	goto oom;
@@ -775,16 +778,6 @@ ctf_link_deduplicating_open_inputs (ctf_dict_t *fp, ctf_dynhash_t *cu_names,
 
 	  parents_[walk - dedup_inputs] = parent_i;
 
-	  /* This should never happen, but if it *does*, we want to know, because it
-	     breaks string lookup and thus eventually everything.  */
-	  if (!ctf_assert (fp, !(one_fp->ctf_flags & LCTF_NO_STR)))
-	    {
-	      ctf_next_destroy (j);
-	      ctf_next_destroy (i);
-	      ctf_set_errno (fp, ECTF_NOPARENT);
-	      goto err;
-	    }
-
 	  *walk = one_fp;
 	  walk++;
 	}
@@ -1054,8 +1047,7 @@ ctf_link_deduplicating_per_cu (ctf_dict_t *fp)
 
       if (labs ((long int) ninputs) > 0xfffffffe)
 	{
-	  ctf_err (err_locus (fp), ECTF_RANGE, _("too many inputs: %li"),
-		   (long int) ninputs);
+	  ctf_err (err_locus (fp), EDOM, _("too many inputs: %li"), (long int) ninputs);
 	  goto err_open_inputs;
 	}
 
@@ -1118,7 +1110,7 @@ ctf_link_deduplicating_per_cu (ctf_dict_t *fp)
 	  goto err_open_inputs;
 	}
 
-      if ((out = ctf_create (&err)) == NULL)
+      if ((out = ctf_create (NULL, &err)) == NULL)
 	{
 	  ctf_err (err_locus (fp), err,
 		   _("cannot create per-CU CTF archive for %s"), out_name);
@@ -1131,10 +1123,9 @@ ctf_link_deduplicating_per_cu (ctf_dict_t *fp)
       /* Share the atoms table to reduce memory usage.  */
       out->ctf_dedup_atoms = fp->ctf_dedup_atoms_alloc;
 
-      /* No ctf_imports at this stage: this per-CU dictionary has no parents.
-	 Parent/child deduplication happens in the link's final pass.  However,
-	 the cuname *is* important, as it is propagated into the final
-	 dictionary.  */
+      /* Per-CU dictionaries have no parents at this stage.  Parent/child
+	 deduplication happens in the link's final pass.  However, the cuname
+	 *is* important, as it is propagated into the final dictionary.  */
       ctf_dict_set_cuname (out, out_name);
 
       if (ctf_dedup (out, inputs, ninputs, 1) < 0)
@@ -1578,11 +1569,8 @@ ctf_link_against (ctf_dict_t *fp, ctf_archive_t *against, ctf_archive_t *dict,
 	 a new dict, import the parent, and stick it in ctf_link_outputs so that
 	 we can return something.  */
 
-      if ((empty = ctf_create (&err)) == NULL)
+      if ((empty = ctf_create (fp->ctf_link_parent, &err)) == NULL)
 	return ctf_err (err_locus (fp), err, _("creating empty against-types link dict"));
-
-      if (ctf_import (empty, fp->ctf_link_parent) < 0)
-	return ctf_err (err_locus (fp), err, _("importing parent into empty against-types link dict"));
 
       if (input_parent_cuname)
 	ctf_dict_set_cuname (empty, input_parent_cuname);
