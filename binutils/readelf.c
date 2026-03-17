@@ -256,7 +256,6 @@ static bool extra_sym_info = false;
 static int demangle_flags = DMGL_ANSI | DMGL_PARAMS;
 static int sym_base = 0;
 
-static char *dump_ctf_parent_name;
 static char *dump_ctf_symtab_name;
 static char *dump_ctf_strtab_name;
 
@@ -6426,7 +6425,6 @@ enum long_option_values
   OPTION_DWARF_START,
   OPTION_DWARF_CHECK,
   OPTION_CTF_DUMP,
-  OPTION_CTF_PARENT,
   OPTION_CTF_SYMBOLS,
   OPTION_CTF_STRINGS,
   OPTION_SFRAME_DUMP,
@@ -6495,7 +6493,6 @@ static struct option options[] =
   {"ctf",	       required_argument, 0, OPTION_CTF_DUMP},
   {"ctf-symbols",      required_argument, 0, OPTION_CTF_SYMBOLS},
   {"ctf-strings",      required_argument, 0, OPTION_CTF_STRINGS},
-  {"ctf-parent",       required_argument, 0, OPTION_CTF_PARENT},
 #endif
   {"sframe",	       optional_argument, 0, OPTION_SFRAME_DUMP},
   {"sym-base",	       optional_argument, 0, OPTION_SYM_BASE},
@@ -6637,8 +6634,6 @@ usage (FILE * stream)
 #ifdef ENABLE_LIBCTF
   fprintf (stream, _("\
   --ctf=<number|name>    Display CTF info from section <number|name>\n"));
-  fprintf (stream, _("\
-  --ctf-parent=<name>    Use CTF archive member <name> as the CTF parent\n"));
   fprintf (stream, _("\
   --ctf-symbols=<number|name>\n\
                          Use section <number|name> as the CTF external symtab\n"));
@@ -6924,10 +6919,6 @@ parse_args (struct dump_data *dumpdata, int argc, char ** argv)
 	case OPTION_CTF_STRINGS:
 	  free (dump_ctf_strtab_name);
 	  dump_ctf_strtab_name = strdup (optarg);
-	  break;
-	case OPTION_CTF_PARENT:
-	  free (dump_ctf_parent_name);
-	  dump_ctf_parent_name = strdup (optarg);
 	  break;
 	case OPTION_SFRAME_DUMP:
 	  do_sframe = true;
@@ -17373,8 +17364,7 @@ dump_ctf_errs (ctf_dict_t *fp)
 /* Dump one CTF archive member.  */
 
 static void
-dump_ctf_archive_member (ctf_dict_t *ctf, const char *name, ctf_dict_t *parent,
-			 size_t member)
+dump_ctf_archive_member (ctf_dict_t *ctf, const char *name, size_t member)
 {
   const char *things[] = {"Header", "Data objects", "Function objects",
 			  "Variables", "Types", "Strings", ""};
@@ -17395,9 +17385,6 @@ dump_ctf_archive_member (ctf_dict_t *ctf, const char *name, ctf_dict_t *parent,
 	printf (_("\nCTF archive member %zi:\n"), member);
     }
   
-
-  if (parent && ctf_dict_parent_name (ctf) != NULL)
-    ctf_import (ctf, parent);
 
   for (i = 0, thing = things; *thing[0]; thing++, i++)
     {
@@ -17435,7 +17422,6 @@ dump_section_as_ctf (Elf_Internal_Shdr * section, Filedata * filedata)
   ctf_sect_t *	       symsectp = NULL;
   ctf_sect_t *	       strsectp = NULL;
   ctf_archive_t *      ctfa = NULL;
-  ctf_dict_t *         parent = NULL;
   ctf_dict_t *         fp;
 
   ctf_next_t *i = NULL;
@@ -17500,20 +17486,6 @@ dump_section_as_ctf (Elf_Internal_Shdr * section, Filedata * filedata)
 
   ctf_arc_symsect_endianness (ctfa, filedata->file_header.e_ident[EI_DATA]
 			      != ELFDATA2MSB);
-
-  /* Explicitly open the parent for importing into the children if the parent
-     name was provided.  Otherwise, it'll be done automatically for us by
-     ctf_archive_next().  */
-  if (dump_ctf_parent_name)
-    {
-      if ((parent = ctf_dict_open (ctfa, dump_ctf_parent_name, &err)) == NULL)
-	{
-	  dump_ctf_errs (NULL);
-	  error (_("CTF open failure: %s\n"), ctf_errmsg (err));
-	  goto fail;
-	}
-    }
-
   ret = true;
 
   if (filedata->is_separate)
@@ -17526,7 +17498,7 @@ dump_section_as_ctf (Elf_Internal_Shdr * section, Filedata * filedata)
 
  while ((fp = ctf_archive_next (ctfa, &i, &name, 0, &err)) != NULL)
    {
-     dump_ctf_archive_member (fp, name, parent, member++);
+     dump_ctf_archive_member (fp, name, member++);
      ctf_dict_close (fp);
    }
  if (err != ECTF_NEXT_END)
@@ -17537,7 +17509,6 @@ dump_section_as_ctf (Elf_Internal_Shdr * section, Filedata * filedata)
    }
 
  fail:
-  ctf_dict_close (parent);
   ctf_close (ctfa);
   free (data);
   free (symdata);
@@ -24995,7 +24966,6 @@ main (int argc, char ** argv)
 
   free (dump_ctf_symtab_name);
   free (dump_ctf_strtab_name);
-  free (dump_ctf_parent_name);
 
   return err ? EXIT_FAILURE : EXIT_SUCCESS;
 }
