@@ -292,12 +292,10 @@ typedef int ctf_func_type_flags_t;
   _CTF_ITEM (ECTF_NOCTFBUF, "buffer does not contain CTF data") \
   _CTF_ITEM (ECTF_NOSYMTAB, "symbol table information is not available") \
   _CTF_ITEM (ECTF_NOPARENT, "the parent CTF dictionary is needed but unavailable") \
-  _CTF_ITEM (ECTF_DMODEL, "data model mismatch") \
   _CTF_ITEM (ECTF_LINKADDEDLATE, "file added to link too late") \
   _CTF_ITEM (ECTF_ZALLOC, "failed to allocate (de)compression buffer") \
   _CTF_ITEM (ECTF_DECOMPRESS, "failed to decompress CTF data") \
   _CTF_ITEM (ECTF_STRTAB, "external string table is not available") \
-  _CTF_ITEM (ECTF_RANGE, "allowable range exceeded") \
   _CTF_ITEM (ECTF_BADNAME, "string name offset is corrupt") \
   _CTF_ITEM (ECTF_BADID, "invalid type identifier") \
   _CTF_ITEM (ECTF_WRONGKIND, "inappropriate type kind") \
@@ -332,8 +330,7 @@ typedef int ctf_func_type_flags_t;
   _CTF_ITEM (ECTF_BADFLAG, "invalid CTF dict flag specified") \
   _CTF_ITEM (ECTF_CTFVERS_NO_SERIALIZE, "CTFv1 dicts are too old to serialize") \
   _CTF_ITEM (ECTF_UNSTABLE, "attempt to write unstable file format version: set I_KNOW_LIBCTF_IS_UNSTABLE in the environment") \
-  _CTF_ITEM (ECTF_HASPARENT, "cannot ctf_import: dict already has a parent") \
-  _CTF_ITEM (ECTF_WRONGPARENT, "cannot ctf_import: incorrect parent provided") \
+  _CTF_ITEM (ECTF_WRONGPARENT, "incorrect parent provided") \
   _CTF_ITEM (ECTF_NOTSERIALIZED, "CTF dict must be serialized first") \
   _CTF_ITEM (ECTF_BADCOMPONENT, "declaration tag component_idx is invalid") \
   _CTF_ITEM (ECTF_DESCENDING, "structure offsets may not descend") \
@@ -537,7 +534,10 @@ extern ctf_dict_t *ctf_dict_open (ctf_archive_t *,
 				  const char *, ctf_error_t *);
 
 /* Open a dictionary with a given index in an archive.  Usable even for archives
-   where the members have no names, or where the names are duplicated.  */
+   where the members have no names, or where the names are duplicated.  Index 0
+   is usually the parent (unless the archive was written by a non-CTF-aware
+   linker, in which case all dicts are parents: the CTF opening machinery
+   compensates for this automatically).  */
 
 extern ctf_dict_t *ctf_dict_open_by_index (ctf_archive_t *,
 					   size_t index, ctf_error_t *errp);
@@ -555,33 +555,38 @@ extern ctf_dict_t *ctf_arc_lookup_symbol_name (ctf_archive_t *,
 					       ctf_id_t *, ctf_error_t *errp);
 extern void ctf_arc_flush_caches (ctf_archive_t *);
 
-/* The next functions return or close real CTF files, or write out CTF archives,
-   not archives or ELF files containing CTF content.  They can be passed symbol
-   and string table sections if need be.  */
+/* The next functions return or close real CTF files, not archives or ELF files
+   containing CTF content.  They can be passed symbol and string table sections
+   if need be.
 
-extern ctf_dict_t *ctf_bufopen (const ctf_sect_t *ctfsect,
-				const ctf_sect_t *symsect,
-				const ctf_sect_t *strsect, ctf_error_t *);
-extern void ctf_dict_close (ctf_dict_t *);
+   Unlike ctf_dict_open et al above, these low-level functions expose the
+   parent/child relationship between CTF dicts (ctf_dict_open* opens parents as
+   needed automatically).
 
-/* CTF dicts may be in a parent/child relationship, where the child dicts
-   contain the name of their originating compilation unit and the name of
-   their parent.  Dicts opened from CTF archives have this relationship set
-   up already, but if opening via raw low-level calls, you need to figure
-   out which dict is the parent and set it on the child via ctf_import().
+   The child dicts are usually named after their originating compilation unit or
+   kernel module and contain definitions of types with different definitions in
+   that location.  You open the parent first and pass it in when opening the
+   child.  Child dicts may have the name of the parent recorded (but newer
+   dicts, CTFv4 or BTF, will not).
 
    To determine whether a CTF type is in a child, use !ctf_type_isparent().
    (ctf_type_isparent cannot fail.)
 
-   Almost all operations other than ctf_import and ctf_close do not work on
-   child dicts that have not yet had ctf_import called on them; in particular,
-   name lookups and type lookup in general are broken, as is type addition.  */
+   These relationships are initially created by the ctf_link machinery when
+   linking (deduplicating) multifile inputs: to create relationships based on
+   something other than input object files, see ctf_link_add_cu_mapping and
+   CTF_LINK_SHARE_*.  */
+
+extern ctf_dict_t *ctf_bufopen (const ctf_sect_t *ctfsect,
+				const ctf_sect_t *symsect,
+				const ctf_sect_t *strsect, ctf_dict_t *parent,
+				ctf_error_t *);
+extern void ctf_dict_close (ctf_dict_t *);
 
 extern const char *ctf_dict_cuname (ctf_dict_t *);
 extern ctf_dict_t *ctf_dict_parent (ctf_dict_t *);
 extern const char *ctf_dict_parent_name (ctf_dict_t *);
 extern ctf_bool_t ctf_type_isparent (const ctf_dict_t *, ctf_id_t);
-extern ctf_ret_t ctf_import (ctf_dict_t *child, ctf_dict_t *parent);
 
 /* Set the cuname (used when creating dicts).  (The parent name is obsolescent
    and cannot be set.)  */
@@ -1009,9 +1014,12 @@ extern void ctf_errwarning_remove (ctf_dict_t *, ctf_error_t err);
 
 /* Creation.  */
 
-/* Create a new, empty dict.  If creation fails, return NULL and put a CTF error
-   code in the passed-in ctf_error_t (if set).  */
-extern ctf_dict_t *ctf_create (ctf_error_t *);
+/* Create a new, empty dict, optionally with a given PARENT.  The PARENT need
+   not be fully laid out or even have any types in it at all.  If creation
+   fails, return NULL and put a CTF error code in the passed-in ctf_error_t (if
+   set).  */
+
+extern ctf_dict_t *ctf_create (ctf_dict_t *parent, ctf_error_t *);
 
 /* Add specific types to a dict.  You can add new types to any dict, but you can
    only add members to types that have been added since this dict was read in
