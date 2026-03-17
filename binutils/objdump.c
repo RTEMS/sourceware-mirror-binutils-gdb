@@ -107,8 +107,6 @@ static int dump_dwarf_section_info;	/* --dwarf */
 static int dump_stab_section_info;	/* --stabs */
 static int dump_ctf_section_info;       /* --ctf */
 static char *dump_ctf_section_name;
-static char *dump_ctf_parent_name;	/* --ctf-parent */
-static char *dump_ctf_parent_section_name;	/* --ctf-parent-section */
 static int dump_sframe_section_info;	/* --sframe */
 static char *dump_sframe_section_name;
 static int do_demangle;			/* -C, --demangle */
@@ -424,10 +422,6 @@ usage (FILE *stream, int status)
       --dwarf-start=N            Display DIEs starting at offset N\n"));
       fprintf (stream, _("\
       --dwarf-check              Make additional dwarf consistency checks.\n"));
-#ifdef ENABLE_LIBCTF
-      fprintf (stream, _("\
-      --ctf-parent=NAME          Use CTF archive member NAME as the CTF parent\n"));
-#endif
       fprintf (stream, _("\
       --visualize-jumps          Visualize jumps by drawing ASCII art lines\n"));
       fprintf (stream, _("\
@@ -491,8 +485,6 @@ enum option_values
     OPTION_SOURCE_COMMENT,
 #ifdef ENABLE_LIBCTF
     OPTION_CTF,
-    OPTION_CTF_PARENT,
-    OPTION_CTF_PARENT_SECTION,
 #endif
     OPTION_SFRAME,
     OPTION_VISUALIZE_JUMPS,
@@ -507,8 +499,6 @@ static struct option long_options[]=
   {"archive-headers", no_argument, NULL, 'a'},
 #ifdef ENABLE_LIBCTF
   {"ctf", optional_argument, NULL, OPTION_CTF},
-  {"ctf-parent", required_argument, NULL, OPTION_CTF_PARENT},
-  {"ctf-parent-section", required_argument, NULL, OPTION_CTF_PARENT_SECTION},
 #endif
   {"debugging", no_argument, NULL, 'g'},
   {"debugging-tags", no_argument, NULL, 'e'},
@@ -4823,8 +4813,7 @@ dump_ctf_errs (ctf_dict_t *fp)
 /* Dump one CTF archive member.  */
 
 static void
-dump_ctf_archive_member (ctf_dict_t *ctf, const char *name, ctf_dict_t *parent,
-			 size_t member)
+dump_ctf_archive_member (ctf_dict_t *ctf, const char *name, size_t member)
 {
   const char *things[] = {"Header", "Data objects", "Function objects",
 			  "Variables", "Types", "Strings", ""};
@@ -4845,9 +4834,6 @@ dump_ctf_archive_member (ctf_dict_t *ctf, const char *name, ctf_dict_t *parent,
       else
 	printf (_("\nCTF archive member %zi:\n"), member);
     }
-
-  if (parent && ctf_dict_parent_name (ctf) != NULL)
-    ctf_import (ctf, parent);
 
   for (i = 0, thing = things; *thing[0]; thing++, i++)
     {
@@ -4876,16 +4862,12 @@ dump_ctf_archive_member (ctf_dict_t *ctf, const char *name, ctf_dict_t *parent,
 /* Dump the CTF debugging information.  */
 
 static void
-dump_ctf (bfd *abfd, const char *sect_name, const char *parent_name,
-	  const char *parent_sect_name)
+dump_ctf (bfd *abfd, const char *sect_name)
 {
-  asection *sec, *psec = NULL;
+  asection *sec;
   ctf_archive_t *ctfa;
-  ctf_archive_t *ctfpa = NULL;
   bfd_byte *ctfdata = NULL;
-  bfd_byte *ctfpdata = NULL;
   ctf_sect_t ctfsect;
-  ctf_dict_t *parent = NULL;
   ctf_dict_t *fp;
   ctf_next_t *i = NULL;
   const char *name;
@@ -4912,9 +4894,7 @@ dump_ctf (bfd *abfd, const char *sect_name, const char *parent_name,
       return;
     }
 
-  /* Load the CTF file and dump it.  Preload the parent dict, since it will
-     need to be imported into every child in turn.  The parent dict may come
-     from a different section entirely.  */
+  /* Load the CTF file and dump it.  */
 
   ctfsect = make_ctfsect (sect_name, ctfdata, bfd_section_size (sec));
   if ((ctfa = ctf_bfdopen_ctfsect (abfd, &ctfsect, &err)) == NULL)
@@ -4926,52 +4906,11 @@ dump_ctf (bfd *abfd, const char *sect_name, const char *parent_name,
       return;
     }
 
-  if (parent_sect_name)
-    {
-      psec = read_section (abfd, parent_sect_name, &ctfpdata);
-      if (sec == NULL)
-	{
-	  my_bfd_nonfatal (bfd_get_filename (abfd));
-	  free (ctfdata);
-	  return;
-	}
-
-      ctfsect = make_ctfsect (parent_sect_name, ctfpdata, bfd_section_size (psec));
-      if ((ctfpa = ctf_bfdopen_ctfsect (abfd, &ctfsect, &err)) == NULL)
-	{
-	  dump_ctf_errs (NULL);
-	  non_fatal (_("CTF open failure: %s"), ctf_errmsg (err));
-	  my_bfd_nonfatal (bfd_get_filename (abfd));
-	  free (ctfdata);
-	  free (ctfpdata);
-	  return;
-	}
-    }
-  else
-    ctfpa = ctfa;
-
-  /* Explicitly open the parent for importing into the children if the
-     parent name was provided.  Otherwise, it'll be done automatically for
-     us by ctf_archive_next().  */
-  if (parent_name)
-    {
-      if ((parent = ctf_dict_open (ctfpa, parent_name, &err)) == NULL)
-	{
-	  dump_ctf_errs (NULL);
-	  non_fatal (_("CTF open failure: %s"), ctf_errmsg (err));
-	  my_bfd_nonfatal (bfd_get_filename (abfd));
-	  ctf_close (ctfa);
-	  free (ctfdata);
-	  free (ctfpdata);
-	  return;
-	}
-    }
-
   printf (_("Contents of type section %s:\n"), sanitize_string (sect_name));
 
   while ((fp = ctf_archive_next (ctfa, &i, &name, 0, &err)) != NULL)
     {
-      dump_ctf_archive_member (fp, name, parent, member++);
+      dump_ctf_archive_member (fp, name, member++);
       ctf_dict_close (fp);
     }
   if (err != ECTF_NEXT_END)
@@ -4980,20 +4919,12 @@ dump_ctf (bfd *abfd, const char *sect_name, const char *parent_name,
       non_fatal (_("CTF archive member open failure: %s"), ctf_errmsg (err));
       my_bfd_nonfatal (bfd_get_filename (abfd));
     }
-  ctf_dict_close (parent);
   ctf_close (ctfa);
   free (ctfdata);
-  if (parent_sect_name)
-    {
-      ctf_close (ctfpa);
-      free (ctfpdata);
-    }
 }
 #else
 static void
-dump_ctf (bfd *abfd ATTRIBUTE_UNUSED, const char *sect_name ATTRIBUTE_UNUSED,
-	  const char *parent_name ATTRIBUTE_UNUSED,
-	  const char *parent_sect_name ATTRIBUTE_UNUSED) {}
+dump_ctf (bfd *abfd ATTRIBUTE_UNUSED, const char *sect_name ATTRIBUTE_UNUSED) {}
 #endif
 
 static void
@@ -5842,8 +5773,7 @@ dump_bfd (bfd *abfd, bool is_mainfile)
   if (is_mainfile || process_links)
     {
       if (dump_ctf_section_info)
-	dump_ctf (abfd, dump_ctf_section_name, dump_ctf_parent_name,
-		  dump_ctf_parent_section_name);
+	dump_ctf (abfd, dump_ctf_section_name);
       if (dump_sframe_section_info)
 	dump_sframe_section (abfd, dump_sframe_section_name, is_mainfile);
       if (dump_stab_section_info)
@@ -6343,12 +6273,6 @@ main (int argc, char **argv)
 	    dump_ctf_section_name = xstrdup (optarg);
 	  seenflag = true;
 	  break;
-	case OPTION_CTF_PARENT:
-	  dump_ctf_parent_name = xstrdup (optarg);
-	  break;
-	case OPTION_CTF_PARENT_SECTION:
-	  dump_ctf_parent_section_name = xstrdup (optarg);
-	  break;
 #endif
 	case OPTION_SFRAME:
 	  dump_sframe_section_info = true;
@@ -6450,9 +6374,7 @@ main (int argc, char **argv)
 
   free_only_list ();
   free (dump_ctf_section_name);
-  free (dump_ctf_parent_name);
   free ((void *) source_comment);
-  free (dump_ctf_parent_section_name);
 
   return exit_status;
 }
