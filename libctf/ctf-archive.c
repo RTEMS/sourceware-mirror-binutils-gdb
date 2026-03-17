@@ -59,8 +59,8 @@ static int ctf_arc_range_check_v1_modents (ctf_archive_v1_modent_t *modent,
 static void *arc_mmap_file (int fd, size_t size);
 static int arc_mmap_unmap (void *header, size_t headersz, const char **errmsg);
 static void *arc_pread_file (int fd, size_t size);
-static int ctf_arc_import_parent (const struct ctf_archive_internal *arci,
-				  ctf_dict_t *fp, ctf_error_t *errp);
+static ctf_dict_t *ctf_dict_open_cached (struct ctf_archive_internal *arci,
+					 size_t index, ctf_error_t *errp);
 
 /* Flag to indicate "symbol not present" in ctf_archive_internal.ctfi_symdicts
    and ctfi_symnamedicts.  Never initialized.  */
@@ -157,7 +157,9 @@ ctf_arc_write_fd (int fd, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
     }
 
   /* Prepare by serializing everything.  Done first because it allocates a
-     lot of space and thus is more likely to fail.  */
+     lot of space and thus is more likely to fail.  Between this point and
+     arc_write_one_ctf(), immediately below, type and string additions will
+     corrupt the dict.  */
   if ((err = ctf_arc_preserialize (ctf_dicts, ctf_dict_cnt, threshold)) != 0)
     return err;
 
@@ -1128,11 +1130,11 @@ ctf_arc_get_dict_len (const struct ctf_archive_internal *arci,
 /* Return the ctf_dict_t at the given offset, or NULL if none, setting 'err'
    if non-NULL.  */
 static ctf_dict_t *
-ctf_dict_open_by_offset (const struct ctf_archive_internal *arci,
+ctf_dict_open_by_offset (struct ctf_archive_internal *arci,
 			 const ctf_sect_t *symsect,
 			 const ctf_sect_t *strsect, size_t offset,
-			 size_t len, int little_endian_symtab,
-			 ctf_error_t *errp)
+			 size_t len, ctf_dict_t *parent,
+			 int little_endian_symtab, ctf_error_t *errp)
 {
   ctf_sect_t ctfsect;
   ctf_dict_t *fp;
@@ -1160,14 +1162,11 @@ ctf_dict_open_by_offset (const struct ctf_archive_internal *arci,
   if (arci->ctfi_v1_hdr)
     ctfsect.cts_data = (void *) (&arci->ctfi_archive[offset] + sizeof (uint64_t));
 
-  fp = ctf_bufopen (&ctfsect, symsect, strsect, errp);
+  fp = ctf_bufopen_len (&ctfsect, symsect, strsect, NULL, parent, arci,
+			0, errp);
   if (!fp)
     return NULL;				/* errno is set for us.  */
 
-  /* V1 archives record the data model of their members.  v2 must get
-     it from elsewhere (BFD, the caller...) */
-  if (arci->ctfi_v1_hdr)
-    ctf_dict_set_model (fp, arci->ctfi_v1_hdr->model);
   if (little_endian_symtab >= 0)
     ctf_symsect_endianness (fp, little_endian_symtab);
 
@@ -1204,6 +1203,7 @@ ctf_dict_open_by_index (struct ctf_archive_internal *arci, size_t index,
   if (!arci->ctfi_dict)
     {
       ctf_dict_t *fp;
+      ctf_dict_t *parent = NULL;
       size_t len;
 
       if (index >= arci->ctfi_nmemb)
@@ -1216,21 +1216,30 @@ ctf_dict_open_by_index (struct ctf_archive_internal *arci, size_t index,
 	  return NULL;
 	}
 
+      if (index != 0)
+	{
+	  parent = ctf_dict_open_cached (arci, 0, errp);
+	  if (!parent)
+	    {
+	      ctf_err (err_locus (NULL), ECTF_NOPARENT,
+		       _("cannot open parent of child with index %zi"), index);
+	      if (errp)
+		*errp = ECTF_NOPARENT;
+	      return NULL;
+	    }
+	}
+
       len = ctf_arc_get_dict_len (arci, index);
       fp = ctf_dict_open_by_offset (arci, &arci->ctfi_symsect,
 				    &arci->ctfi_strsect,
-				    arci->ctfi_members[index], len,
+				    arci->ctfi_members[index], len, parent,
 				    arci->ctfi_symsect_little_endian, errp);
       if (fp)
 	{
 	  fp->ctf_archive = (struct ctf_archive_internal *) arci;
 	  arci->ctfi_refcnt++;
-	  if (ctf_arc_import_parent (arci, fp, errp) < 0)
-	    {
-	      ctf_dict_close (fp);
-	      return NULL;
-	    }
 	}
+      ctf_dict_close (parent);
       return fp;
     }
 
@@ -1365,61 +1374,6 @@ ctf_arc_flush_caches (struct ctf_archive_internal *arci)
   arci->ctfi_symnamedicts = NULL;
   arci->ctfi_dicts = NULL;
   arci->ctfi_crossdict_cache = NULL;
-}
-
-/* Import the parent into a ctf archive, if this is a child, the parent is not
-   already set, and a suitable archive member exists.  No error is raised if
-   this is not possible: this is just a best-effort helper operation to give
-   people useful dicts to start with.  */
-static ctf_ret_t
-ctf_arc_import_parent (const struct ctf_archive_internal *arci, ctf_dict_t *fp,
-		       ctf_error_t *errp)
-{
-  ctf_error_t err = 0;
-  ctf_dict_t *parent = NULL;
-  const char *parent_name = fp->ctf_parent_name;
-  int load_parent = 0;
-  size_t parent_index = 0;
-
-  if (!(fp->ctf_flags & LCTF_CHILD) || fp->ctf_parent)
-    return 0;
-
-  /* If no parent name is set, and this is a v2 archive, use the first
-     member.  */
-
-  if (fp->ctf_parent_name)
-    {
-      void *index_v;
-      if (!ctf_dynhash_lookup_kv (arci->ctfi_named_indexes, parent_name, NULL,
-				  &index_v))
-	{
-	  parent_index = (size_t) index_v;
-	  load_parent = 1;
-	}
-    }
-  else if (!arci->ctfi_v1_hdr)
-    load_parent = 1;
-
-  if (load_parent)
-    {
-      parent = ctf_dict_open_cached ((ctf_archive_t *) arci, parent_index,
-				     &err);
-
-      if (errp)
-	*errp = err;
-    }
-
-  if (parent)
-    {
-      if (ctf_import (fp, parent) < 0)
-	ctf_warn (err_locus (NULL), ctf_errno (fp), NULL);
-      ctf_dict_close (parent);
-    }
-  else if (err == ECTF_ARNNAME)
-    ctf_errwarning_remove (NULL, ECTF_ARNNAME);
-  else if (err)
-    return -1;					/* errno is set for us.  */
-  return 0;
 }
 
 /* Return the number of members in an archive.  */

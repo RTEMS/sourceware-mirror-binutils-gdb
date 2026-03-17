@@ -20,7 +20,7 @@ main (int argc, char *argv[])
   /* Adding things after serialization should not corrupt names created before
      serialization.  */
 
-  if ((fp = ctf_create (&err)) == NULL)
+  if ((fp = ctf_create (NULL, &err)) == NULL)
     goto create_err;
 
   if ((zygal = ctf_add_struct (fp, "zygal", 0, 0, 0)) == CTF_ERR)

@@ -13,7 +13,7 @@ main (int argc, char *argv[])
   ctf_id_t root, nonroot;
   int err;
 
-  if ((fp = ctf_create (&err)) == NULL)
+  if ((fp = ctf_create (NULL, &err)) == NULL)
     {
       fprintf (stderr, "Cannot create: %s\n", ctf_errmsg (err));
       return 1;

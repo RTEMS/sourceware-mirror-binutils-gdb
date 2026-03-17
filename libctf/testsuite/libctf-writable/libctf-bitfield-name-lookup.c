@@ -23,7 +23,7 @@ int bitfieldery (int count, int up, int pos)
      hand; and this is an open-time bug, so we need to serialize it and then
      load it back in again.  */
 
-  if ((dict = ctf_create (&open_err)) == NULL)
+  if ((dict = ctf_create (NULL, &open_err)) == NULL)
     goto open_err;
 
   /* Populate with a pile of bitfields of increasing/decreasing size, with a
@@ -73,7 +73,7 @@ int bitfieldery (int count, int up, int pos)
 
   err = "opening";
   if ((dict = ctf_simple_open ((char *) ctf_written, size, NULL, 0,
-			       0, NULL, 0, &open_err)) == NULL)
+			       0, NULL, 0, NULL, &open_err)) == NULL)
     goto open_err;
 
   err = "looking up";

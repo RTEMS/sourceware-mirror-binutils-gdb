@@ -15,7 +15,7 @@ main (void)
   size_t i;
   int err;
 
-  if ((pfp = ctf_create (&err)) == NULL)
+  if ((pfp = ctf_create (NULL, &err)) == NULL)
     goto create_err;
 
   if (ctf_type_set_conflicting (pfp, 0, "") < 0
@@ -27,11 +27,8 @@ main (void)
 	|| (foo = ctf_add_pointer (pfp, ptype)) == CTF_ERR)
       goto create_parent;
 
-  if ((cfp = ctf_create (&err)) == NULL)
+  if ((cfp = ctf_create (pfp, &err)) == NULL)
     goto create_err;
-
-  if (ctf_import (cfp, pfp) < 0)
-    goto create_child;
 
   if ((ptype = ctf_add_integer (pfp, "foo", &e)) == CTF_ERR)
     goto create_parent;
