@@ -471,6 +471,8 @@ ctf_rollback (ctf_dict_t *fp, ctf_snapshot_id_t id)
       ctf_dtd_delete (fp, dtd);
     }
 
+  ctf_str_rollback (fp, id);
+
   /* Unconditionally reset all the stored IDs: this ensures safety even if
      ctf_import was called after some types were added.  */
 
