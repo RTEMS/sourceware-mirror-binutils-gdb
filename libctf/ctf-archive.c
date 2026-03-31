@@ -1086,6 +1086,7 @@ ctf_arc_close (struct ctf_archive_internal *arci)
   ctf_dynhash_destroy (arci->ctfi_named_indexes);
   ctf_dynhash_destroy (arci->ctfi_member_names);
   free (arci->ctfi_default_parent_cuname);
+  ctf_dict_close (arci->ctfi_parent);
   free (arci->ctfi_symdicts);
   free (arci->ctfi_symnamedicts);
   ctf_dynhash_destroy (arci->ctfi_dicts);
@@ -1125,6 +1126,34 @@ ctf_arc_get_dict_len (const struct ctf_archive_internal *arci,
     next = arci->ctfi_members[index + 1];
 
   return next - arci->ctfi_members[index];
+}
+
+/* When dicts in archives are in parent/child relationships, index 0 is usually
+   the parent (unless the archive was written by a non-CTF-aware linker, in
+   which case all dicts are parents: the CTF opening machinery compensates for
+   this automatically).  But there are unusual use cases (such as
+   ctf_link_against, below) in which archives may exist in which parents come
+   from different places and perhaps are not even stored in the same archive
+   (e.g. Linux kernel split BTF, where the parent is in vmlinux and the children
+   are in different kernel modules).  You can specify a parent to be used when
+   opening dicts from this archive with ctf_arc_set_parent.  A reference to this
+   dict is taken by the archive, so you can close it freely.  */
+
+ctf_ret_t
+ctf_arc_set_parent (struct ctf_archive_internal *arci, ctf_dict_t *parent)
+{
+  if (parent == arci->ctfi_parent)
+    return 0;
+
+  ctf_dict_close (arci->ctfi_parent);
+  arci->ctfi_parent = parent;
+  ctf_arc_flush_caches (arci);
+
+  if (!parent)
+    return 0;
+
+  arci->ctfi_parent->ctf_refcnt++;
+  return 0;
 }
 
 /* Return the ctf_dict_t at the given offset, or NULL if none, setting 'err'
@@ -1195,6 +1224,8 @@ ctf_dict_t *
 ctf_dict_open_by_index (struct ctf_archive_internal *arci, size_t index,
 			ctf_error_t *errp)
 {
+  int close_parent = 0;
+
   if (errp)
     *errp = 0;
 
@@ -1203,7 +1234,7 @@ ctf_dict_open_by_index (struct ctf_archive_internal *arci, size_t index,
   if (!arci->ctfi_dict)
     {
       ctf_dict_t *fp;
-      ctf_dict_t *parent = NULL;
+      ctf_dict_t *parent = arci->ctfi_parent;
       size_t len;
 
       if (index >= arci->ctfi_nmemb)
@@ -1216,7 +1247,7 @@ ctf_dict_open_by_index (struct ctf_archive_internal *arci, size_t index,
 	  return NULL;
 	}
 
-      if (index != 0)
+      if (index != 0 && !parent)
 	{
 	  parent = ctf_dict_open_cached (arci, 0, errp);
 	  if (!parent)
@@ -1227,6 +1258,7 @@ ctf_dict_open_by_index (struct ctf_archive_internal *arci, size_t index,
 		*errp = ECTF_NOPARENT;
 	      return NULL;
 	    }
+	  close_parent = 1;
 	}
 
       len = ctf_arc_get_dict_len (arci, index);
@@ -1239,7 +1271,10 @@ ctf_dict_open_by_index (struct ctf_archive_internal *arci, size_t index,
 	  fp->ctf_archive = (struct ctf_archive_internal *) arci;
 	  arci->ctfi_refcnt++;
 	}
-      ctf_dict_close (parent);
+
+      if (close_parent)
+	ctf_dict_close (parent);
+
       return fp;
     }
 
@@ -1787,7 +1822,7 @@ ctf_archive_raw_next (const struct ctf_archive_internal *arci, ctf_next_t **it,
    We identify v1 parents by name rather than by flag value, which works
    well enough given that the linker always emits parents with the same
    name: for v2, we use the index, because the first dict in an archive is
-   always the parent.  */
+   always the parent (except when ctf_arc_set_parent is set).  */
 
 ctf_dict_t *
 ctf_archive_next (const struct ctf_archive_internal *arci, ctf_next_t **it,
@@ -1851,6 +1886,7 @@ ctf_archive_next (const struct ctf_archive_internal *arci, ctf_next_t **it,
      is the parent (i.e. at most two iterations, but possibly an early return if
      *all* we have is a parent).  */
 
+ retry_parent:
   do
     {
       size_t offset;
@@ -1870,12 +1906,22 @@ ctf_archive_next (const struct ctf_archive_internal *arci, ctf_next_t **it,
       i->ctn_n++;
     }
   while (skip_parent && ((arci->ctfi_v1_hdr && strcmp (name_, _CTF_SECTION) == 0)
-			 || index == 0));
+			 || (index == 0 && !arci->ctfi_parent)));
 
   if (name)
     *name = name_;
 
   f = ctf_dict_open_cached ((ctf_archive_t *) arci, index, errp);
+
+  /* Skip the parent correctly if we encounter it in the middle of an archive
+     traversal, even if it was explicitly set.  */
+
+  if (skip_parent && f != NULL && f == arci->ctfi_parent)
+    {
+      ctf_dict_close (f);
+      goto retry_parent;
+    }
+
   return f;
 
  end:
