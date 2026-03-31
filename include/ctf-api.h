@@ -534,13 +534,28 @@ extern ctf_dict_t *ctf_dict_open (ctf_archive_t *,
 				  const char *, ctf_error_t *);
 
 /* Open a dictionary with a given index in an archive.  Usable even for archives
-   where the members have no names, or where the names are duplicated.  Index 0
-   is usually the parent (unless the archive was written by a non-CTF-aware
-   linker, in which case all dicts are parents: the CTF opening machinery
-   compensates for this automatically).  */
+   where the members have no names, or where the names are duplicated.  */
 
 extern ctf_dict_t *ctf_dict_open_by_index (ctf_archive_t *,
 					   size_t index, ctf_error_t *errp);
+
+/* When dicts in archives are in parent/child relationships (see below), index 0
+   is usually the parent (unless the archive was written by a non-CTF-aware
+   linker, in which case all dicts are parents: the CTF opening machinery
+   compensates for this automatically).  But there are unusual use cases (such
+   as ctf_link_against, below) in which archives may exist in which parents come
+   from different places and perhaps are not even stored in the same archive
+   (e.g. Linux kernel split BTF, where the parent is in vmlinux and the children
+   are in different kernel modules).  You can specify a parent to be used when
+   opening dicts from this archive with ctf_arc_parent.  A reference to this
+   dict is taken by the archive, so you can close it freely.
+
+   Some obscure features may not work with archives opened this way: in
+   particular, adding types to a parent you open this way before opening
+   children with that dict as a parent will cause opening of the children to
+   fail: for normal parents in archives, this works fine.  */
+
+extern ctf_ret_t ctf_arc_set_parent (ctf_archive_t *, ctf_dict_t *parent);
 
 /* Look up symbols' types in archives by index or name, returning the dict
    and optionally type ID in which the type is found.  Lookup results are
@@ -567,7 +582,9 @@ extern void ctf_arc_flush_caches (ctf_archive_t *);
    kernel module and contain definitions of types with different definitions in
    that location.  You open the parent first and pass it in when opening the
    child.  Child dicts may have the name of the parent recorded (but newer
-   dicts, CTFv4 or BTF, will not).
+   dicts, CTFv4 or BTF, will not: this name is ignored by the libctf machinery
+   because every existing implementation always puts parents in the same place,
+   index 0 of the archive).
 
    To determine whether a CTF type is in a child, use !ctf_type_isparent().
    (ctf_type_isparent cannot fail.)
