@@ -8470,7 +8470,9 @@ The @samp{async} mode implies imprecise exceptions.
 @kindex -z memtag-stack
 @cindex Mark program stack for MTE protection
 The @samp{-z memtag-stack} specifies that output object uses MTE
-instructions for stack memory usage.
+instructions for stack memory usage.  When linked against the GNU C Library,
+a GLIBC_ABI_MEMTAG symbol version dependency on the shared C library is added
+t the output.  Supported for aarch64.
 
 @ifclear GENERIC
 @lowersections

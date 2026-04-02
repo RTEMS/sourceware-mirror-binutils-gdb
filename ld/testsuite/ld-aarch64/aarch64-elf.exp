@@ -390,6 +390,22 @@ run_dump_test_lp64 "mte-tagged-frame"
 run_dump_test_lp64 "dt-memtag-mode"
 run_dump_test_lp64 "dt-memtag-stack"
 
+# The musl C library does not support Memtag
+if { ![istarget *-*-musl]
+     && [check_compiler_available]
+     && [check_shared_lib_support] } {
+   run_cc_link_tests [list \
+       [list \
+	  "Build gnu-memtag-1a.so" \
+	  "-shared -Wl,--no-as-needed -Wl,-z,memtag-stack" \
+	  "-fPIC" \
+	  { dt-memtag.s } \
+	  {{readelf {-W --version-info} dt-memtag-gnuabi.rd}} \
+	  "gnu-memtag-1a.so" \
+       ] \
+   ]
+}
+
 set aarch64elflinktests {
   {"ld-aarch64/so with global symbol" "-shared" "" "" {copy-reloc-so.s}
     {} "copy-reloc-so.so"}

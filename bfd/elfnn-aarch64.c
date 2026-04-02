@@ -10719,6 +10719,34 @@ elfNN_aarch64_merge_gnu_properties (struct bfd_link_info *info,
 						 bprop, outprop);
 }
 
+static void
+elf_aarch64_add_glibc_version_dependency (struct elf_find_verdep_info *rinfo)
+{
+  struct elf_aarch64_link_hash_table *htab;
+  const char *version[3] = { NULL, NULL, NULL };
+  bool auto_version[3] = { false, false, false };
+  int i = 0;
+
+  htab = elf_aarch64_hash_table (rinfo->info);
+
+  if (rinfo->info->enable_dt_relr)
+    {
+      version[i] = "GLIBC_ABI_DT_RELR";
+      i++;
+    }
+
+  if (htab->memtag_opts.memtag_stack != 0)
+    {
+      version[i] = "GLIBC_ABI_MEMTAG";
+      i++;
+    }
+
+  if (i == 0)
+    return;
+
+  _bfd_elf_link_add_glibc_version_dependency (rinfo, version, auto_version);
+}
+
 /* We use this so we can override certain functions
    (though currently we don't).  */
 
@@ -10932,5 +10960,7 @@ static const struct elf_size_info elfNN_aarch64_size_info =
 #undef	elf_backend_obj_attr_v2_known_subsections_size
 #define elf_backend_obj_attr_v2_known_subsections_size \
   ARRAY_SIZE(aarch64_obj_attr_v2_known_subsections)
+#define elf_backend_add_glibc_version_dependency \
+  elf_aarch64_add_glibc_version_dependency
 
 #include "elfNN-target.h"
