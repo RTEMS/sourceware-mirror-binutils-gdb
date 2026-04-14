@@ -637,6 +637,8 @@ ctf_next_copy (ctf_next_t *i)
  err_next_inner:
   ctf_next_destroy (i2->ctn_next);
  err_next:
-  ctf_next_destroy (i2);
+  /* Do not use ctf_next_destroy here: the inner components are already freed,
+     or are copies of i and have not yet been reallocated.  */
+  free (i2);
   return NULL;
 }
