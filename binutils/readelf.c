@@ -17373,8 +17373,7 @@ dump_ctf_errs (ctf_dict_t *fp)
 /* Dump one CTF archive member.  */
 
 static void
-dump_ctf_archive_member (ctf_dict_t *ctf, const char *name, ctf_dict_t *parent,
-			 size_t member)
+dump_ctf_archive_member (ctf_dict_t *ctf, const char *name, size_t member)
 {
   const char *things[] = {"Header", "Data objects", "Function objects",
 			  "Variables", "Types", "Strings", ""};
@@ -17395,9 +17394,6 @@ dump_ctf_archive_member (ctf_dict_t *ctf, const char *name, ctf_dict_t *parent,
 	printf (_("\nCTF archive member %zi:\n"), member);
     }
   
-
-  if (parent && ctf_dict_parent_name (ctf) != NULL)
-    ctf_import (ctf, parent);
 
   for (i = 0, thing = things; *thing[0]; thing++, i++)
     {
@@ -17506,10 +17502,11 @@ dump_section_as_ctf (Elf_Internal_Shdr * section, Filedata * filedata)
      ctf_archive_next().  */
   if (dump_ctf_parent_name)
     {
-      if ((parent = ctf_dict_open (ctfa, dump_ctf_parent_name, &err)) == NULL)
+      if ((parent = ctf_dict_open (ctfa, dump_ctf_parent_name, &err)) == NULL
+	  || ctf_arc_set_parent (ctfa, parent) < 0)
 	{
 	  dump_ctf_errs (NULL);
-	  error (_("CTF open failure: %s\n"), ctf_errmsg (err));
+	  error (_("CTF parent open/import failure: %s\n"), ctf_errmsg (err));
 	  goto fail;
 	}
     }
@@ -17526,7 +17523,7 @@ dump_section_as_ctf (Elf_Internal_Shdr * section, Filedata * filedata)
 
  while ((fp = ctf_archive_next (ctfa, &i, &name, 0, &err)) != NULL)
    {
-     dump_ctf_archive_member (fp, name, parent, member++);
+     dump_ctf_archive_member (fp, name, member++);
      ctf_dict_close (fp);
    }
  if (err != ECTF_NEXT_END)
