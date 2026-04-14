@@ -4823,8 +4823,7 @@ dump_ctf_errs (ctf_dict_t *fp)
 /* Dump one CTF archive member.  */
 
 static void
-dump_ctf_archive_member (ctf_dict_t *ctf, const char *name, ctf_dict_t *parent,
-			 size_t member)
+dump_ctf_archive_member (ctf_dict_t *ctf, const char *name, size_t member)
 {
   const char *things[] = {"Header", "Data objects", "Function objects",
 			  "Variables", "Types", "Strings", ""};
@@ -4845,9 +4844,6 @@ dump_ctf_archive_member (ctf_dict_t *ctf, const char *name, ctf_dict_t *parent,
       else
 	printf (_("\nCTF archive member %zi:\n"), member);
     }
-
-  if (parent && ctf_dict_parent_name (ctf) != NULL)
-    ctf_import (ctf, parent);
 
   for (i = 0, thing = things; *thing[0]; thing++, i++)
     {
@@ -4951,14 +4947,15 @@ dump_ctf (bfd *abfd, const char *sect_name, const char *parent_name,
     ctfpa = ctfa;
 
   /* Explicitly open the parent for importing into the children if the
-     parent name was provided.  Otherwise, it'll be done automatically for
-     us by ctf_archive_next().  */
-  if (parent_name)
+     parent name or section name was provided.  Otherwise, it'll be done
+     automatically for us by ctf_archive_next().  */
+  if (parent_name || parent_sect_name)
     {
-      if ((parent = ctf_dict_open (ctfpa, parent_name, &err)) == NULL)
+      if ((parent = ctf_dict_open (ctfpa, parent_name, &err)) == NULL
+	  || ctf_arc_set_parent (ctfa, parent) < 0)
 	{
 	  dump_ctf_errs (NULL);
-	  non_fatal (_("CTF open failure: %s"), ctf_errmsg (err));
+	  non_fatal (_("CTF parent open/import failure: %s"), ctf_errmsg (err));
 	  my_bfd_nonfatal (bfd_get_filename (abfd));
 	  ctf_close (ctfa);
 	  free (ctfdata);
@@ -4971,7 +4968,7 @@ dump_ctf (bfd *abfd, const char *sect_name, const char *parent_name,
 
   while ((fp = ctf_archive_next (ctfa, &i, &name, 0, &err)) != NULL)
     {
-      dump_ctf_archive_member (fp, name, parent, member++);
+      dump_ctf_archive_member (fp, name, member++);
       ctf_dict_close (fp);
     }
   if (err != ECTF_NEXT_END)
