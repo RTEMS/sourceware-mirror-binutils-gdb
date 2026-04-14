@@ -727,7 +727,6 @@ ctf_dump_vars (ctf_dict_t *fp, ctf_dump_state_t *arg)
 			_("cannot dump var %s (%lx) in datasec %s"),
 			ctf_type_name_raw (fp, var_type), var_type,
 			ctf_type_name_raw (fp, type));
-	      goto err;
 	    }
 	}
       if (ctf_errno (fp) != ECTF_NEXT_END)
@@ -764,7 +763,6 @@ ctf_dump_vars (ctf_dict_t *fp, ctf_dump_state_t *arg)
       ctf_warn (type_err_locus (fp, type), ctf_errno (fp),
 		_("cannot dump var %s (%lx) in no datasec"),
 		ctf_type_name_raw (fp, type), type);
-      goto err;
     }
   if (ctf_errno (fp) != ECTF_NEXT_END)
     {
