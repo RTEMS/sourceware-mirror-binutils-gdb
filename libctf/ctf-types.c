@@ -1199,19 +1199,44 @@ ctf_type_align (ctf_dict_t *fp, ctf_id_t type)
       {
 	size_t align = 0;
 	unsigned char *vlen;
-	uint32_t i = 0;
+	ctf_member_t *memb;
 	size_t n;
 
 	vlen = ctf_vlen (fp, type, tp, &n);
+	memb = (ctf_member_t *) vlen;
 
 	if (kind == CTF_K_STRUCT)
-	  n = MIN (n, 1);	/* Only use first member for structs.  */
-
-	for (; n != 0; n--, i++)
 	  {
-	    ctf_member_t *memb = (ctf_member_t *) vlen;
+	    size_t last = n;
 
-	    ssize_t am = ctf_type_align (ofp, memb[i].ctm_type);
+	    n = MIN (n, 1);	/* Only use first member for structs.  */
+
+	    /* For BIG structs, skip padding members.  */
+
+	    if (ctf_find_prefix (ofp, tp, CTF_K_BIG) != NULL)
+	      {
+		for (; n <= last; n++)
+		  {
+		    if (memb[n - 1].ctm_name != 0 || memb[n - 1].ctm_type != 0)
+		      break;
+		  }
+
+		/* Only padding members: struct is empty, no alignment
+		   constraints.  */
+
+		if (n > last)
+		  return align;
+	      }
+
+	    /* Alignment of a struct is that of its first real member.  */
+
+	    return ctf_type_align (ofp, memb[n - 1].ctm_type);
+	  }
+
+	/* Alignment of a union is the greatest of any of its members.  */
+	for (; n > 0; n--)
+	  {
+	    ssize_t am = ctf_type_align (ofp, memb[n - 1].ctm_type);
 	    align = MAX (align, (size_t) am);
 	  }
 	return align;
