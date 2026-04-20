@@ -273,7 +273,7 @@ typedef struct ctf_header
 #define CTF_VERSION_4 5		/* The same as 5.  */
 #define CTF_VERSION_5 5
 #define CTF_VERSION CTF_VERSION_5 /* Current version.  */
-#define CTF_STABLE_VERSION 5
+#define CTF_STABLE_VERSION CTF_VERSION_3
 
 #define CTF_BTF_VERSION 1
 
