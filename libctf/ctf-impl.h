@@ -144,7 +144,8 @@ typedef struct ctf_dictops
   uint32_t (*ctfo_get_prefixed_vlen) (const ctf_type_t *tp);
   ssize_t (*ctfo_get_ctt_size) (const ctf_dict_t *, const ctf_type_t *tp,
 				ssize_t *, ssize_t *);
-  ssize_t (*ctfo_get_vbytes) (ctf_dict_t *, const ctf_type_t *, ssize_t);
+  ssize_t (*ctfo_get_vbytes) (ctf_dict_t *, const ctf_type_t *, ssize_t,
+			      int *alienp);
 } ctf_dictops_t;
 
 typedef struct ctf_list
@@ -465,6 +466,9 @@ struct ctf_dict
   unsigned char *ctf_buf;	  /* Uncompressed CTF data buffer, including
 				     CTFv4 header portion.  */
   size_t ctf_size;		  /* Size of CTF header + uncompressed data.  */
+  size_t ctf_nlayout;		  /* Number of kinds in layout section.  */
+  ctf_btf_layout_t *ctf_layout;	  /* CTF layout section (if any).  */
+  int ctf_alien;		  /* True if this dict contains foreign kinds.  */
   ctf_serialize_t ctf_serialize;  /* State internal to ctf-serialize.c.  */
   uint32_t *ctf_sxlate;		  /* Translation table for unindexed symtypetab
 				     entries.  */
@@ -695,8 +699,8 @@ extern ctf_id_t ctf_index_to_type (const ctf_dict_t *, uint32_t);
 #define LCTF_ISROOT(fp, tp)		((fp)->ctf_dictops->ctfo_get_root(tp))
 #define LCTF_VLEN(fp, tp)		((fp)->ctf_dictops->ctfo_get_prefixed_vlen(tp))
 #define LCTF_INFO_UNPREFIXED_VLEN(fp, info)	((fp)->ctf_dictops->ctfo_get_vlen(info))
-#define LCTF_VBYTES(fp, tp, size) \
-  ((fp)->ctf_dictops->ctfo_get_vbytes (fp, tp, size))
+#define LCTF_VBYTES(fp, tp, size, alienp) \
+  ((fp)->ctf_dictops->ctfo_get_vbytes (fp, tp, size, alienp))
 
 #define LCTF_IS_PREFIXED_KIND(kind) (kind == CTF_K_BIG || kind == CTF_K_CONFLICTING)
 #define LCTF_IS_PREFIXED_INFO(info)			\
