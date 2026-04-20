@@ -1481,6 +1481,11 @@ ctf_preserialize (ctf_dict_t *fp, int force_ctf)
 			_("cannot write out already-written dict with children and newly-added strings"));
     }
 
+  /* Prohibit serialization of a dict that contains alien type kinds.  */
+  if (fp->ctf_alien)
+    return ctf_err (err_locus (fp), ECTF_CTFVERS,
+		    _("cannot serialize BTF containing unknown type kinds"));
+
   /* Fill in an initial CTF header.  The type section begins at a 4-byte aligned
      boundary past the CTF header itself (at relative offset zero).
 
@@ -1575,6 +1580,8 @@ ctf_preserialize (ctf_dict_t *fp, int force_ctf)
   hdr.btf.bth_type_len = type_size;
   hdr.btf.bth_str_off = hdr.btf.bth_type_off + type_size;
   hdr.btf.bth_str_len = 0;
+  hdr.btf.bth_layout_off = 0;
+  hdr.btf.bth_layout_len = 0;
   hdr.cth_parent_strlen = 0;
   if (fp->ctf_parent)
     hdr.cth_parent_ntypes = fp->ctf_parent->ctf_typemax;
