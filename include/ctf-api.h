@@ -282,7 +282,7 @@ typedef int ctf_func_type_flags_t;
   _CTF_FIRST (ECTF_NEXT_END, "end of iteration") \
   _CTF_ITEM (ECTF_FMT, "file is not in CTF or ELF format") \
   _CTF_ITEM (ECTF_BFDERR, "BFD error")				\
-  _CTF_ITEM (ECTF_CTFVERS, "CTF dict version is too new for libctf") \
+  _CTF_ITEM (ECTF_CTFVERS, "BTF/CTF dict version is too new for libctf") \
   _CTF_ITEM (ECTF_BFD_AMBIGUOUS, "ambiguous BFD target")	\
   _CTF_ITEM (ECTF_SYMTAB, "symbol table uses invalid entry size") \
   _CTF_ITEM (ECTF_SYMBAD, "symbol table data buffer is not valid") \
