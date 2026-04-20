@@ -3798,6 +3798,9 @@ lang_ctf_errs_warnings (ctf_dict_t *fp)
 	     ctf_errmsg (err));
     }
 
+  if (fp != NULL)
+    lang_ctf_errs_warnings (NULL);
+
   /* `err' returns errors from the error/warning iterator in particular.
      These never assert.  But if we have an fp, that could have recorded
      an assertion failure: assert if it has done so.  */
