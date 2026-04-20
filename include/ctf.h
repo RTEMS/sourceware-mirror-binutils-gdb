@@ -57,10 +57,10 @@ extern "C"
    | header | header | objects |   info   | index  |  index   |...
    +--------+--------+----------+--------+-------------------+...
 
-   ...+-------+--------+
-   ...| data  | string |
-   ...| types | table  |
-      +-------+--------+
+   ...+-------+--------+--------+
+   ...| data  | kind   | string |
+   ...| types | layout | table  |
+      +-------+--------+--------+
 
    The file header stores a magic number and version information, encoding
    flags, and the byte offset and length of each of the sections relative to
@@ -201,6 +201,16 @@ typedef struct ctf_btf_preamble
   uint8_t btf_flags;		/* Always 0, for now */
 } ctf_btf_preamble_t;
 
+typedef struct ctf_btf_header_nolayout
+{
+  ctf_btf_preamble_t bth_preamble;
+  uint32_t bth_hdr_len;		/* De-facto BTF version number */
+  uint32_t bth_type_off;	/* Offset of type section.  */
+  uint32_t bth_type_len;	/* Length of type section.  */
+  uint32_t bth_str_off;		/* Offset of string section.  */
+  uint32_t bth_str_len;		/* Length of string section.  */
+} ctf_btf_header_nolayout_t;
+
 typedef struct ctf_btf_header
 {
   ctf_btf_preamble_t bth_preamble;
@@ -209,6 +219,8 @@ typedef struct ctf_btf_header
   uint32_t bth_type_len;	/* Length of type section.  */
   uint32_t bth_str_off;		/* Offset of string section.  */
   uint32_t bth_str_len;		/* Length of string section.  */
+  uint32_t bth_layout_off;	/* Offset of layout section.  */
+  uint32_t bth_layout_len;	/* Length of layout section.  */
 } ctf_btf_header_t;
 
 typedef struct ctf_preamble
@@ -619,6 +631,15 @@ typedef int ctf_kind_t;
 #endif
 
 #define CTF_PREFIX_KIND(kind) ((kind) == CTF_K_BIG || (kind) == CTF_K_CONFLICTING)
+
+/* The BTF layout section is an array of these instances for every known kind:
+   gaps are filled with zeroes.  */
+typedef struct ctf_btf_layout
+{
+  uint8_t cbl_info_sz;		/* Size of singular element after ctf_type_t.  */
+  uint8_t cbl_elem_sz;		/* Size of each of ctf_vlen(t) elements.  */
+  uint16_t cbl_flags;		/* Currently unused.  */
+} ctf_btf_layout_t;
 
 /* Values for ctt_type when kind is CTF_K_INTEGER.  The flags, offset in bits,
    and size in bits are encoded as a single word using the following macros.
