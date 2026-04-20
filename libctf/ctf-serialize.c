@@ -1551,6 +1551,16 @@ ctf_preserialize (ctf_dict_t *fp, int force_ctf)
 
       hdr_len = sizeof (ctf_header_t);
       ctf_adjustment = sizeof (ctf_header_t) - sizeof (ctf_btf_header_t);
+
+      /* Stop unstable file formats (subject to change) getting out into the
+	 wild.  */
+#if CTF_VERSION != CTF_STABLE_VERSION
+      if (!getenv ("I_KNOW_LIBCTF_IS_UNSTABLE"))
+	{
+	  ctf_set_errno (fp, ECTF_UNSTABLE);
+	  goto err;
+	}
+#endif
     }
 
   hdr.cth_objt_off = 0;
@@ -1663,17 +1673,6 @@ ctf_serialize (ctf_dict_t *fp, size_t *bufsiz, int force_ctf)
   const ctf_strs_writable_t *strtab;
   unsigned char *buf, *newbuf;
   ctf_btf_header_t *hdrp;
-
-  /* Stop unstable file formats (subject to change) getting out into the
-     wild.  */
-#if CTF_VERSION != CTF_STABLE_VERSION
-  if (!getenv ("I_KNOW_LIBCTF_IS_UNSTABLE"))
-    {
-      ctf_depreserialize (fp);
-      ctf_set_errno (fp, ECTF_UNSTABLE);
-      return NULL;
-    }
-#endif
 
   /* Preserialize, if we need to.  */
 
