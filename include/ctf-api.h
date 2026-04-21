@@ -1037,13 +1037,15 @@ extern ctf_id_t ctf_add_array (ctf_dict_t *, const ctf_arinfo_t *);
    ctf_add_enum_encoded() with bitfield values currently returns an error: this
    restriction will be lifted shortly.
 
+   The SIZE can be 0 (for 'architectural default'), or a size in bytes.
+
    ENUM_64_UNKNOWN can be CTF_K_ENUM, CTF_K_ENUM64, or CTF_K_UNKNOWN (0), which
    for now simply means an enum64, but may in future mean to use whichever is
    appropriate.  */
 
 extern ctf_id_t ctf_add_enum (ctf_dict_t *, const char *,
 			      ctf_kind_t enum_64_unknown,
-			      const ctf_encoding_t *);
+			      size_t size, const ctf_encoding_t *);
 
 extern ctf_id_t ctf_add_btf_float (ctf_dict_t *, const char *,
 				   const ctf_encoding_t *);

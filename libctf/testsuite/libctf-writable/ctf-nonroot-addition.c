@@ -25,7 +25,7 @@ main (int argc, char *argv[])
   if (ctf_type_set_conflicting (fp, 0, "") < 0)
     goto conflict_err;
 
-  if ((nonroot = ctf_add_enum (fp, "foo", 0, 0)) == CTF_ERR)
+  if ((nonroot = ctf_add_enum (fp, "foo", 0, 0, 0)) == CTF_ERR)
     goto add_err;
 
   if (nonroot == root)
