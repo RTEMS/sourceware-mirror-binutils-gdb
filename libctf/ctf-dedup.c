@@ -3571,6 +3571,7 @@ ctf_dedup_emit_type (const char *hval, ctf_dict_t *output, ctf_dict_t **inputs,
       {
 	ctf_enum_value_t val;
 	ctf_encoding_t en;
+	ssize_t size = ctf_type_size (input, type);
 	errtype = _("enum");
 
 	/* Check enumerands for duplication and nonrootify if clashing: this is
@@ -3599,7 +3600,7 @@ ctf_dedup_emit_type (const char *hval, ctf_dict_t *output, ctf_dict_t **inputs,
 	if (ctf_type_encoding (input, type, &en) < 0)
 	  goto err_input;
 
-	new_type = ctf_add_enum (target, name, kind, &en);
+	new_type = ctf_add_enum (target, name, kind, size, &en);
 	if (new_type == CTF_ERR)
 	  goto err_input;				/* errno is set for us.  */
 

@@ -1319,7 +1319,7 @@ ctf_add_struct (ctf_dict_t *fp, const char *name,
 
 ctf_id_t
 ctf_add_enum (ctf_dict_t *fp, const char *name, ctf_kind_t enum_64_unknown,
-	      const ctf_encoding_t *ep)
+	      size_t size, const ctf_encoding_t *ep)
 {
   ctf_dtdef_t *dtd;
   ctf_id_t type = 0;
@@ -1366,10 +1366,15 @@ ctf_add_enum (ctf_dict_t *fp, const char *name, ctf_kind_t enum_64_unknown,
   prefix->ctt_info = CTF_TYPE_INFO (CTF_K_BIG, 0, 0);
   dtd->dtd_data->ctt_info = CTF_TYPE_INFO (kind, is_signed, 0);
 
-  if (kind == CTF_K_ENUM)
-    dtd->dtd_data->ctt_size = fp->ctf_dmodel->ctd_int;
+  if (size == 0)
+    {
+      if (kind == CTF_K_ENUM)
+	dtd->dtd_data->ctt_size = fp->ctf_dmodel->ctd_int;
+      else
+	dtd->dtd_data->ctt_size = 8;
+    }
   else
-    dtd->dtd_data->ctt_size = 8;
+    dtd->dtd_data->ctt_size = size;
 
   if (!ep)
     return dtd->dtd_type;
@@ -2872,7 +2877,8 @@ ctf_add_type_internal (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type
 	  if (ctf_type_encoding (src_fp, src_type, &src_en) != 0)
 	    return (ctf_set_typed_errno (dst_fp, ctf_errno (src_fp)));
 
-	  dst_type = ctf_add_enum (dst_fp, name, kind, &src_en);
+	  dst_type = ctf_add_enum (dst_fp, name, kind,
+				   ctf_type_size (src_fp, src_type), &src_en);
 	  if (dst_type == CTF_ERR)
 	    goto enum_err;
 

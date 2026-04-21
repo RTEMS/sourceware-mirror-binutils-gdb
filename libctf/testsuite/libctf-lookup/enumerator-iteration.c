@@ -95,7 +95,7 @@ main (int argc, char *argv[])
 	      foo = ctf_type_aname (fp, type), val.val);
       free (foo);
 
-      if ((type = ctf_add_enum (fp, "ie3", 0, 0)) == CTF_ERR)
+      if ((type = ctf_add_enum (fp, "ie3", 0, 0, 0)) == CTF_ERR)
 	goto enum_add_err;
 
       if (ctf_add_enumerator (fp, type, "DYNADD", counter += 10) < 0)
@@ -139,7 +139,7 @@ main (int argc, char *argv[])
 	fprintf (stderr, "Duplicate enumerator addition did not fail as it ought to\n");
 
       if (ctf_type_set_conflicting (fp, 0, "") < 0
-	  || (type = ctf_add_enum (fp, "ie4_hidden", 0, 0)) == CTF_ERR)
+	  || (type = ctf_add_enum (fp, "ie4_hidden", 0, 0, 0)) == CTF_ERR)
 	goto enum_add_err;
 
       if (ctf_add_enumerator (fp, type, "DYNADD3", counter += 10) < 0)
@@ -148,7 +148,7 @@ main (int argc, char *argv[])
 	goto enumerator_add_err;
 
       if (ctf_type_set_conflicting (fp, 0, "") < 0
-	  || (type = ctf_add_enum (fp, "ie3_hidden", 0, 0)) == CTF_ERR)
+	  || (type = ctf_add_enum (fp, "ie3_hidden", 0, 0, 0)) == CTF_ERR)
 	goto enum_add_err;
 
       if (ctf_add_enumerator (fp, type, "DYNADD", counter += 10) < 0)
