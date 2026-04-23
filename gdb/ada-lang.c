@@ -13120,32 +13120,27 @@ ada_add_exceptions_from_frame (compiled_regex *preg,
 			       const frame_info_ptr &frame,
 			       std::vector<ada_exc_info> *exceptions)
 {
-  const struct block *block = get_frame_block (frame, 0);
+  const struct block *frame_block = get_frame_block (frame, 0);
 
-  while (block != 0)
-    {
-      for (struct symbol *sym : block_iterator_range (block))
-	{
-	  switch (sym->loc_class ())
-	    {
-	    case LOC_TYPEDEF:
-	    case LOC_BLOCK:
-	    case LOC_CONST:
-	      break;
-	    default:
-	      if (ada_is_exception_sym (sym))
-		{
-		  struct ada_exc_info info = {sym->print_name (),
-					      sym->value_address ()};
+  for (auto block : block::function_blocks (frame_block))
+    for (struct symbol *sym : block_iterator_range (block))
+      {
+	switch (sym->loc_class ())
+	  {
+	  case LOC_TYPEDEF:
+	  case LOC_BLOCK:
+	  case LOC_CONST:
+	    break;
+	  default:
+	    if (ada_is_exception_sym (sym))
+	      {
+		struct ada_exc_info info = {sym->print_name (),
+					    sym->value_address ()};
 
-		  exceptions->push_back (info);
-		}
-	    }
-	}
-      if (block->function () != NULL)
-	break;
-      block = block->superblock ();
-    }
+		exceptions->push_back (info);
+	      }
+	  }
+      }
 }
 
 /* Add all exceptions defined globally whose name name match
