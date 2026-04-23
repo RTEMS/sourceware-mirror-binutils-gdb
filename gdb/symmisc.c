@@ -961,11 +961,10 @@ block_depth (const struct block *block)
 {
   int i = 0;
 
-  while ((block = block->superblock ()) != NULL)
-    {
-      i++;
-    }
-  return i;
+  for (auto b [[maybe_unused]]: block::super_blocks (block))
+    i++;
+
+  return i - 1;
 }
 
 

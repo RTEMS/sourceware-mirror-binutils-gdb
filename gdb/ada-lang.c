@@ -13825,9 +13825,7 @@ public:
     /* Search upwards from currently selected frame (so that we can
        complete on local vars.  */
 
-    for (const block *b = get_selected_block (0);
-	 b != nullptr;
-	 b = b->superblock ())
+    for (auto b : block::super_blocks (get_selected_block (0)))
       {
 	if (b->is_static_block ())
 	  surrounding_static_block = b;   /* For elmin of dups */
@@ -13852,9 +13850,8 @@ public:
 	auto callback = [&] (compunit_symtab *s)
 	  {
 	    QUIT;
-	    for (const block *b = s->blockvector ()->static_block ();
-		 b != nullptr;
-		 b = b->superblock ())
+	    for (auto b
+		   : block::super_blocks (s->blockvector ()->static_block ()))
 	      {
 		/* Don't do this block twice.  */
 		if (b == surrounding_static_block)
