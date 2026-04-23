@@ -127,7 +127,34 @@ struct block : public allocate_on_obstack<block>
     }
   };
 
+  /* Variant of next_iterator using the superblock field instead of next.  */
+  struct function_block_iterator : base_next_iterator<const block>
+  {
+    typedef function_block_iterator self_type;
+
+    explicit function_block_iterator (value_type item)
+      : base_next_iterator (item->is_global_block () || item->is_static_block ()
+			    ? nullptr : item)
+    {
+    }
+
+    function_block_iterator () = default;
+
+    self_type &operator++ ()
+    {
+      if (this->m_item->function () != nullptr)
+	{
+	  this->m_item = nullptr;
+	  return *this;
+	}
+
+      this->m_item = this->m_item->superblock ();
+      return *this;
+    }
+  };
+
   using superblock_range = iterator_range<superblock_iterator>;
+  using function_block_range = iterator_range<function_block_iterator>;
 
   /* Return this block's start address.  */
   CORE_ADDR start () const
@@ -334,12 +361,27 @@ struct block : public allocate_on_obstack<block>
     return superblock_range (std::move (begin));
   }
 
+  function_block_range function_blocks () const
+  {
+    function_block_range::iterator begin (this);
+
+    return function_block_range (std::move (begin));
+  }
+
   static superblock_range super_blocks (const block *b)
   {
     if (b == nullptr)
       return superblock_range ();
 
     return b->super_blocks ();
+  }
+
+  static function_block_range function_blocks (const block *b)
+  {
+    if (b == nullptr)
+      return function_block_range ();
+
+    return b->function_blocks ();
   }
 
   /* Return true if block A is lexically nested within this block, or
