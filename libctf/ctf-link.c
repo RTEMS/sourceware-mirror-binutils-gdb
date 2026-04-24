@@ -2071,10 +2071,6 @@ ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
       arg.i++;
     }
 
-  /* Only one member?  Don't bother writing out a name table at all.  */
-  if (arg.i == 1)
-    flags |= CTF_ARC_WRITE_NAMELESS;
-
   if ((f = tmpfile ()) == NULL)
     {
       errloc = "tempfile creation";
