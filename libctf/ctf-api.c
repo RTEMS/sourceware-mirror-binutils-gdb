@@ -162,6 +162,12 @@ ctf_dict_flag (ctf_dict_t *fp, ctf_dict_flags_t flag)
     {
     case CTF_STRICT_NO_DUP_ENUMERATORS:
       return (fp->ctf_flags & LCTF_STRICT_NO_DUP_ENUMERATORS) != 0;
+    case CTF_DICT_HAS_SYMBOL_TYPES:
+      return (fp->ctf_header->cth_objt_len > 0
+	      || fp->ctf_header->cth_func_len > 0
+	      || fp->ctf_dynsymidx
+	      || (fp->ctf_objthash && ctf_dynhash_elements (fp->ctf_objthash) > 0)
+	      || (fp->ctf_funchash && ctf_dynhash_elements (fp->ctf_funchash) > 0));
     default:
       return (ctf_set_errno (fp, ECTF_BADFLAG));
     }
