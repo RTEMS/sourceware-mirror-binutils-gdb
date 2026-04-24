@@ -392,11 +392,15 @@ typedef int ctf_member_next_flags_t;
 
 /* Flags for ctf_dict_set_flag.  */
 
-/* If set, duplicate enumerators in a single dict fail with ECTF_DUPLICATE.  */
-
 typedef enum ctf_dict_flags
   {
-    CTF_STRICT_NO_DUP_ENUMERATORS = 0x1
+    /* If set, duplicate enumerators in a single dict fail with
+       ECTF_DUPLICATE.  */
+    CTF_STRICT_NO_DUP_ENUMERATORS = 0x1,
+
+    /* If set, this dict has at least one symbol -> type mapping.  (This flag
+       merely reports a property of the dict and cannot be set.)  */
+    CTF_DICT_HAS_SYMBOL_TYPES = 0x2
   } ctf_dict_flags_t;
 
 typedef int ctf_visit_f (ctf_dict_t *, const char *name, ctf_id_t type,
@@ -453,7 +457,8 @@ extern ctf_archive_t *ctf_open (const char *filename,
 				const char *target, ctf_error_t *);
 extern void ctf_close (ctf_archive_t *);
 
-/* Set or unset dict-wide boolean flags, and get the value of these flags.  */
+/* Set or unset dict-wide boolean flags, and get the value of these flags.  Not
+   all flags can be set.  */
 
 extern ctf_ret_t ctf_dict_set_flag (ctf_dict_t *, ctf_dict_flags_t flag, int set);
 extern ctf_bool_t ctf_dict_flag (ctf_dict_t *, ctf_dict_flags_t flag);
