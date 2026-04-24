@@ -617,6 +617,7 @@ struct ctf_archive_internal
   ctf_dynhash_t *ctfi_member_names; /* Mapping from dict offset to name.  */
   const char *ctfi_names;	    /* The underlying name table. */
   char *ctfi_default_parent_cuname; /* Default the parent dict's cuname.  */
+  int ctfi_has_strtab;		    /* 1 if this archive has a strtab.  */
   ctf_dict_t *ctfi_parent;	    /* Parent dict.  */
   ctf_dynhash_t *ctfi_dicts;	    /* Dicts we have opened and cached.  */
   ctf_dict_t *ctfi_crossdict_cache; /* Cross-dict caching.  */

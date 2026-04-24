@@ -146,6 +146,7 @@ LIBCTF_2.0 {
 	ctf_archive_count;
 	ctf_archive_next;
 	ctf_archive_raw_next;
+	ctf_arc_flag;
 	ctf_dict_arc;
 	ctf_arc_flush_caches;
 	ctf_arc_set_parent;

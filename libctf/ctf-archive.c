@@ -826,6 +826,7 @@ ctf_new_archive_internal (unsigned char *buf, ctf_dict_t *fp, int v1,
 	  size_t j = 0;
 	  const char *name;
 
+	  arci->ctfi_has_strtab = 1;
 	  arci->ctfi_names = (const char *) magic + sizeof (uint64_t);	/* Skip over the CTFA_MAGIC.  */
 
 	  for (name = arci->ctfi_names; j < i; j++)
@@ -1126,6 +1127,20 @@ ctf_arc_get_dict_len (const struct ctf_archive_internal *arci,
     next = arci->ctfi_members[index + 1];
 
   return next - arci->ctfi_members[index];
+}
+
+/* Get archive-wide flags.  */
+
+ctf_bool_t
+ctf_arc_flag (struct ctf_archive_internal *arci, ctf_arc_flags_t flag)
+{
+  switch (flag)
+    {
+    case CTF_ARC_FLAGS_LIBCTF_CREATED:
+      return arci->ctfi_has_strtab;
+    default:
+      return -1;                        /* No errno for this function.  */
+    }
 }
 
 /* When dicts in archives are in parent/child relationships, index 0 is usually
