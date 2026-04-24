@@ -3818,7 +3818,13 @@ ldlang_open_ctf (void)
   int all_btf = 1;
   int picked_ctf = 0;
   int picked_btf = 0;
+  ctf_archive_t *only_one_input = NULL;
   ctf_error_t err;
+  bfd_size_type old_size;
+  flagword old_flags;
+  asection *unchanged_section = NULL;
+  int ctf_copy_unchanged = 0;
+  lang_input_statement_type *emission_file = NULL;
 
   if (link_info.ctf_disabled)
     return;
@@ -3858,13 +3864,34 @@ ldlang_open_ctf (void)
       /* Set the cuname suitably for this entry.  */
       ctf_link_set_default_parent_cuname (file->the_ctf, file->filename);
 
-      /* Prevent the contents of this section from being written.  */
+      /* If we have only one CTF/BTF input, remember it: we may be able to avoid
+	 dedupping it.  */
+
+      if (!any_cbtf)
+	only_one_input = file->the_ctf;
+      else
+	only_one_input = NULL;
+
+      any_cbtf = 1;
+
+      /* Prevent the contents of this section from being written, but reserve
+	 the right to reverse this decision later in this function if we decide
+	 we don't need to dedup after all.  */
 
       /* One of these sections must exist if ctf_bfdopen() succeeded.  */
       if ((sect = bfd_get_section_by_name (file->the_bfd, ".ctf")) == NULL)
 	sect = bfd_get_section_by_name (file->the_bfd, ".BTF");
       else
 	all_btf = 0;
+
+      if (only_one_input)
+	{
+	  old_size = sect->size;
+	  old_flags = sect->flags;
+	  unchanged_section = sect;
+	}
+      else
+	unchanged_section = NULL;
 
       sect->size = 0;
       sect->flags |= SEC_NEVER_LOAD | SEC_HAS_CONTENTS | SEC_LINKER_CREATED
@@ -3887,9 +3914,8 @@ ldlang_open_ctf (void)
     }
 
   /* If we found no CTF sections, we may be generating BTF output: pick out a
-     BTF section to use for the output, and add a new CTF section -- which may
-     later be excluded -- to contain the CTF output if we later conclude we must
-     generate CTF in this case.  */
+     BTF section to use for the output, and remember which input file it came
+     from.  */
 
   if (!picked_ctf)
     {
@@ -3899,8 +3925,10 @@ ldlang_open_ctf (void)
 	{
 	  asection *sect;
 
-	  if (dictfile->the_bfd == NULL || ((dictfile->the_bfd->flags) & DYNAMIC) != 0
-	      || !bfd_check_format (dictfile->the_bfd, bfd_object))
+	  if (dictfile->the_bfd == NULL
+	      || ((dictfile->the_bfd->flags) & DYNAMIC) != 0
+	      || !bfd_check_format (dictfile->the_bfd, bfd_object)
+	      || dictfile->the_ctf == NULL)
 	    continue;
 
           if ((sect = bfd_get_section_by_name (dictfile->the_bfd, ".BTF")) != NULL)
@@ -3915,14 +3943,123 @@ ldlang_open_ctf (void)
 	    }
 
 	  if (!picked_ctf)
+	    emission_file = dictfile;
+	}
+    }
+
+    /* If we only picked one single archive, we may want to simply copy it
+       unchanged to the output, without deduplication, in two cases:
+
+       - the single archive was itself derived from the operation of the libctf
+         deduplicator, and there is no symtypetab so no symbol reporting by the
+         linker can have affected it
+
+       - the single archive has a single dict which is a BTF archive derived
+         from the operation of pahole, which has been augmented in ways we do
+         not know how to deduplicate.  This can be identified by the presence of
+         bpf_kfunc decl tags.
+
+       This process often involves opening and working over every dict: but the
+       open dicts are cached, so we are not paying a price we would not pay in
+       order to dedup them anyway.  */
+
+  if (only_one_input)
+    {
+      ctf_dict_t *fp;
+
+      if (ctf_arc_flag (only_one_input, CTF_ARC_FLAGS_LIBCTF_CREATED))
+	{
+	  ctf_next_t *it = NULL;
+	  int symtypetabs_found = 0;
+
+	  while ((fp = ctf_archive_next (only_one_input, &it, NULL,
+					 0, &err)) != NULL)
 	    {
-	      bfd_make_section_with_flags (dictfile->the_bfd, ".ctf",
-					   (SEC_NEVER_LOAD | SEC_HAS_CONTENTS
-					    | SEC_LINKER_CREATED));
-	      picked_ctf = 1;
+	      if (ctf_dict_flag (fp, CTF_DICT_HAS_SYMBOL_TYPES))
+		{
+		  symtypetabs_found = 1;
+		  ctf_next_destroy (it);
+		  err = ECTF_NEXT_END;
+		  break;
+		}
+	      ctf_dict_close (fp);
+	    }
+	  if (err != ECTF_NEXT_END)
+	    {
+	      einfo (_("CTF error: cannot open BTF/CTF sections; "
+		       "all types will be discarded: `%s'\n"),
+		     ctf_errmsg (err));
+	      ld_stop_phase (PHASE_CTF);
+	      return;
+	    }
+
+	  if (!symtypetabs_found)
+	    ctf_copy_unchanged = 1;
+	}
+      else
+	{
+	  /* Archive not created by libctf.  Is it something pahole-
+	     augmented?  */
+
+	  if (try_pure_btf && ctf_archive_count (only_one_input) == 1)
+	    {
+	      ctf_next_t *it = NULL;
+
+	      while ((fp = ctf_archive_next (only_one_input, &it, NULL,
+					     0, &err)) != NULL)
+		{
+		  ctf_next_t *tags = NULL;
+
+		  if (ctf_tag_next (fp, "bpf_kfunc", &tags) != CTF_ERR)
+		    {
+		      ctf_copy_unchanged = 1;
+		      ctf_next_destroy (tags);
+		      ctf_dict_close (fp);
+		      err = ECTF_NEXT_END;
+		      break;
+		    }
+		  ctf_next_destroy (tags);
+		  ctf_dict_close (fp);
+		}
+
+	      if (err != ECTF_NEXT_END)
+		{
+		  einfo (_("CTF error: cannot open BTF/CTF sections; "
+			   "all types will be discarded: `%s'\n"),
+			 ctf_errmsg (err));
+		  ld_stop_phase (PHASE_CTF);
+		  return;
+		}
 	    }
 	}
     }
+
+  if (ctf_copy_unchanged && unchanged_section)
+    {
+      unchanged_section->flags = old_flags;
+      unchanged_section->size = old_size;
+
+      /* Setting ctf_disabled forces the linker to act as if --disable-ctf-dedup
+	 was passed on the command line, causing CTF sections to be copied
+	 directly to the output, as we want here, rather than being skipped in
+	 favour of later manual construction.  */
+
+      link_info.ctf_disabled = true;
+      LANG_FOR_EACH_INPUT_STATEMENT (closefile)
+	ctf_close (closefile->the_ctf);
+
+      ld_stop_phase (PHASE_CTF);
+      return;
+    }
+
+  /* A pure BTF link may still require a CTF section if deduplication finds
+     ambiguously-defined types.  Create it (if not needed, it will be deleted
+     again).  */
+
+  if (emission_file)
+    bfd_make_section_with_flags (emission_file->the_bfd, ".ctf",
+				 (SEC_NEVER_LOAD | SEC_HAS_CONTENTS
+				  | SEC_LINKER_CREATED));
 
   if ((ctf_output = ctf_create (NULL, &err)) != NULL)
     {
