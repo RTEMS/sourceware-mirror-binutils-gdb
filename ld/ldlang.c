@@ -3822,8 +3822,8 @@ ldlang_open_ctf (void)
   ctf_error_t err;
   bfd_size_type old_size;
   flagword old_flags;
-  int ctf_copy_unchanged;
-  asection *unchanged_sect = NULL;
+  asection *unchanged_section = NULL;
+  int ctf_copy_unchanged = 0;
   lang_input_statement_type *emission_file = NULL;
 
   if (link_info.ctf_disabled)
@@ -3888,8 +3888,10 @@ ldlang_open_ctf (void)
 	{
 	  old_size = sect->size;
 	  old_flags = sect->flags;
-	  unchanged_sect = sect;
+	  unchanged_section = sect;
 	}
+      else
+	unchanged_section = NULL;
 
       sect->size = 0;
       sect->flags |= SEC_NEVER_LOAD | SEC_HAS_CONTENTS | SEC_LINKER_CREATED
@@ -3960,8 +3962,6 @@ ldlang_open_ctf (void)
        This process often involves opening and working over every dict: but the
        open dicts are cached, so we are not paying a price we would not pay in
        order to dedup them anyway.  */
-
-  ctf_copy_unchanged = 0;
 
   if (only_one_input)
     {
@@ -4034,13 +4034,19 @@ ldlang_open_ctf (void)
 	}
     }
 
-  if (ctf_copy_unchanged && unchanged_sect)
+  if (ctf_copy_unchanged && unchanged_section)
     {
-      unchanged_sect->flags = old_flags;
-      unchanged_sect->size = old_size;
+      unchanged_section->flags = old_flags;
+      unchanged_section->size = old_size;
 
-      LANG_FOR_EACH_INPUT_STATEMENT (errfile)
-	ctf_close (errfile->the_ctf);
+      /* Setting ctf_disabled forces the linker to act as if --disable-ctf-dedup
+	 was passed on the command line, causing CTF sections to be copied
+	 directly to the output, as we want here, rather than being skipped in
+	 favour of later manual construction.  */
+
+      link_info.ctf_disabled = true;
+      LANG_FOR_EACH_INPUT_STATEMENT (closefile)
+	ctf_close (closefile->the_ctf);
 
       ld_stop_phase (PHASE_CTF);
       return;
