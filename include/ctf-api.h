@@ -465,9 +465,6 @@ extern ctf_ret_t ctf_dict_set_flag (ctf_dict_t *, ctf_dict_flags_t flag, int set
 extern ctf_bool_t ctf_dict_flag (ctf_dict_t *, ctf_dict_flags_t flag);
 
 /* Return the data, symbol, or string sections used by a given CTF dict.  */
-extern ctf_sect_t ctf_getdatasect (const ctf_dict_t *);
-extern ctf_sect_t ctf_getsymsect (const ctf_dict_t *);
-extern ctf_sect_t ctf_getstrsect (const ctf_dict_t *);
 extern ctf_sect_t ctf_elf_sect (const ctf_dict_t *, ctf_elfsect_names_t sect);
 
 /* Set the endianness of the symbol section, which may be different from
