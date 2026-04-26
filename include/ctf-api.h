@@ -467,6 +467,9 @@ extern ctf_bool_t ctf_dict_flag (ctf_dict_t *, ctf_dict_flags_t flag);
 /* Return the data, symbol, or string sections used by a given CTF dict.  */
 extern ctf_sect_t ctf_elf_sect (const ctf_dict_t *, ctf_elfsect_names_t sect);
 
+/* Return the data, symbol, or string sections used by a given CTF archive.  */
+extern ctf_sect_t ctf_arc_elf_sect (const ctf_archive_t *, ctf_elfsect_names_t sect);
+
 /* Set the endianness of the symbol section, which may be different from
    the endianness of the CTF dict. Done for you by ctf_open and ctf_fdopen,
    but direct calls to ctf_bufopen etc with symbol sections provided must
