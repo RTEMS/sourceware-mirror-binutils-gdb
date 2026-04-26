@@ -935,6 +935,41 @@ ctf_arc_symsect_endianness (struct ctf_archive_internal *arci, int little_endian
     ctf_symsect_endianness (arci->ctfi_dict, arci->ctfi_symsect_little_endian);
 }
 
+/* Return various ELF sections related to CTF.  The archive counterpart of
+   ctf_elf_sect().
+
+   On error, returns an all-NULL section as if there was nothing opened.  */
+
+ctf_sect_t
+ctf_arc_elf_sect (const struct ctf_archive_internal *arci,
+		  ctf_elfsect_names_t sect)
+{
+  ctf_sect_t error = { "ERROR", NULL, 0, 0 };
+
+  if (arci->ctfi_dict)
+    return ctf_elf_sect (arci->ctfi_dict, sect);
+
+  switch (sect)
+    {
+    case CTF_ELF_SECT:
+      {
+	ctf_sect_t ret;
+
+	ret.cts_name = "";			/* Not currently populated. */
+	ret.cts_data = arci->ctfi_archive;
+	ret.cts_size = arci->ctfi_whole_archive_len;
+
+	return ret;
+      }
+    case CTF_ELF_SYMSECT:
+      return arci->ctfi_symsect;
+    case CTF_ELF_STRSECT:
+      return arci->ctfi_strsect;
+    default:
+      return error;
+    }
+}
+
 /* Get the CTF preamble from data in a buffer, which may be either an archive or
    a CTF dict.  If multiple dicts are present in an archive, the preamble comes
    from an arbitrary dict.  The preamble is a pointer into the ctfsect passed
