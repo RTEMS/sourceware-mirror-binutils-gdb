@@ -79,7 +79,8 @@ ctf_version (int ctf_version_, size_t btf_hdr_len, ctf_btf_mode_t btf_mode)
     {
       /*  Dynamic version switching is not presently supported. */
       if (btf_hdr_len != _btf_hdr_len
-	  && btf_hdr_len != sizeof (ctf_btf_header_t))
+	  && btf_hdr_len != sizeof (ctf_btf_header_t)
+	  && btf_hdr_len != sizeof (ctf_btf_header_nolayout_t))
 	{
 	  ctf_err (err_locus (NULL), ENOTSUP,
 		   _("do not know how to emit BTF header of length %zi"),
