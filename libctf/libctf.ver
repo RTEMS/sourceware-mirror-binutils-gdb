@@ -75,8 +75,8 @@ LIBCTF_2.0 {
 	ctf_type_cmp;
 	ctf_type_compat;
 	ctf_type_data;
-	ctf_tag;
-	ctf_decl_tag;
+	ctf_tag_reference;
+	ctf_decl_tag_reference;
 
 	ctf_member_info;
 	ctf_member_next;
