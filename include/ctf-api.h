@@ -685,7 +685,8 @@ typedef enum ctf_btf_mode
    version of dicts written out by the ctf_write* functions.  If version is
    zero, we just return the default library version number.  The BTF version
    (for CTFv4 and above) is indicated via btf_hdr_len, also zero for "no
-   change".
+   change".  (This is not the version written, but rather an indication of
+   whether reading a BTF header with the given length is supported.)
 
    You can influence what type kinds are written out to a CTFv4 dict via the
    ctf_write_suppress_kind() function.  */
