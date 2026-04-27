@@ -848,7 +848,7 @@ ctf_dedup_rhash_type (ctf_dict_t *fp, ctf_dict_t *input, ctf_dict_t **inputs,
 	   component index unconditionally, because an index of -1 is fine
 	   too.  */
 
-	if ((ref = ctf_decl_tag (input, type, &component_idx)) == CTF_ERR)
+	if ((ref = ctf_decl_tag_reference (input, type, &component_idx)) == CTF_ERR)
 	  {
 	    whaterr = N_("hashing decl tags");
 	    goto err;
@@ -2636,7 +2636,7 @@ ctf_dedup_member_decl_tag (ctf_dict_t *fp, ctf_id_t type)
     {
       int64_t component_idx;
 
-      if (ctf_decl_tag (fp, type, &component_idx) == CTF_ERR)
+      if (ctf_decl_tag_reference (fp, type, &component_idx) == CTF_ERR)
 	return -1;
 
       if (component_idx > -1)
@@ -3863,7 +3863,7 @@ ctf_dedup_emit_type (const char *hval, ctf_dict_t *output, ctf_dict_t **inputs,
 	    break;
 	  }
 
-	if (ctf_decl_tag (input, type, &component_idx) == CTF_ERR)
+	if (ctf_decl_tag_reference (input, type, &component_idx) == CTF_ERR)
 	  goto err_input;
 
 	if ((new_type = ctf_add_decl_tag (target, ref, name,
@@ -4136,7 +4136,7 @@ ctf_dedup_emit_decl_tags (ctf_dict_t *output, ctf_dict_t **inputs)
       if (ctf_dynhash_lookup (d->cd_nonroot_consistency, hval))
 	conflicting = 1;
 
-      if (ctf_decl_tag (input_fp, input_type, &component_idx) == CTF_ERR)
+      if (ctf_decl_tag_reference (input_fp, input_type, &component_idx) == CTF_ERR)
 	goto err_input;
 
       if ((name = ctf_type_name_raw (input_fp, input_type)) == NULL)

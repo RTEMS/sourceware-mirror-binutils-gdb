@@ -911,18 +911,13 @@ extern ctf_id_t ctf_variable_datasec (ctf_dict_t *fp, ctf_id_t var);
    the type of the declaration to which a decl tag is attached (so a decl tag on
    a function parameter would return the type ID of the parameter's type).  */
 
-extern ctf_id_t ctf_tag (ctf_dict_t *, ctf_id_t tag);
+extern ctf_id_t ctf_tag_reference (ctf_dict_t *, ctf_id_t tag);
 
 /* Return the component ID and declaration to which a decl tag is attached.
    -1 means "whole type".  */
 
-extern ctf_id_t ctf_decl_tag (ctf_dict_t *, ctf_id_t decl_tag,
-			      int64_t *component_idx);
-
-/* Return the decl tags that point to this declaration (if any).  */
-
-extern ctf_id_t ctf_decl_tag_next (ctf_dict_t *, ctf_id_t decl,
-				   int64_t *component_idx, ctf_next_t **it);
+extern ctf_id_t ctf_decl_tag_reference (ctf_dict_t *, ctf_id_t decl_tag,
+					int64_t *component_idx);
 
 /* Iterators.  */
 
@@ -992,6 +987,10 @@ extern ctf_id_t ctf_datasec_var_next (ctf_dict_t *, ctf_id_t, ctf_next_t **,
 
 /* Iterate over all tags with the given TAG, returning the ID of each tag.  */
 extern ctf_id_t ctf_tag_next (ctf_dict_t *, const char *tag, ctf_next_t **);
+
+/* Return the decl tags that point to this declaration (if any).  */
+extern ctf_id_t ctf_decl_tag_next (ctf_dict_t *, ctf_id_t decl,
+				   int64_t *component_idx, ctf_next_t **it);
 
 /* ctf_archive_next opens each member dict for you, automatically importing any
    parent dict as usual: the caller must close each dict returned once done with
