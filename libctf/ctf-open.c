@@ -1144,8 +1144,8 @@ init_static_types_names (ctf_dict_t *fp, ctf_header_t *cth, int child_types,
 		ctf_id_t decl_tagged;
 
                 /* Should never happen.  */
-		decl_tagged = ctf_decl_tag (fp, ctf_index_to_type (fp, id),
-					    &component_idx);
+		decl_tagged = ctf_decl_tag_reference (fp, ctf_index_to_type (fp, id),
+						      &component_idx);
 
 		if (!ctf_assert (fp, decl_tagged != CTF_ERR))
 		  return ctf_errno (fp);

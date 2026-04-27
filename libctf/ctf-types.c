@@ -1580,7 +1580,8 @@ ctf_type_reference (ctf_dict_t *fp, ctf_id_t type)
 /* Return the component ID and declaration to which a decl tag is attached.  */
 
 ctf_id_t
-ctf_decl_tag (ctf_dict_t *fp, ctf_id_t decl_tag, int64_t *component_idx)
+ctf_decl_tag_reference (ctf_dict_t *fp, ctf_id_t decl_tag,
+			int64_t *component_idx)
 {
   ctf_dict_t *ofp = fp;
   const ctf_type_t *tp, *suffix;
@@ -1703,7 +1704,7 @@ end_iter:
    a function parameter would return the type ID of the parameter's type).  */
 
 ctf_id_t
-ctf_tag (ctf_dict_t *fp, ctf_id_t tag)
+ctf_tag_reference (ctf_dict_t *fp, ctf_id_t tag)
 {
   ctf_kind_t kind = ctf_type_kind (fp, tag);
   int64_t component_idx;
@@ -1718,7 +1719,7 @@ ctf_tag (ctf_dict_t *fp, ctf_id_t tag)
   if (kind == CTF_K_TYPE_TAG)
     return ref;
 
-  if (ctf_decl_tag (fp, tag, &component_idx) == CTF_ERR)
+  if (ctf_decl_tag_reference (fp, tag, &component_idx) == CTF_ERR)
     return CTF_ERR;		/* errno is set for us.  */
 
   if (component_idx == -1)
