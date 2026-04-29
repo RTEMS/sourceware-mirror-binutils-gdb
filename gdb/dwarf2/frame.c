@@ -183,11 +183,6 @@ static ULONGEST read_encoded_value (struct comp_unit *unit, gdb_byte encoding,
 				    int ptr_len, const gdb_byte *buf,
 				    unsigned int *bytes_read_ptr,
 				    unrelocated_addr func_base);
-
-
-/* Store the length the expression for the CFA in the `cfa_reg' field,
-   which is unused in that case.  */
-#define cfa_exp_len cfa_reg
 
 dwarf2_frame_state::dwarf2_frame_state (CORE_ADDR pc_, struct dwarf2_cie *cie)
   : pc (pc_), data_align (cie->data_alignment_factor),
@@ -228,7 +223,7 @@ register %s (#%d) at %s"),
 }
 
 static CORE_ADDR
-execute_stack_op (const gdb_byte *exp, ULONGEST len, int addr_size,
+execute_stack_op (gdb::array_view<const gdb_byte> expr, int addr_size,
 		  const frame_info_ptr &this_frame, CORE_ADDR initial,
 		  int initial_in_stack_memory, dwarf2_per_objfile *per_objfile)
 {
@@ -236,7 +231,7 @@ execute_stack_op (const gdb_byte *exp, ULONGEST len, int addr_size,
   scoped_value_mark free_values;
 
   ctx.push_address (initial, initial_in_stack_memory);
-  value *result_val = ctx.evaluate (exp, len, true, nullptr, this_frame);
+  value *result_val = ctx.evaluate (expr, true, nullptr, this_frame);
 
   if (result_val->lval () == lval_memory)
     return result_val->address ();
@@ -408,10 +403,9 @@ bad CFI data; mismatched DW_CFA_restore_state at %s"),
 
 	    case DW_CFA_def_cfa_expression:
 	      insn_ptr = safe_read_uleb128 (insn_ptr, insn_end, &utmp);
-	      fs->regs.cfa_exp_len = utmp;
-	      fs->regs.cfa_exp = insn_ptr;
+	      fs->regs.cfa_exp = gdb::make_array_view (insn_ptr, utmp);
 	      fs->regs.cfa_how = CFA_EXP;
-	      insn_ptr += fs->regs.cfa_exp_len;
+	      insn_ptr += utmp;
 	      break;
 
 	    case DW_CFA_expression:
@@ -571,7 +565,7 @@ execute_cfa_program_test (struct gdbarch *gdbarch)
   SELF_CHECK (fs.regs.cfa_reg == 1);
   SELF_CHECK (fs.regs.cfa_offset == 4);
   SELF_CHECK (fs.regs.cfa_how == CFA_REG_OFFSET);
-  SELF_CHECK (fs.regs.cfa_exp == NULL);
+  SELF_CHECK (fs.regs.cfa_exp.empty ());
   SELF_CHECK (fs.regs.prev == NULL);
 }
 
@@ -759,8 +753,7 @@ bool
 dwarf2_fetch_cfa_info (struct gdbarch *gdbarch, CORE_ADDR pc,
 		       dwarf2_per_cu *data, int *regnum_out,
 		       LONGEST *offset_out, CORE_ADDR *text_offset_out,
-		       const gdb_byte **cfa_start_out,
-		       const gdb_byte **cfa_end_out)
+		       gdb::array_view<const gdb_byte> &cfa_expr_out)
 {
   struct dwarf2_fde *fde;
   dwarf2_per_objfile *per_objfile;
@@ -811,8 +804,7 @@ dwarf2_fetch_cfa_info (struct gdbarch *gdbarch, CORE_ADDR pc,
 
     case CFA_EXP:
       *text_offset_out = per_objfile->objfile->text_section_offset ();
-      *cfa_start_out = fs.regs.cfa_exp;
-      *cfa_end_out = fs.regs.cfa_exp + fs.regs.cfa_exp_len;
+      cfa_expr_out = fs.regs.cfa_exp;
       return false;
 
     default:
@@ -978,10 +970,8 @@ dwarf2_frame_cache (const frame_info_ptr &this_frame, void **this_cache)
 	  break;
 
 	case CFA_EXP:
-	  cache->cfa =
-	    execute_stack_op (fs.regs.cfa_exp, fs.regs.cfa_exp_len,
-			      cache->addr_size, this_frame, 0, 0,
-			      cache->per_objfile);
+	  cache->cfa = execute_stack_op (fs.regs.cfa_exp, cache->addr_size,
+					 this_frame, 0, 0, cache->per_objfile);
 	  break;
 
 	default:
@@ -1166,10 +1156,8 @@ dwarf2_frame_prev_register (const frame_info_ptr &this_frame, void **this_cache,
       return frame_unwind_got_register (this_frame, regnum, realnum);
 
     case DWARF2_FRAME_REG_SAVED_EXP:
-      addr = execute_stack_op (cache->reg[regnum].loc.exp.start,
-			       cache->reg[regnum].loc.exp.len,
-			       cache->addr_size,
-			       this_frame, cache->cfa, 1,
+      addr = execute_stack_op (cache->reg[regnum].loc.exp.view (),
+			       cache->addr_size, this_frame, cache->cfa, 1,
 			       cache->per_objfile);
       return frame_unwind_got_memory (this_frame, regnum, addr);
 
@@ -1178,10 +1166,8 @@ dwarf2_frame_prev_register (const frame_info_ptr &this_frame, void **this_cache,
       return frame_unwind_got_constant (this_frame, regnum, addr);
 
     case DWARF2_FRAME_REG_SAVED_VAL_EXP:
-      addr = execute_stack_op (cache->reg[regnum].loc.exp.start,
-			       cache->reg[regnum].loc.exp.len,
-			       cache->addr_size,
-			       this_frame, cache->cfa, 1,
+      addr = execute_stack_op (cache->reg[regnum].loc.exp.view (),
+			       cache->addr_size, this_frame, cache->cfa, 1,
 			       cache->per_objfile);
       return frame_unwind_got_constant (this_frame, regnum, addr);
 

@@ -129,8 +129,7 @@ struct dwarf_expr_context
 
   void push_address (CORE_ADDR value, bool in_stack_memory);
 
-  /* Evaluate the expression at ADDR (LEN bytes long) in a given PER_CU
-     and FRAME context.
+  /* Evaluate expression EXPR in a given PER_CU and FRAME context.
 
      AS_LVAL defines if the returned struct value is expected to be a
      value (false) or a location description (true).
@@ -140,7 +139,7 @@ struct dwarf_expr_context
 
      The ADDR_INFO property can be specified to override the range of
      memory addresses with the passed in buffer.  */
-  value *evaluate (const gdb_byte *addr, size_t len, bool as_lval,
+  value *evaluate (gdb::array_view<const gdb_byte> expr, bool as_lval,
 		   dwarf2_per_cu *per_cu, const frame_info_ptr &frame,
 		   const struct property_addr_info *addr_info = nullptr,
 		   struct type *type = nullptr,
@@ -208,12 +207,12 @@ private:
   /* Property address info used for the evaluation.  */
   const struct property_addr_info *m_addr_info = nullptr;
 
-  void eval (const gdb_byte *addr, size_t len);
+  void eval (gdb::array_view<const gdb_byte> expr);
   struct type *address_type () const;
   void push (struct value *value, bool in_stack_memory);
   bool stack_empty_p () const;
   void add_piece (ULONGEST size, ULONGEST offset, enum dwarf_location_atom op);
-  void execute_stack_op (const gdb_byte *op_ptr, const gdb_byte *op_end);
+  void execute_stack_op (gdb::array_view<const gdb_byte> expr);
   void pop ();
   struct value *fetch (int n);
   CORE_ADDR fetch_address (int n);
@@ -227,10 +226,10 @@ private:
   value *fetch_result (struct type *type, struct type *subobj_type,
 		       LONGEST subobj_offset, bool as_lval);
 
-  /* Return the location expression for the frame base attribute, in
-     START and LENGTH.  The result must be live until the current
-     expression evaluation is complete.  */
-  void get_frame_base (const gdb_byte **start, size_t *length);
+  /* Return the location expression for the frame base attribute.  The
+     result must be live until the current expression evaluation is
+     complete.  */
+  gdb::array_view<const gdb_byte> get_frame_base ();
 
   /* Return the base type given by the indicated DIE at DIE_CU_OFF.
      This can throw an exception if the DIE is invalid or does not
@@ -269,25 +268,24 @@ CORE_ADDR read_addr_from_reg (const frame_info_ptr &frame, int reg);
 void dwarf_expr_require_composition (const gdb_byte *, const gdb_byte *,
 				     const char *);
 
-int dwarf_block_to_dwarf_reg (const gdb_byte *buf, const gdb_byte *buf_end);
+int dwarf_block_to_dwarf_reg (gdb::array_view<const gdb_byte> block);
 
-int dwarf_block_to_dwarf_reg_deref (const gdb_byte *buf,
-				    const gdb_byte *buf_end,
+int dwarf_block_to_dwarf_reg_deref (gdb::array_view<const gdb_byte> block,
 				    CORE_ADDR *deref_size_return);
 
-/* If <BUF..BUF_END] contains DW_FORM_block* with single DW_OP_fbreg(X) fill
-   in FB_OFFSET_RETURN with the X offset and return true.  Otherwise return
+/* If BLOCK contains DW_FORM_block* with single DW_OP_fbreg(X) fill in
+   FB_OFFSET_RETURN with the X offset and return true.  Otherwise return
    false.  */
 
-bool dwarf_block_to_fb_offset (const gdb_byte *buf, const gdb_byte *buf_end,
+bool dwarf_block_to_fb_offset (gdb::array_view<const gdb_byte> block,
 			       CORE_ADDR *fb_offset_return);
 
-/* If <BUF..BUF_END] contains DW_FORM_block* with single DW_OP_bregSP(X) fill
-   in SP_OFFSET_RETURN with the X offset and return true.  Otherwise return
+/* If BLOCK contains DW_FORM_block* with single DW_OP_bregSP(X) fill in
+   SP_OFFSET_RETURN with the X offset and return true.  Otherwise return
    false.  The matched SP register number depends on GDBARCH.  */
 
-bool dwarf_block_to_sp_offset (struct gdbarch *gdbarch, const gdb_byte *buf,
-			       const gdb_byte *buf_end,
+bool dwarf_block_to_sp_offset (struct gdbarch *gdbarch,
+			       gdb::array_view<const gdb_byte> block,
 			       CORE_ADDR *sp_offset_return);
 
 /* Wrappers around the leb128 reader routines to simplify them for our
