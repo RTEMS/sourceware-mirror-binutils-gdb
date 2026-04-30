@@ -108,54 +108,6 @@ struct blockranges
 
 struct block : public allocate_on_obstack<block>
 {
-  /* Variant of next_iterator using the superblock field instead of next.  */
-  struct superblock_iterator : base_next_iterator<const block>
-  {
-    typedef superblock_iterator self_type;
-
-    explicit superblock_iterator (value_type item)
-      : base_next_iterator (item)
-    {
-    }
-
-    superblock_iterator () = default;
-
-    self_type &operator++ ()
-    {
-      this->m_item = this->m_item->superblock ();
-      return *this;
-    }
-  };
-
-  /* Variant of next_iterator using the superblock field instead of next.  */
-  struct function_block_iterator : base_next_iterator<const block>
-  {
-    typedef function_block_iterator self_type;
-
-    explicit function_block_iterator (value_type item)
-      : base_next_iterator (item->is_global_block () || item->is_static_block ()
-			    ? nullptr : item)
-    {
-    }
-
-    function_block_iterator () = default;
-
-    self_type &operator++ ()
-    {
-      if (this->m_item->function () != nullptr)
-	{
-	  this->m_item = nullptr;
-	  return *this;
-	}
-
-      this->m_item = this->m_item->superblock ();
-      return *this;
-    }
-  };
-
-  using superblock_range = iterator_range<superblock_iterator>;
-  using function_block_range = iterator_range<function_block_iterator>;
-
   /* Return this block's start address.  */
   CORE_ADDR start () const
   { return m_start; }
@@ -354,6 +306,20 @@ struct block : public allocate_on_obstack<block>
 
   struct dynamic_prop *static_link () const;
 
+  /* Iterator and range type to iterate over this block and its superblocks.  */
+
+  struct superblock_incrementer
+  {
+    const block *operator() (const block &b) const noexcept
+    { return b.superblock (); }
+  };
+
+  using superblock_iterator
+    = base_next_iterator<const block, superblock_incrementer>;
+  using superblock_range = iterator_range<superblock_iterator>;
+
+  /* Return a range to iterate over this block and its superblocks.  */
+
   superblock_range super_blocks () const
   {
     superblock_range::iterator begin (this);
@@ -361,12 +327,40 @@ struct block : public allocate_on_obstack<block>
     return superblock_range (std::move (begin));
   }
 
+  /* Iterator and range type to iterate over this block and its superblocks
+     within a function.  */
+
+  struct function_block_incrementer
+  {
+    const block *operator() (const block &b) const noexcept
+    {
+      /* If the current item is the function-defining block, we're done.  */
+      if (b.function () != nullptr)
+	return nullptr;
+
+      return b.superblock ();
+    }
+  };
+
+  using function_block_iterator
+    = base_next_iterator<const block, function_block_incrementer>;
+  using function_block_range = iterator_range<function_block_iterator>;
+
+  /* Assuming that this is a block within a function, return a range to iterate
+     over this block and its superblocks up to that function's block.
+
+     This method must not be called on global or static blocks.  */
+
   function_block_range function_blocks () const
   {
-    function_block_range::iterator begin (this);
+    gdb_assert (!this->is_global_block ());
+    gdb_assert (!this->is_static_block ());
 
-    return function_block_range (std::move (begin));
+    return function_block_range (function_block_iterator (this));
   }
+
+  /* Same as block::super_blocks, except that if B is nullptr, return an empty
+     range.  */
 
   static superblock_range super_blocks (const block *b)
   {
@@ -375,6 +369,9 @@ struct block : public allocate_on_obstack<block>
 
     return b->super_blocks ();
   }
+
+  /* Same as block::function_blocks, except that if B is nullptr, return an
+     empty range.  */
 
   static function_block_range function_blocks (const block *b)
   {

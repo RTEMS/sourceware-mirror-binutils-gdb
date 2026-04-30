@@ -21,35 +21,21 @@
 
 #include "gdbsupport/iterator-range.h"
 
-/* An iterator base class for iterating over a field of a type.  In order to
-   form a functioning iterator, classes inheriting this should define an
-   operator++, which determines the actual field that is iterated over.
+/* An iterator base class that defines pretty much everything except how to
+   obtain the next element, given the current element.
 
-   Instead of factoring out a base class, we could use something like this:
+   Increment is a functor that takes a T& and returns the next T* in the
+   sequence.  It shall return nullptr when there are no more elements.  */
 
-     template<typename T, auto F = &T::next>
-     struct next_iterator
-     {
-       ...
-       self_type &operator++ ()
-       {
-	 m_item = m_item->*F;
-	 return *this;
-       }
-       ...
-     }
-
-  but that has the drawback that it doesn't work with incomplete T.  */
-
-template<typename T>
+template<typename T, typename Incrementer>
 struct base_next_iterator
 {
-  typedef base_next_iterator self_type;
-  typedef T *value_type;
-  typedef T *&reference;
-  typedef T **pointer;
-  typedef std::forward_iterator_tag iterator_category;
-  typedef int difference_type;
+  using self_type = base_next_iterator<T, Incrementer>;
+  using value_type = T *;
+  using reference = T *&;
+  using pointer = T **;
+  using iterator_category = std::forward_iterator_tag;
+  using difference_type = int;
 
   explicit base_next_iterator (T *item)
     : m_item (item)
@@ -77,37 +63,30 @@ struct base_next_iterator
     return m_item != other.m_item;
   }
 
-protected:
+  self_type &operator++ ()
+  {
+    gdb_assert (m_item != nullptr);
+    this->m_item = Incrementer () (*m_item);
+    return *this;
+  }
 
+private:
   T *m_item;
 };
 
-/* An iterator that uses the 'next' field of a type to iterate.  This
-   can be used with various GDB types that are stored as linked
-   lists.  */
+/* Iterator that follows the `next` field of a type.  */
 
-template<typename T>
-struct next_iterator : base_next_iterator<T> {
-  typedef next_iterator self_type;
-  typedef T *value_type;
-  typedef T *&reference;
-  typedef T **pointer;
-
-  explicit next_iterator (T *item)
-    : base_next_iterator<T> (item)
+template <typename T>
+struct next_field_incrementer
+{
+  T *operator() (T &item) const noexcept
   {
-  }
-
-  next_iterator () = default;
-
-  self_type &operator++ ()
-  {
-    this->m_item = this->m_item->next;
-    return *this;
+    return item.next;
   }
 };
 
-/* A convenience wrapper to make a range type around a next_iterator.  */
+template <typename T>
+using next_iterator = base_next_iterator<T, next_field_incrementer<T>>;
 
 template <typename T>
 using next_range = iterator_range<next_iterator<T>>;
