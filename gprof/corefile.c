@@ -207,6 +207,10 @@ open_separated_debug_file (bfd *abfd)
 	{
 	  if (bfd_check_format (debug_bfd, bfd_object))
 	    {
+	      /* Successfully opened the debug file.
+	         Enable decompression on the debug file.  */
+              debug_bfd->flags |= BFD_DECOMPRESS;
+
 	      /* Store the debug BFD for use during symbol reading.
 	         We'll use this for bfd_canonicalize_symtab and other symbol ops.  */
 	      core_debug_bfd = debug_bfd;
