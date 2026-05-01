@@ -15584,34 +15584,6 @@ get_dynamic_reloc_section_name (bfd *       abfd,
   return name;
 }
 
-/* Returns the dynamic reloc section associated with SEC.
-   If necessary compute the name of the dynamic reloc section based
-   on SEC's name (looked up in ABFD's string table) and the setting
-   of IS_RELA.  */
-
-asection *
-_bfd_elf_get_dynamic_reloc_section (bfd *abfd,
-				    asection *sec,
-				    bool is_rela)
-{
-  asection *reloc_sec = elf_section_data (sec)->sreloc;
-
-  if (reloc_sec == NULL)
-    {
-      const char *name = get_dynamic_reloc_section_name (abfd, sec, is_rela);
-
-      if (name != NULL)
-	{
-	  reloc_sec = bfd_get_linker_section (abfd, name);
-
-	  if (reloc_sec != NULL)
-	    elf_section_data (sec)->sreloc = reloc_sec;
-	}
-    }
-
-  return reloc_sec;
-}
-
 /* Returns the dynamic reloc section associated with SEC.  If the
    section does not exist it is created and attached to the DYNOBJ
    bfd and stored in the SRELOC field of SEC's elf_section_data
