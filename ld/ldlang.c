@@ -8463,21 +8463,15 @@ lang_add_gc_name (const char *name)
 static void
 lang_check_relocs (void)
 {
-  if (link_info.check_relocs_after_open_input)
-    {
-      bfd *abfd;
-
-      for (abfd = link_info.input_bfds;
-	   abfd != (bfd *) NULL; abfd = abfd->link.next)
-	if (!bfd_link_check_relocs (abfd, &link_info))
-	  {
-	    /* No object output, fail return.  */
-	    config.make_executable = false;
-	    /* Note: we do not abort the loop, but rather
-	       continue the scan in case there are other
-	       bad relocations to report.  */
-	  }
-    }
+  for (bfd *abfd = link_info.input_bfds; abfd != NULL; abfd = abfd->link.next)
+    if (!bfd_link_check_relocs (abfd, &link_info))
+      {
+	/* No object output, fail return.  */
+	config.make_executable = false;
+	/* Note: we do not abort the loop, but rather
+	   continue the scan in case there are other
+	   bad relocations to report.  */
+      }
 }
 
 /* Look through all output sections looking for places where we can
