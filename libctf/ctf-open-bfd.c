@@ -69,7 +69,7 @@ ctf_bfdopen (struct bfd *abfd, ctf_error_t *errp)
       return (ctf_set_open_errno (errp, ECTF_FMT));
     }
 
-  ctfsect.cts_name = _CTF_SECTION;
+  ctfsect.cts_name = bfd_section_name(ctf_asect);
   ctfsect.cts_entsize = 1;
   ctfsect.cts_size = bfd_section_size (ctf_asect);
   ctfsect.cts_data = contents;
