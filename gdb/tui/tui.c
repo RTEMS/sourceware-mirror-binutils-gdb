@@ -429,7 +429,8 @@ tui_enable (void)
 	 again.  */
       error (_("Cannot enable the TUI"));
     }
-  else if (tui_finish_init == TRIBOOL_TRUE)
+
+  if (tui_finish_init == TRIBOOL_TRUE)
     {
       WINDOW *w;
       SCREEN *s;
