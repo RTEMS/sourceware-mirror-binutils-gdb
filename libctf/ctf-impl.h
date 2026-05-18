@@ -24,7 +24,6 @@
 #include <errno.h>
 #include "ctf-util-port.h"
 #include <ctf-api.h>
-#include <ctf-test-api.h>
 #include "ctf-util-sha1.h"
 #include <sys/types.h>
 #include <stdlib.h>
@@ -888,11 +887,9 @@ extern void ctf_depreserialize (ctf_dict_t *fp);
 extern struct ctf_archive_internal *
 ctf_new_archive_internal (unsigned char *buf, ctf_dict_t *fp, int v1,
 			  enum arc_on_close_operation on_close, size_t len,
-			  const ctf_sect_t *symsect, const ctf_sect_t *strsect,
-			  ctf_error_t *errp);
+			  ctf_open_sect_t *sects, ctf_error_t *errp);
 struct ctf_archive_internal *ctf_new_archive_wrapper (ctf_dict_t *fp,
-						      const ctf_sect_t *symsect,
-						      const ctf_sect_t *strsect,
+						      ctf_open_sect_t *sects,
 						      ctf_error_t *errp);
 extern struct ctf_archive_internal *
 ctf_arc_open_internal (int fd, const char *filename, ctf_error_t *errp);
@@ -909,13 +906,11 @@ extern ctf_dict_t *ctf_create_internal (ctf_dict_t *parent,
 					ctf_import_flags_t import_flags,
 					ctf_error_t *errp);
 extern void *ctf_set_open_errno (ctf_error_t *, ctf_error_t);
-extern ssize_t ctf_buflen (const ctf_sect_t *ctfsect, ctf_error_t *errp);
+extern ssize_t ctf_buflen (ctf_open_sect_t *sects, ctf_error_t *errp);
 extern ctf_ret_t ctf_flip_header (void *, int, int, int);
 extern ctf_error_t ctf_flip (ctf_dict_t *, ctf_header_t *, unsigned char *,
 			     int is_btf, int to_foreign);
-extern ctf_dict_t *ctf_bufopen_len (const ctf_sect_t *ctfsect,
-				    const ctf_sect_t *symsect,
-				    const ctf_sect_t *strsect,
+extern ctf_dict_t *ctf_bufopen_len (ctf_open_sect_t *sects,
 				    ssize_t *len, ctf_dict_t *parent,
 				    ctf_archive_t *ctf_archive,
 				    ctf_import_flags_t import_flags,

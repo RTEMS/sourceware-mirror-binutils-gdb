@@ -1187,7 +1187,7 @@ ctf_link_deduplicating_per_cu (ctf_dict_t *fp)
 
       if ((in_arc = ctf_new_archive_internal (NULL, outputs[0], 0,
 					      FREE_ARCHIVE_ONLY_DICT, 0,
-					      NULL, NULL, &err)) == NULL)
+					      NULL, &err)) == NULL)
 	{
 	  ctf_set_errno (fp, err);
 	  goto err_outputs;
@@ -1515,9 +1515,10 @@ ctf_link_against (ctf_dict_t *fp, ctf_archive_t *against, ctf_archive_t *dict,
       == NULL)
     return ctf_err (err_locus (fp), err, _("cannot open against-types parent dict"));
 
-  /* Add the sole parent, then the single child.  */
+  /* Add the sole parent, then the single child.  The parent is never written
+     out or CU-mapped, so give it a non-colliding name.  */
 
-  if (ctf_link_add (fp, against, _CTF_SECTION, NULL) < 0)
+  if (ctf_link_add (fp, against, "//@@parent@name@irrelevant//", NULL) < 0)
     return -1;					/* errno is set for us.  */
 
   if (ctf_link_add (fp, dict, name, NULL) < 0)

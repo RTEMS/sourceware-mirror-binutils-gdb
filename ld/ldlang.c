@@ -3849,7 +3849,7 @@ ldlang_open_ctf (void)
 	 wrapper): files derived from a previous relocatable link have a CTF
 	 archive containing possibly many CTF files.  */
 
-      if ((file->the_ctf = ctf_bfdopen (file->the_bfd, &err)) == NULL)
+      if ((file->the_ctf = ctf_bfdopen (file->the_bfd, NULL, &err)) == NULL)
 	{
 	  if (err != ECTF_NOCTFDATA)
 	    {
