@@ -22,8 +22,8 @@ LIBCTF_2.0 {
 
 	ctf_dict_open;
 	ctf_dict_open_by_index;
+	ctf_open_sect;
 	ctf_bufopen;
-	ctf_simple_open;
 	ctf_create;
 	ctf_close;
 	ctf_dict_close;
@@ -33,7 +33,6 @@ LIBCTF_2.0 {
 	ctf_dict_parent_name;
 	ctf_dict_parent;
 	ctf_type_isparent;
-
 
 	ctf_dict_set_model;
 	ctf_dict_model;
@@ -180,7 +179,6 @@ LIBCTF_2.0 {
 	ctf_open;                               /* libctf only.  */
 	ctf_arc_open;                           /* libctf only.  */
 	ctf_bfdopen;                            /* libctf only.  */
-	ctf_bfdopen_ctfsect;                    /* libctf only.  */
     local:
 	*;
 };

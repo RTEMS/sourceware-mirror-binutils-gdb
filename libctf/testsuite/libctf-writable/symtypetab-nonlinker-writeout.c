@@ -36,6 +36,7 @@ try_maybe_reporting (int report)
   ctf_dict_t *fp;
   ctf_id_t func, func2, func3, base, base2, base3;
   ctf_encoding_t e = { CTF_INT_SIGNED, 0, sizeof (long) };
+  ctf_sect_t sect = {0};
   ctf_id_t dummy = 0;
   ctf_next_t *i = NULL;
   ctf_id_t symtype;
@@ -167,8 +168,14 @@ try_maybe_reporting (int report)
   ctf_file_close (fp);
 
   /* Read back in.  */
-  if ((fp = ctf_simple_open ((const char *) buf, bufsiz, NULL, 0, 0, NULL,
-			     0, NULL, &err)) == NULL)
+
+  sect.cts_section = CTF_ELF_SECT;
+  sect.cts_name = ".ctf";
+  sect.cts_entsize = 1;
+  sect.cts_size = bufsize;
+  sect.cts_data = (char *) buf;
+
+  if ((fp = ctf_bufopen (ctf_open_sect (NULL, &sect), NULL, &err)) == NULL)
     goto open_err;
 
   /* Verify symbol order against the order we expect if this dict is sorted and

@@ -9,6 +9,7 @@
 int bitfieldery (int count, int up, int pos)
 {
   unsigned char *ctf_written;
+  ctf_sect_t sect = {0};
   size_t size;
   ctf_dict_t *dict;
   const char *err = "opening";
@@ -72,8 +73,15 @@ int bitfieldery (int count, int up, int pos)
   ctf_dict_close (dict);
 
   err = "opening";
-  if ((dict = ctf_simple_open ((char *) ctf_written, size, NULL, 0,
-			       0, NULL, 0, NULL, &open_err)) == NULL)
+
+  sect.cts_section = CTF_ELF_SECT;
+  sect.cts_name = ".ctf";
+  sect.cts_entsize = 1;
+  sect.cts_size = size;
+  sect.cts_data = (char *) ctf_written;
+
+  if ((dict = ctf_bufopen (ctf_open_sect (NULL, &sect), NULL,
+			   &open_err)) == NULL)
     goto open_err;
 
   err = "looking up";

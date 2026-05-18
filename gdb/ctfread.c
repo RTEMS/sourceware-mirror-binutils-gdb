@@ -1468,7 +1468,7 @@ elfctf_build_psymtabs (struct objfile *of)
   const char *name;
   ctf_error_t err;
 
-  ctf_archive_t *arc = ctf_bfdopen (abfd, &err);
+  ctf_archive_t *arc = ctf_bfdopen (abfd, NULL, &err);
   if (arc == nullptr)
     error (_("ctf_bfdopen failed on %s - %s"),
 	   bfd_get_filename (abfd), ctf_errmsg (err));

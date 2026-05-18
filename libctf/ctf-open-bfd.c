@@ -44,62 +44,41 @@ ctf_bfdclose (struct ctf_archive_internal *arci)
 	       bfd_errmsg (bfd_get_error ()));
 }
 
-/* Open a CTF file given the specified BFD.  */
+/* Open a CTF file given the specified BFD, and other sections which may
+   override it (the CTF section may contain a CTF archive or a file).  */
 
 ctf_archive_t *
-ctf_bfdopen (struct bfd *abfd, ctf_error_t *errp)
-{
-  ctf_archive_t *arc;
-  asection *ctf_asect;
-  bfd_byte *contents;
-  ctf_sect_t ctfsect;
-
-  libctf_init_debug();
-
-  if (((ctf_asect = bfd_get_section_by_name (abfd, _CTF_SECTION)) == NULL)
-      && ((ctf_asect = bfd_get_section_by_name (abfd, ".BTF")) == NULL))
-    {
-      return (ctf_set_open_errno (errp, ECTF_NOCTFDATA));
-    }
-
-  if (!bfd_malloc_and_get_section (abfd, ctf_asect, &contents))
-    {
-      ctf_err (err_locus (NULL), 0, _("cannot malloc CTF section: %s"),
-	       bfd_errmsg (bfd_get_error ()));
-      return (ctf_set_open_errno (errp, ECTF_FMT));
-    }
-
-  ctfsect.cts_name = bfd_section_name(ctf_asect);
-  ctfsect.cts_entsize = 1;
-  ctfsect.cts_size = bfd_section_size (ctf_asect);
-  ctfsect.cts_data = contents;
-
-  if ((arc = ctf_bfdopen_ctfsect (abfd, &ctfsect, errp)) != NULL)
-    {
-      /* This frees the cts_data later.  */
-      arc->ctfi_data = (void *) ctfsect.cts_data;
-      return arc;
-    }
-
-  free (contents);
-  return NULL;				/* errno is set for us.  */
-}
-
-/* Open a CTF file given the specified BFD and CTF section (which may contain a
-   CTF archive or a file).  */
-
-ctf_archive_t *
-ctf_bfdopen_ctfsect (struct bfd *abfd _libctf_unused_,
-		     const ctf_sect_t *ctfsect, ctf_error_t *errp)
+ctf_bfdopen (struct bfd *abfd _libctf_unused_, ctf_open_sect_t *sects, ctf_error_t *errp)
 {
   ctf_archive_t *arci;
+  ctf_sect_t *sect = (ctf_sect_t *) sects;
+  ctf_sect_t ctfsect = {0};
+  ctf_sect_t *ctfsectp = NULL;
   ctf_sect_t *symsectp = NULL;
   ctf_sect_t *strsectp = NULL;
   const char *bfderrstr = NULL;
+  char *ctf_alloc = NULL;
   char *strtab_alloc = NULL;
   int symsect_endianness = -1;
+  int free_ctfsect = 0;
 
   libctf_init_debug();
+
+  /* Extract user-passed sects.  */
+
+  do
+    {
+      switch (sect->cts_section)
+	{
+	case CTF_ELF_SECT: ctfsectp = sect; break;
+	case CTF_ELF_SYMSECT: symsectp = sect; break;
+	case CTF_ELF_STRSECT: strsectp = sect; break;
+	default:
+	  /* Unknown sections are fine, and ignored.  */
+	  ;
+	}
+      sect = ctf_list_next (sect);
+    } while (sect);
 
 #ifdef HAVE_BFD_ELF
   ctf_sect_t symsect, strsect;
@@ -113,10 +92,29 @@ ctf_bfdopen_ctfsect (struct bfd *abfd _libctf_unused_,
   size_t strsize;
   const ctf_preamble_t *preamble;
 
-  if (ctfsect->cts_data == NULL)
+  if (!ctfsectp)
     {
-      bfderrstr = N_("CTF section is NULL");
-      goto err;
+      asection *ctf_asect;
+      bfd_byte *contents;
+      
+      if (((ctf_asect = bfd_get_section_by_name (abfd, _CTF_SECTION)) == NULL)
+	  && ((ctf_asect = bfd_get_section_by_name (abfd, ".BTF")) == NULL))
+	return (ctf_set_open_errno (errp, ECTF_NOCTFDATA));
+
+      if (!bfd_malloc_and_get_section (abfd, ctf_asect, &contents))
+	{
+	  bfderrstr = N_("cannot malloc CTF section");
+	  goto err;
+	}
+
+      ctf_alloc = (char *) contents;
+      ctfsect.cts_section = CTF_ELF_SECT;
+      ctfsect.cts_name = bfd_section_name (ctf_asect);
+      ctfsect.cts_entsize = 1;
+      ctfsect.cts_size = bfd_section_size (ctf_asect);
+      ctfsect.cts_data = contents;
+      ctfsectp = &ctfsect;
+      free_ctfsect = 1;
     }
 
   /* v3 dicts may cite the symtab or the dynsymtab, without using sh_link to
@@ -124,11 +122,11 @@ ctf_bfdopen_ctfsect (struct bfd *abfd _libctf_unused_,
      now).  */
 
   errno = 0;
-  preamble = ctf_arc_bufpreamble_v1 (ctfsect);
+  preamble = ctf_arc_bufpreamble_v1 (ctfsectp);
   if (!preamble && errno == EOVERFLOW)
     {
       bfderrstr = N_("section too short to be CTF or BTF");
-      goto err;
+      goto err_free_ctf;
     }
 
   if (!preamble || (preamble && preamble->ctp_flags & CTF_F_DYNSTR))
@@ -153,7 +151,7 @@ ctf_bfdopen_ctfsect (struct bfd *abfd _libctf_unused_,
       if ((symtab = malloc (symhdr->sh_size)) == NULL)
 	{
 	  bfderrstr = N_("cannot malloc symbol table");
-	  goto err;
+	  goto err_free_ctf;
 	}
 
       isymbuf = bfd_elf_get_elf_syms (abfd, symhdr, symcount, 0,
@@ -205,6 +203,7 @@ ctf_bfdopen_ctfsect (struct bfd *abfd _libctf_unused_,
 	 thrashing around digging the name out of the shstrtab given that we don't
 	 use it for anything but debugging.  */
 
+      strsect.cts_section = CTF_ELF_STRSECT;
       strsect.cts_data = strtab;
       strsect.cts_name = strtab_name;
       strsect.cts_size = strsize;
@@ -214,6 +213,7 @@ ctf_bfdopen_ctfsect (struct bfd *abfd _libctf_unused_,
   if (symtab)
     {
       assert (symhdr->sh_entsize == get_elf_backend_data (abfd)->s->sizeof_sym);
+      symsect.cts_section = CTF_ELF_SYMSECT;
       symsect.cts_name = symtab_name;
       symsect.cts_entsize = symhdr->sh_entsize;
       symsect.cts_size = symhdr->sh_size;
@@ -224,7 +224,8 @@ ctf_bfdopen_ctfsect (struct bfd *abfd _libctf_unused_,
   symsect_endianness = bfd_little_endian (abfd);
 #endif
 
-  arci = ctf_arc_bufopen (ctfsect, symsectp, strsectp, errp);
+  arci = ctf_arc_bufopen (ctf_open_sect (ctf_open_sect (ctf_open_sect (NULL,
+			  ctfsectp), symsectp), strsectp), errp);
   if (arci)
     {
       /* Request freeing of the symsect and possibly the strsect.  */
@@ -236,10 +237,16 @@ ctf_bfdopen_ctfsect (struct bfd *abfd _libctf_unused_,
       if (symsect_endianness > -1)
 	ctf_arc_symsect_endianness (arci, symsect_endianness);
 
+      /* This frees the cts_data later.  */
+      if (free_ctfsect)
+	arci->ctfi_data = (void *) ctfsect.cts_data;
+
       /* XXX get the data model right.  */
       return arci;
     }
 #ifdef HAVE_BFD_ELF
+ err_free_ctf:
+  free (ctf_alloc);
  err_free_sym:
   free (symtab);
   free (strtab_alloc);
@@ -328,7 +335,7 @@ ctf_fdopen (int fd, const char *filename, const char *target, ctf_error_t *errp)
       return (ctf_set_open_errno (errp, err));
     }
 
-  if ((arci = ctf_bfdopen (abfd, errp)) == NULL)
+  if ((arci = ctf_bfdopen (abfd, NULL, errp)) == NULL)
     {
       if (!bfd_close_all_done (abfd))
 	ctf_err (err_locus (NULL), 0, _("cannot close BFD: %s"),
