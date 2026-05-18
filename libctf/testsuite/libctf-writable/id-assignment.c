@@ -1,10 +1,25 @@
 /* Test parent / child ID assignment.  */
 
-#include <ctf-test-api.h>
+#include <ctf-api.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* Make a ctfsect suitable for ctf_bfdopen().  */
+static ctf_sect_t
+make_ctfsect (const char *name, bfd_byte *data, bfd_size_type size)
+{
+  ctf_sect_t ctfsect = {0};
+
+  ctfsect.cts_section = CTF_ELF_SECT;
+  ctfsect.cts_name = name;
+  ctfsect.cts_entsize = 1;
+  ctfsect.cts_size = size;
+  ctfsect.cts_data = data;
+
+  return ctfsect;
+}
 
 int
 test (int empty_parent, int unserialized_parent)
@@ -47,7 +62,8 @@ test (int empty_parent, int unserialized_parent)
 
       ctf_dict_close (parent);
 
-      if ((parent = ctf_simple_open ((char *) pbuf, psize, NULL, 0, 0, NULL, 0, NULL, &err)) == NULL)
+      if ((parent = ctf_bufopen (ctf_open_sect (NULL, make_ctfsect (".ctf", (char *) pbuf, psize)),
+				 NULL, &err)) == NULL)
 	goto parent_open_err;
 
       if (!empty_parent)
@@ -201,12 +217,12 @@ test (int empty_parent, int unserialized_parent)
   free (pbuf);
   free (cbuf);
 
-  if ((parent = ctf_simple_open ((char *) pbuf2, psize, NULL, 0, 0, NULL, 0,
-				 NULL, &err)) == NULL)
+  if ((parent = ctf_bufopen (ctf_open_sect (NULL, make_ctfsect ((char *) pbuf2, psize)),
+			     NULL, &err)) == NULL)
     goto parent_open_err;
 
-  if ((child = ctf_simple_open ((char *) cbuf2, csize, NULL, 0, 0, NULL,
-				0, parent, &err)) == NULL)
+  if ((child = ctf_bufopen (ctf_open_sect (NULL, make_ctfsect ((char *) cbuf2, csize)),
+			    parent, &err)) == NULL)
     goto child_open_err;
 
   if (!empty_parent)

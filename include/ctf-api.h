@@ -78,21 +78,51 @@ typedef int ctf_error_t;
 
 struct bfd;
 
+/* Symbolic names for CTF sections.  */
+
+typedef enum ctf_sect_names
+  {
+   CTF_SECT_HEADER,
+   CTF_SECT_OBJT,
+   CTF_SECT_OBJTIDX = CTF_SECT_OBJT,
+   CTF_SECT_FUNC,
+   CTF_SECT_FUNCIDX = CTF_SECT_FUNC,
+   CTF_SECT_VAR,
+   CTF_SECT_TYPE,
+   CTF_SECT_STR
+  } ctf_sect_names_t;
+
+/* Symbolic names for ELF sections associated with CTF.  */
+typedef enum ctf_elfsect_names
+  {
+    CTF_ELF_SECT,				/* The .ctf section.  */
+    CTF_ELF_SYMSECT,				/* The associated symtab.  */
+    CTF_ELF_STRSECT,				/* The ELF string table.  */
+  } ctf_elfsect_names_t;
+
 /* If the debugger needs to provide the CTF library with a set of raw buffers
    for use as the CTF data, symbol table, and string table, it can do so by
-   filling in ctf_sect_t structures and passing them to ctf_bufopen.
+   filling in ctf_sect_t structures and passing them to ctf_bufopen et al via
+   the ctf_open_sect_t function.
 
-   The contents of this structure must always be in native endianness.  At read
-   time, the symbol table endianness is derived from the BFD target (if BFD is
-   in use): if a BFD target is not in use, please call ctf_symsect_endianness or
-   ctf_arc_symsect_endianness.  */
+   At read time, the symbol table endianness is derived from the BFD target (if
+   BFD is in use): if a BFD target is not in use, please call
+   ctf_symsect_endianness or ctf_arc_symsect_endianness.  */
 
 typedef struct ctf_sect
 {
+  /* Used by ctf_open_sect et al.  Must be zero-initialized.  */
+  struct
+  {
+    void *reserved1;
+    void *reserved2;
+  } reserved;
+
+  ctf_elfsect_names_t cts_section; /* ELF section this corresponds to.  */
   const char *cts_name;		  /* Section name (if any).  */
   const void *cts_data;		  /* Pointer to section data.  */
   size_t cts_size;		  /* Size of data in bytes.  */
-  size_t cts_entsize;		  /* Size of each section entry (symtab only).  */
+  size_t cts_entsize;		  /* Size of each section entry (symtab only). */
 } ctf_sect_t;
 
 /* A minimal symbol extracted from a linker's internal symbol table
@@ -160,28 +190,6 @@ enum ctf_link_flags
   };
 typedef int ctf_link_flags_t;
 #endif
-
-/* Symbolic names for CTF sections.  */
-
-typedef enum ctf_sect_names
-  {
-   CTF_SECT_HEADER,
-   CTF_SECT_OBJT,
-   CTF_SECT_OBJTIDX = CTF_SECT_OBJT,
-   CTF_SECT_FUNC,
-   CTF_SECT_FUNCIDX = CTF_SECT_FUNC,
-   CTF_SECT_VAR,
-   CTF_SECT_TYPE,
-   CTF_SECT_STR
-  } ctf_sect_names_t;
-
-/* Symbolic names for ELF sections associated with CTF.  */
-typedef enum ctf_elfsect_names
-  {
-    CTF_ELF_SECT,				/* The .ctf section.  */
-    CTF_ELF_SYMSECT,				/* The associated symtab.  */
-    CTF_ELF_STRSECT,				/* The ELF string table.  */
-  } ctf_elfsect_names_t;
 
 /* Encoding information for integers, floating-point values, and certain other
    intrinsics can be obtained by calling ctf_type_encoding, below.  The flags
@@ -288,7 +296,7 @@ typedef int ctf_func_type_flags_t;
   _CTF_ITEM (ECTF_SYMBAD, "symbol table data buffer is not valid") \
   _CTF_ITEM (ECTF_STRBAD, "string table data buffer is not valid") \
   _CTF_ITEM (ECTF_CORRUPT, "file data structure corruption detected") \
-  _CTF_ITEM (ECTF_NOCTFDATA, "file does not contain CTF data") \
+  _CTF_ITEM (ECTF_NOCTFDATA, "no .ctf or .BTF section") \
   _CTF_ITEM (ECTF_NOCTFBUF, "buffer does not contain CTF data") \
   _CTF_ITEM (ECTF_NOSYMTAB, "symbol table information is not available") \
   _CTF_ITEM (ECTF_NOPARENT, "the parent CTF dictionary is needed but unavailable") \
@@ -445,12 +453,37 @@ extern ctf_next_t *ctf_next_copy (ctf_next_t *);
 
    All these functions except for ctf_close use BFD and can open anything BFD
    can open, hunting down the .ctf section for you, so are not available in the
-   libctf-nobfd flavour of the library.  If you want to provide the CTF section
-   yourself, you can do that with ctf_bfdopen_ctfsect.  */
+   libctf-nobfd flavour of the library.  If you want to provide some sections
+   yourself, you can do that using the optional ctf_open_sect_t argument to
+   ctf_bfdopen.
 
-extern ctf_archive_t *ctf_bfdopen (struct bfd *, ctf_error_t *);
-extern ctf_archive_t *ctf_bfdopen_ctfsect (struct bfd *, const ctf_sect_t *,
-					   ctf_error_t *);
+   Some of these functions take a list of sections, constructed by the
+   ctf_open_sect function, which chains together ctf_open_sect_t structs (pass
+   the return value of each into the next call).  These other sections are
+   optional and usually consist of symtab, strtab, and symtypetab sections.  If
+   you don't pass the right sections in (usually symtypetab and associated
+   string and symbol tables linked via sh_link), opening will succeed but things
+   like symbol->type lookup will not be available, and the ctf_*_lookup_symbol
+   functions will fail with ECTF_NOSYMTAB.  The structures returned by
+   ctf_open_sect are consumed by the open functions and should not be used
+   again.  The ctf_sect_t's passed in, and the buffers they wrap, are still
+   owned by the caller; the ctf_sect_t's can be freed, but the buffers are in
+   use: do not free them until the archive, and all dicts derived from it, are
+   closed.
+
+   We do not define what happens if you pass in multiple sections of the same
+   type in ctf_open_sect (this is to enable us to define useful behaviour in the
+   future if need be).
+
+   ctf_open_sect cannot fail and can be called in a nested fashion in the
+   argument list of functions taking a ctf_open_sect_t to pass in multiple
+   sections easily.   */
+
+typedef struct ctf_open_sect ctf_open_sect_t;
+extern ctf_open_sect_t *ctf_open_sect (ctf_open_sect_t *, ctf_sect_t *);
+
+extern ctf_archive_t *ctf_bfdopen (struct bfd *, ctf_open_sect_t *,
+				   ctf_error_t *);
 extern ctf_archive_t *ctf_fdopen (int fd, const char *filename,
 				  const char *target, ctf_error_t *);
 extern ctf_archive_t *ctf_open (const char *filename,
@@ -483,24 +516,11 @@ extern void ctf_arc_symsect_endianness (ctf_archive_t *, int little_endian);
    Almost all functions that open archives will also open raw CTF dicts, which
    are treated as if they were archives with only one member.
 
-   Some of these functions take optional raw symtab and strtab section content
-   in the form of ctf_sect_t structures.  For CTF in ELF files, the more
-   convenient opening functions above extract these .dynsym and its associated
-   string table (usually .dynsym) whenever the CTF_F_DYNSTR flag is set in the
-   CTF preamble (which it almost always will be for linked objects, but not for
-   .o files).  If you use ctf_arc_bufopen and do not specify symbol/string
-   tables, the ctf_*_lookup_symbol functions will fail with ECTF_NOSYMTAB.
-   Do not free the buffers passed to ctf_arc_bufopen until the archive, and
-   all dicts derived from it, are closed.
-
    Like many other convenient opening functions, ctf_arc_open needs BFD and is
    not available in libctf-nobfd.  */
 
 extern ctf_archive_t *ctf_arc_open (const char *, ctf_error_t *);
-extern ctf_archive_t *ctf_arc_bufopen (const ctf_sect_t *ctfsect,
-				       const ctf_sect_t *symsect,
-				       const ctf_sect_t *strsect,
-				       ctf_error_t *);
+extern ctf_archive_t *ctf_arc_bufopen (ctf_open_sect_t *, ctf_error_t *);
 extern void ctf_arc_close (ctf_archive_t *);
 
 /* Get boolean properties of an archive.  Only one property is defined so far: a
@@ -588,7 +608,7 @@ extern void ctf_arc_flush_caches (ctf_archive_t *);
 
 /* The next functions return or close real CTF files, not archives or ELF files
    containing CTF content.  They can be passed symbol and string table sections
-   if need be.
+   if need be.  (A sect of type CTF_ELF_SECT is obviously mandatory.)
 
    Unlike ctf_dict_open et al above, these low-level functions expose the
    parent/child relationship between CTF dicts (ctf_dict_open* opens parents as
@@ -610,9 +630,7 @@ extern void ctf_arc_flush_caches (ctf_archive_t *);
    something other than input object files, see ctf_link_add_cu_mapping and
    CTF_LINK_SHARE_*.  */
 
-extern ctf_dict_t *ctf_bufopen (const ctf_sect_t *ctfsect,
-				const ctf_sect_t *symsect,
-				const ctf_sect_t *strsect, ctf_dict_t *parent,
+extern ctf_dict_t *ctf_bufopen (ctf_open_sect_t *sects, ctf_dict_t *parent,
 				ctf_error_t *);
 extern void ctf_dict_close (ctf_dict_t *);
 

@@ -618,14 +618,16 @@ ctf_arc_find_magic (unsigned char *buf, size_t len, int *strtab)
    contain a ctf_archive) or a single ctf_dict: endian-swap the archive
    header as necessary, and check all its offsets for validity.
    Close/optionally unmap BUF and/or FP on error.  Arrange to free or unmap
-   the SYMSECT or STRSECT, as needed, on close.  */
+   any passed-in symbol or string sections on close.  The CTF section in the
+   passed-in SECTS is ignored: it's assumed to already be passed in as BUF.  */
 
 struct ctf_archive_internal *
 ctf_new_archive_internal (unsigned char *buf, ctf_dict_t *fp, int v1,
 			  enum arc_on_close_operation on_close,
-			  size_t len, const ctf_sect_t *symsect,
-			  const ctf_sect_t *strsect, ctf_error_t *errp)
+			  size_t len, ctf_open_sect_t *sects,
+			  ctf_error_t *errp)
 {
+  ctf_sect_t *strsect = NULL, *symsect = NULL;
   struct ctf_archive_internal *arci = NULL;
   size_t ufsize;
   ctf_error_t err = 0;
@@ -772,7 +774,7 @@ ctf_new_archive_internal (unsigned char *buf, ctf_dict_t *fp, int v1,
       while ((magic = ctf_arc_find_magic (p, MIN (65, len - (p - buf)), &strtab)) != NULL)
 	{
 	  ssize_t dict_len;
-	  ctf_sect_t tmp;
+	  ctf_sect_t tmp = {0};
 
 	  if (strtab)
 	    break;
@@ -780,10 +782,9 @@ ctf_new_archive_internal (unsigned char *buf, ctf_dict_t *fp, int v1,
 	  p = magic;
 	  arci->ctfi_members[i] = (p - buf);
 
-	  memset (&tmp, 0, sizeof (ctf_sect_t));
 	  tmp.cts_size = len - (p - buf);	/* (upper bound)  */
 	  tmp.cts_data = p;
-	  if ((dict_len = ctf_buflen (&tmp, &err)) < 0)
+	  if ((dict_len = ctf_buflen (ctf_open_sect (NULL, &tmp), &err)) < 0)
 	    {
 	      ctf_set_open_errno (errp, err);
 	      ctf_err (err_locus (NULL), err,
@@ -879,10 +880,28 @@ ctf_new_archive_internal (unsigned char *buf, ctf_dict_t *fp, int v1,
       goto err_set;
     }
 
+  if (sects)
+    {
+      ctf_sect_t *sect = (ctf_sect_t *) sects;
+
+      do
+	{
+	  switch (sect->cts_section)
+	    {
+	    case CTF_ELF_SYMSECT: symsect = sect; break;
+	    case CTF_ELF_STRSECT: strsect = sect; break;
+	    default:
+	      ;
+	    }
+	  sect = ctf_list_next (sect);
+	} while (sect);
+    }
+
   if (symsect)
-     memcpy (&arci->ctfi_symsect, symsect, sizeof (struct ctf_sect));
+    memcpy (&arci->ctfi_symsect, symsect, sizeof (struct ctf_sect));
   if (strsect)
-     memcpy (&arci->ctfi_strsect, strsect, sizeof (struct ctf_sect));
+    memcpy (&arci->ctfi_strsect, strsect, sizeof (struct ctf_sect));
+
   arci->ctfi_free_symsect = 0;
   arci->ctfi_free_strsect = 0;
   arci->ctfi_symsect_little_endian = -1;
@@ -915,12 +934,11 @@ ctf_new_archive_internal (unsigned char *buf, ctf_dict_t *fp, int v1,
    is.  */
 
 struct ctf_archive_internal *
-ctf_new_archive_wrapper (ctf_dict_t *fp, const ctf_sect_t *symsect,
-			 const ctf_sect_t *strsect, ctf_error_t *errp)
+ctf_new_archive_wrapper (ctf_dict_t *fp, ctf_open_sect_t *sects, ctf_error_t *errp)
 {
   struct ctf_archive_internal *arci;
   if ((arci = ctf_new_archive_internal (NULL, fp, 0, FREE_ARCHIVE_ON_DICT_CLOSE,
-					0, symsect, strsect, errp)) != NULL)
+					0, sects, errp)) != NULL)
     arci->ctfi_symsect_little_endian = fp->ctf_symsect_little_endian;
   return arci;
 }
@@ -944,7 +962,7 @@ ctf_sect_t
 ctf_arc_elf_sect (const struct ctf_archive_internal *arci,
 		  ctf_elfsect_names_t sect)
 {
-  ctf_sect_t error = { "ERROR", NULL, 0, 0 };
+  ctf_sect_t error = { {0}, 0, "ERROR", NULL, 0, 0 };
 
   if (arci->ctfi_dict)
     return ctf_elf_sect (arci->ctfi_dict, sect);
@@ -1000,10 +1018,25 @@ ctf_arc_bufpreamble_v1 (const ctf_sect_t *ctfsect)
    preserve until ctf_arc_close() time).  Returns the archive, or NULL and an
    error in *err (if not NULL).  */
 ctf_archive_t *
-ctf_arc_bufopen (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
-		 const ctf_sect_t *strsect, ctf_error_t *errp)
+ctf_arc_bufopen (ctf_open_sect_t *sects, ctf_error_t *errp)
 {
+  ctf_sect_t *sect = (ctf_sect_t *) sects;
+  ctf_sect_t *ctfsect = NULL;
+
   int v1 = 0;
+
+  if (sect == NULL)
+    return (ctf_set_open_errno (errp, ECTF_NOCTFDATA));
+
+  do
+    {
+      if (sect->cts_section == CTF_ELF_SECT)
+	ctfsect = sect;
+      sect = ctf_list_next (sect);
+    } while (sect);
+
+  if (ctfsect == NULL)
+    return (ctf_set_open_errno (errp, ECTF_NOCTFDATA));
 
   if (ctfsect->cts_data != NULL
       && ctfsect->cts_size > sizeof (uint64_t)
@@ -1012,7 +1045,7 @@ ctf_arc_bufopen (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
 
   return ctf_new_archive_internal ((unsigned char *) ctfsect->cts_data, NULL,
 				   v1, FREE_ARCHIVE_ONLY_DICT, ctfsect->cts_size,
-				   symsect, strsect, errp);
+				   sects, errp);
 }
 
 /* Open a CTF archive from a given fd.  Returns the archive (wrapper), or
@@ -1064,7 +1097,7 @@ ctf_arc_open_internal (int fd, const char *filename, ctf_error_t *errp)
       v1 = 1;
 
   ret = ctf_new_archive_internal (content, NULL, v1, close_op, s.st_size,
-				  NULL, NULL, errp);
+				  NULL, errp);
 
   /* ctf_new_archive_internal cleans up on error, so shouldn't do so.  */
   return ret;
@@ -1210,28 +1243,21 @@ ctf_arc_set_parent (struct ctf_archive_internal *arci, ctf_dict_t *parent)
    if non-NULL.  */
 static ctf_dict_t *
 ctf_dict_open_by_offset (struct ctf_archive_internal *arci,
-			 const ctf_sect_t *symsect,
-			 const ctf_sect_t *strsect, size_t offset,
-			 size_t len, ctf_dict_t *parent,
-			 int little_endian_symtab, ctf_error_t *errp)
+			 ctf_open_sect_t *sects, size_t offset, size_t len,
+			 ctf_dict_t *parent, int little_endian_symtab,
+			 ctf_error_t *errp)
 {
-  ctf_sect_t ctfsect;
+  ctf_sect_t ctfsect = {0};
   ctf_dict_t *fp;
 
   ctf_dprintf ("ctf_dict_open_by_offset(%zi): opening\n", offset);
-
-  if (symsect->cts_name == NULL)
-    symsect = NULL;
-  if (strsect->cts_name == NULL)
-    strsect = NULL;
-
-  memset (&ctfsect, 0, sizeof (ctf_sect_t));
 
   /* Offsets in v1 are relative to the ctfs header offset.  In v2 they are
      simply file offsets.  */
   if (arci->ctfi_v1_hdr)
     offset += arci->ctfi_v1_hdr->ctfs;
 
+  ctfsect.cts_section = CTF_ELF_SECT;
   ctfsect.cts_name = _CTF_SECTION;
   ctfsect.cts_entsize = 1;
   ctfsect.cts_data = (void *) (&arci->ctfi_archive[offset]);
@@ -1241,7 +1267,7 @@ ctf_dict_open_by_offset (struct ctf_archive_internal *arci,
   if (arci->ctfi_v1_hdr)
     ctfsect.cts_data = (void *) (&arci->ctfi_archive[offset] + sizeof (uint64_t));
 
-  fp = ctf_bufopen_len (&ctfsect, symsect, strsect, NULL, parent, arci,
+  fp = ctf_bufopen_len (ctf_open_sect (sects, &ctfsect), NULL, parent, arci,
 			0, errp);
   if (!fp)
     return NULL;				/* errno is set for us.  */
@@ -1285,6 +1311,8 @@ ctf_dict_open_by_index (struct ctf_archive_internal *arci, size_t index,
     {
       ctf_dict_t *fp;
       ctf_dict_t *parent = arci->ctfi_parent;
+      ctf_sect_t symsect, strsect;
+      ctf_sect_t *symsectp = NULL, *strsectp = NULL;
       size_t len;
 
       if (index >= arci->ctfi_nmemb)
@@ -1312,8 +1340,21 @@ ctf_dict_open_by_index (struct ctf_archive_internal *arci, size_t index,
 	}
 
       len = ctf_arc_get_dict_len (arci, index);
-      fp = ctf_dict_open_by_offset (arci, &arci->ctfi_symsect,
-				    &arci->ctfi_strsect,
+
+      /* Take a copy of the ctf_sect_t's out of the way to keep the list chaining
+	 done by ctf_open_sect from persisting or crossing threads unpleasantly.  */
+      if (arci->ctfi_symsect.cts_name != NULL)
+	{
+	  memcpy (&symsect, &arci->ctfi_symsect, sizeof (struct ctf_sect));
+	  symsectp = &symsect;
+	}
+      if (arci->ctfi_strsect.cts_name != NULL)
+	{
+	  memcpy (&strsect, &arci->ctfi_strsect, sizeof (struct ctf_sect));
+	  strsectp = &strsect;
+	}
+
+      fp = ctf_dict_open_by_offset (arci, ctf_open_sect (ctf_open_sect (NULL, symsectp), strsectp),
 				    arci->ctfi_members[index], len, parent,
 				    arci->ctfi_symsect_little_endian, errp);
       if (fp)

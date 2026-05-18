@@ -1720,50 +1720,33 @@ void ctf_set_ctl_hashes (ctf_dict_t *fp)
   fp->ctf_lookups[5].ctl_hash = NULL;
 }
 
-/* Open a CTF file, mocking up a suitable ctf_sect.  */
+/* Chain ctf_sect_t's together.  No memory allocation is needed, so this
+   function cannot fail and can be called in a nested fashion safely.  */
 
-ctf_dict_t *ctf_simple_open (const char *ctfsect, size_t ctfsect_size,
-			     const char *symsect, size_t symsect_size,
-			     size_t symsect_entsize,
-			     const char *strsect, size_t strsect_size,
-			     ctf_dict_t *parent, ctf_error_t *errp)
+ctf_open_sect_t *ctf_open_sect (ctf_open_sect_t *open_sect, ctf_sect_t *sect)
 {
-  ctf_sect_t skeleton;
+  /* A ctf_open_sect_t *is* a ctf_sect_t: they are layout-equivalent, but also
+     they both start with a ctf_list_t.  */
 
-  ctf_sect_t ctf_sect, sym_sect, str_sect;
-  ctf_sect_t *ctfsectp = NULL;
-  ctf_sect_t *symsectp = NULL;
-  ctf_sect_t *strsectp = NULL;
+  ctf_list_t *existing = (ctf_list_t *) open_sect;
 
-  skeleton.cts_name = _CTF_SECTION;
-  skeleton.cts_entsize = 1;
+  /* Allow the caller to pass in a NULL sect: return the passed-in sect and do
+     nothing to it.  (Simplifies call chains in which some members are
+     optional, e.g. ctf_bfdopen).  */
 
-  if (ctfsect)
+  if (!sect)
+    return (ctf_open_sect_t *) open_sect;
+
+  /* Allow reuse of the same section in multiple calls.  */
+  memset ((ctf_list_t *) sect, 0, sizeof (ctf_list_t));
+
+  if (open_sect)
     {
-      memcpy (&ctf_sect, &skeleton, sizeof (struct ctf_sect));
-      ctf_sect.cts_data = ctfsect;
-      ctf_sect.cts_size = ctfsect_size;
-      ctfsectp = &ctf_sect;
+      ctf_list_append (existing, sect);
+      return (ctf_open_sect_t *) existing;
     }
-
-  if (symsect)
-    {
-      memcpy (&sym_sect, &skeleton, sizeof (struct ctf_sect));
-      sym_sect.cts_data = symsect;
-      sym_sect.cts_size = symsect_size;
-      sym_sect.cts_entsize = symsect_entsize;
-      symsectp = &sym_sect;
-    }
-
-  if (strsect)
-    {
-      memcpy (&str_sect, &skeleton, sizeof (struct ctf_sect));
-      str_sect.cts_data = strsect;
-      str_sect.cts_size = strsect_size;
-      strsectp = &str_sect;
-    }
-
-  return ctf_bufopen (ctfsectp, symsectp, strsectp, parent, errp);
+  else
+    return (ctf_open_sect_t *) sect;
 }
 
 /* Decode the specified CTF or BTF buffer and optional symbol table, and create
@@ -1772,12 +1755,9 @@ ctf_dict_t *ctf_simple_open (const char *ctfsect, size_t ctfsect_size,
    ctf_open(), below.  */
 
 ctf_dict_t *
-ctf_bufopen (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
-	     const ctf_sect_t *strsect, ctf_dict_t *parent,
-	     ctf_error_t *errp)
+ctf_bufopen (ctf_open_sect_t *sects, ctf_dict_t *parent, ctf_error_t *errp)
 {
-  return ctf_bufopen_len (ctfsect, symsect, strsect, NULL, parent, NULL,
-			  0, errp);
+  return ctf_bufopen_len (sects, NULL, parent, NULL, 0, errp);
 }
 
 /* Get the length of a CTF buffer, without returning it.  The length includes
@@ -1785,11 +1765,11 @@ ctf_bufopen (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
    though will not be larger than the section size.  */
 
 ssize_t
-ctf_buflen (const ctf_sect_t *ctfsect, ctf_error_t *errp)
+ctf_buflen (ctf_open_sect_t *sects, ctf_error_t *errp)
 {
   ssize_t len;
 
-  ctf_bufopen_len (ctfsect, NULL, NULL, &len, NULL, NULL, 0, errp);
+  ctf_bufopen_len (sects, &len, NULL, NULL, 0, errp);
   return len;
 }
 
@@ -1801,8 +1781,7 @@ ctf_buflen (const ctf_sect_t *ctfsect, ctf_error_t *errp)
    if LEN is NULL, the dict is returned in ctf_dict_t, or NULL on error.  */
 
 ctf_dict_t *
-ctf_bufopen_len (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
-		 const ctf_sect_t *strsect, ssize_t *len, ctf_dict_t *parent,
+ctf_bufopen_len (ctf_open_sect_t *sects, ssize_t *len, ctf_dict_t *parent,
 		 ctf_archive_t *ctf_archive, ctf_import_flags_t import_flags,
 		 ctf_error_t *errp)
 {
@@ -1817,6 +1796,8 @@ ctf_bufopen_len (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
   ctf_header_v3_t *header_v3 = NULL;
   ctf_dict_t *fp;
   size_t ctf_adjustment = 0;
+  ctf_sect_t *sect = (ctf_sect_t *) sects;
+  ctf_sect_t *ctfsect = NULL, *strsect = NULL, *symsect = NULL;
 
   /* These match the CTF_VERSION definitions up to IS_BTF.  */
   enum
@@ -1838,6 +1819,28 @@ ctf_bufopen_len (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
   libctf_init_debug();
 
   ctf_set_open_errno (errp, 0);
+
+  /* Figure out what sects we've got.  */
+
+  if (sect == NULL)
+    return (ctf_set_open_errno (errp, ECTF_NOCTFDATA));
+
+  do
+    {
+      switch (sect->cts_section)
+	{
+	case CTF_ELF_SECT: ctfsect = sect; break;
+	case CTF_ELF_SYMSECT: symsect = sect; break;
+	case CTF_ELF_STRSECT: strsect = sect; break;
+	default:
+	  /* Unknown sections are fine, and ignored.  */
+	  ;
+	}
+      sect = ctf_list_next (sect);
+    } while (sect);
+
+  if (ctfsect == NULL)
+    return (ctf_set_open_errno (errp, ECTF_NOCTFDATA));
 
   ctf_dprintf ("ctf_bufopen %zi+%zi+%zi bytes: validating\n",
 	       ctfsect ? ctfsect->cts_size : 0,
@@ -2451,10 +2454,10 @@ ctf_bufopen_len (const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
   memcpy (&fp->ctf_data, ctfsect, sizeof (ctf_sect_t));
 
   if (symsect != NULL)
-    {
-      memcpy (&fp->ctf_ext_symtab, symsect, sizeof (ctf_sect_t));
-      memcpy (&fp->ctf_ext_strtab, strsect, sizeof (ctf_sect_t));
-    }
+    memcpy (&fp->ctf_ext_symtab, symsect, sizeof (ctf_sect_t));
+
+  if (strsect != NULL)
+    memcpy (&fp->ctf_ext_strtab, strsect, sizeof (ctf_sect_t));
 
   if (fp->ctf_data.cts_name != NULL)
     if ((fp->ctf_data.cts_name = strdup (fp->ctf_data.cts_name)) == NULL)
@@ -2796,6 +2799,8 @@ ctf_archive_t *
 ctf_dict_arc (ctf_dict_t *fp, int flags)
 {
   struct ctf_archive_internal *arci;
+  ctf_sect_t symsect, strsect;
+  ctf_sect_t *symsectp = NULL, *strsectp = NULL;
   ctf_error_t err;
 
   if (fp->ctf_archive)
@@ -2808,8 +2813,21 @@ ctf_dict_arc (ctf_dict_t *fp, int flags)
   if (flags & CTF_DICT_ARC_ORIGINAL)
     return NULL;
 
-  if ((arci = ctf_new_archive_wrapper (fp, &fp->ctf_ext_symtab,
-				       &fp->ctf_ext_strtab, &err)) == NULL)
+  /* Take a copy of the ctf_sect_t's out of the way to keep the list chaining
+     done by ctf_open_sect from persisting or crossing threads unpleasantly.  */
+  if (fp->ctf_ext_symtab.cts_name != NULL)
+    {
+      memcpy (&symsect, &fp->ctf_ext_symtab, sizeof (struct ctf_sect));
+      symsectp = &symsect;
+    }
+  if (fp->ctf_ext_symtab.cts_name != NULL)
+    {
+      memcpy (&strsect, &fp->ctf_ext_symtab, sizeof (struct ctf_sect));
+      strsectp = &strsect;
+    }
+
+  if ((arci = ctf_new_archive_wrapper (fp, ctf_open_sect (ctf_open_sect (NULL, symsectp), strsectp),
+				       &err)) == NULL)
     {
       ctf_set_errno (fp, err);
       return NULL;
@@ -2829,7 +2847,7 @@ ctf_dict_arc (ctf_dict_t *fp, int flags)
 ctf_sect_t
 ctf_elf_sect (const ctf_dict_t *fp, ctf_elfsect_names_t sect)
 {
-  ctf_sect_t error = { "ERROR", NULL, 0, 0 };
+  ctf_sect_t error = { {0}, 0, "ERROR", NULL, 0, 0 };
 
   switch (sect)
     {
@@ -2840,6 +2858,7 @@ ctf_elf_sect (const ctf_dict_t *fp, ctf_elfsect_names_t sect)
     case CTF_ELF_STRSECT:
       return fp->ctf_ext_strtab;
     default:
+      error.cts_section = sect;
       return error;
     }
 }

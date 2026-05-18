@@ -17331,8 +17331,10 @@ dump_section_as_bytes (Elf_Internal_Shdr *section,
 
 #ifdef ENABLE_LIBCTF
 static ctf_sect_t *
-shdr_to_ctf_sect (ctf_sect_t *buf, Elf_Internal_Shdr *shdr, Filedata *filedata)
+shdr_to_ctf_sect (ctf_sect_t *buf, ctf_elfsect_names_t sect,
+		  Elf_Internal_Shdr *shdr, Filedata *filedata)
 {
+  buf->cts_section = sect;
   buf->cts_name = printable_section_name (filedata, shdr);
   buf->cts_size = shdr->sh_size;
   buf->cts_entsize = shdr->sh_entsize;
@@ -17427,7 +17429,7 @@ dump_section_as_ctf (Elf_Internal_Shdr * section, Filedata * filedata)
   void *	       data = NULL;
   void *	       symdata = NULL;
   void *	       strdata = NULL;
-  ctf_sect_t	       ctfsect, symsect, strsect;
+  ctf_sect_t	       ctfsect = {0}, symsect = {0}, strsect = {0};
   ctf_sect_t *	       symsectp = NULL;
   ctf_sect_t *	       strsectp = NULL;
   ctf_archive_t *      ctfa = NULL;
@@ -17440,7 +17442,7 @@ dump_section_as_ctf (Elf_Internal_Shdr * section, Filedata * filedata)
   ctf_error_t err;
   bool ret = false;
 
-  shdr_to_ctf_sect (&ctfsect, section, filedata);
+  shdr_to_ctf_sect (&ctfsect, CTF_ELF_SECT, section, filedata);
   data = get_section_contents (section, filedata);
   ctfsect.cts_data = data;
 
@@ -17462,7 +17464,8 @@ dump_section_as_ctf (Elf_Internal_Shdr * section, Filedata * filedata)
 					symtab_sec->sh_size,
 					_("symbols"))) == NULL)
 	goto fail;
-      symsectp = shdr_to_ctf_sect (&symsect, symtab_sec, filedata);
+      symsectp = shdr_to_ctf_sect (&symsect, CTF_ELF_SYMSECT, symtab_sec,
+				   filedata);
       symsect.cts_data = symdata;
     }
 
@@ -17479,7 +17482,8 @@ dump_section_as_ctf (Elf_Internal_Shdr * section, Filedata * filedata)
 					strtab_sec->sh_size,
 					_("strings"))) == NULL)
 	goto fail;
-      strsectp = shdr_to_ctf_sect (&strsect, strtab_sec, filedata);
+      strsectp = shdr_to_ctf_sect (&strsect, CTF_ELF_STRSECT, strtab_sec,
+				   filedata);
       strsect.cts_data = strdata;
     }
 
@@ -17487,7 +17491,8 @@ dump_section_as_ctf (Elf_Internal_Shdr * section, Filedata * filedata)
      archive: libctf papers over the difference, so we can pretend it is always
      an archive.  */
 
-  if ((ctfa = ctf_arc_bufopen (&ctfsect, symsectp, strsectp, &err)) == NULL)
+  if ((ctfa = ctf_arc_bufopen (ctf_open_sect (ctf_open_sect (ctf_open_sect (NULL,
+			       &ctfsect), symsectp), strsectp), &err)) == NULL)
     {
       dump_ctf_errs (NULL);
       error (_("CTF open failure: %s\n"), ctf_errmsg (err));
