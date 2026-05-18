@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctf-test-api.h>
+#include <ctf-api.h>
 #include <ctf.h>
 
 #ifdef HAVE_VALGRIND_VALGRIND_H
@@ -105,6 +105,7 @@ void free (void *ptr)
 int main (void)
 {
   ctf_dict_t *fp;
+  ctf_sect_t sect = {0};
   ctf_encoding_t e = { CTF_INT_SIGNED, 0, sizeof (long) };
   int err;
   ctf_id_t type;
@@ -156,8 +157,13 @@ int main (void)
   malloc_count = 0;
   free_count = 0;
 
-  if ((ctf_simple_open (written, written_size, NULL, 0, 0, NULL, 0,
-			NULL, &err)) != NULL)
+  sect.cts_section = CTF_ELF_SECT;
+  sect.cts_name = ".ctf";
+  sect.cts_entsize = 1;
+  sect.cts_size = written_size;
+  sect.cts_data = written;
+
+  if ((ctf_bufopen (ctf_open_sect (NULL, &sect), NULL, &err)) != NULL)
     {
       fprintf (stderr, "wildly corrupted dict still opened OK?!\n");
       exit (1);

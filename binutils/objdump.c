@@ -4784,13 +4784,13 @@ dump_ctf_indent_lines (ctf_sect_names_t sect ATTRIBUTE_UNUSED,
   return xasprintf ("%s%s", blanks, s);
 }
 
-/* Make a ctfsect suitable for ctf_bfdopen_ctfsect().  */
+/* Make a ctfsect suitable for ctf_bfdopen().  */
 static ctf_sect_t
-make_ctfsect (const char *name, bfd_byte *data,
-	      bfd_size_type size)
+make_ctfsect (const char *name, bfd_byte *data, bfd_size_type size)
 {
-  ctf_sect_t ctfsect;
+  ctf_sect_t ctfsect = {0};
 
+  ctfsect.cts_section = CTF_ELF_SECT;
   ctfsect.cts_name = name;
   ctfsect.cts_entsize = 1;
   ctfsect.cts_size = size;
@@ -4913,7 +4913,7 @@ dump_ctf (bfd *abfd, const char *sect_name, const char *parent_name,
      from a different section entirely.  */
 
   ctfsect = make_ctfsect (sect_name, ctfdata, bfd_section_size (sec));
-  if ((ctfa = ctf_bfdopen_ctfsect (abfd, &ctfsect, &err)) == NULL)
+  if ((ctfa = ctf_bfdopen (abfd, ctf_open_sect (NULL, &ctfsect), &err)) == NULL)
     {
       dump_ctf_errs (NULL);
       non_fatal (_("CTF open failure: %s"), ctf_errmsg (err));
@@ -4932,8 +4932,10 @@ dump_ctf (bfd *abfd, const char *sect_name, const char *parent_name,
 	  return;
 	}
 
-      ctfsect = make_ctfsect (parent_sect_name, ctfpdata, bfd_section_size (psec));
-      if ((ctfpa = ctf_bfdopen_ctfsect (abfd, &ctfsect, &err)) == NULL)
+      ctfsect = make_ctfsect (parent_sect_name, ctfpdata,
+			      bfd_section_size (psec));
+      if ((ctfpa = ctf_bfdopen (abfd, ctf_open_sect (NULL, &ctfsect),
+				&err)) == NULL)
 	{
 	  dump_ctf_errs (NULL);
 	  non_fatal (_("CTF open failure: %s"), ctf_errmsg (err));

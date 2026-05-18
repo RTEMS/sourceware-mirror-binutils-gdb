@@ -197,7 +197,7 @@ ctf_create_internal (ctf_dict_t *parent, ctf_import_flags_t import_flags,
 
   ctf_dynhash_t *structs = NULL, *unions = NULL, *enums = NULL, *names = NULL;
   ctf_dynhash_t *datasecs = NULL, *tags = NULL;
-  ctf_sect_t cts;
+  ctf_sect_t cts = {0};
   ctf_dict_t *fp;
 
   libctf_init_debug();
@@ -222,13 +222,14 @@ ctf_create_internal (ctf_dict_t *parent, ctf_import_flags_t import_flags,
       goto err;
     }
 
+  cts.cts_section = CTF_ELF_SECT;
   cts.cts_name = _CTF_SECTION;
   cts.cts_data = &hdr;
   cts.cts_size = sizeof (hdr);
   cts.cts_entsize = 1;
 
-  if ((fp = ctf_bufopen_len (&cts, NULL, NULL, NULL, parent, NULL, import_flags
-			     | CTF_IMPORT_NEW, errp)) == NULL)
+  if ((fp = ctf_bufopen_len (ctf_open_sect (NULL, &cts), NULL, parent, NULL,
+			     import_flags | CTF_IMPORT_NEW, errp)) == NULL)
     goto err;
 
   /* These hashes will have been initialized with a starting size of zero,
