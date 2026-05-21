@@ -4258,7 +4258,6 @@ lang_write_ctf (int late)
   asection *btf_sect, *ctf_sect;
   asection *output_sect;
   unsigned char *contents = NULL;
-  int really_btf;
   int err = 0;
 
   if (!ctf_output)
@@ -4298,12 +4297,10 @@ lang_write_ctf (int late)
   if (is_pure_btf < 0)
     err = 1;
 
-  /* Finally serialize, taking note of whether what we actually generated was
-     CTF in the end.  Errors are handled below, if this section is actually
+  /* Finally serialize. Errors are handled below, if this section is actually
      output.  */
   if (!err)
-    contents = ctf_link_write (ctf_output, &output_size,
-			       (size_t) -1, &really_btf);
+    contents = ctf_link_write (ctf_output, &output_size);
 
   /* Emit CTF or BTF, whichever was used and is needed.  We decide which to
      emit to based on the decision taken by section removal, above, not
@@ -4316,20 +4313,6 @@ lang_write_ctf (int late)
     output_sect = btf_sect;
   else
     output_sect = ctf_sect;
-
-  /* Complain and fail if we thought we were emitting BTF but now it's been
-     upgraded to CTF (which is not supposed to happen, though it's perfectly
-     fine to go the other way).  */
-  if (!err && is_pure_btf && !really_btf)
-    {
-      einfo (_("%P: warning: BTF section %pA unexpectedly upgraded to CTF "
-	       "after section assignment: "
-	       "output will have no BTF or CTF sections\n"),
-	     output_sect);
-      free (contents);
-      contents = NULL;
-      err = 1;
-    }
 
   if (output_sect)
     {

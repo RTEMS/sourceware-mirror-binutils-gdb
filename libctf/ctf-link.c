@@ -1898,8 +1898,7 @@ ctf_elf64_to_link_sym (ctf_dict_t *fp, ctf_link_sym_t *dst, const Elf64_Sym *src
 }
 
 /* Determine whether the archive that will be built from this linked dict is compatible
-   with pure BTF or would require CTF.  (Other things may nonetheless require CTF, in
-   particular, compression.)  */
+   with pure BTF or would require CTF.  */
 ctf_ret_t
 ctf_link_output_is_btf (ctf_dict_t *fp)
 {
@@ -1983,13 +1982,9 @@ ctf_accumulate_archives (void *key, void *value, void *arg_)
 }
 
 /* Write out a CTF archive (if there are per-CU CTF files) or a CTF file
-   (otherwise) into a new dynamically-allocated string, and return it.
-   Members with sizes above THRESHOLD are compressed.
-
-   The optional arg IS_BTF is set to 1 if the written output is valid BTF
-   (no archives, no CTF-specific types).  */
+   (otherwise) into a new dynamically-allocated string, and return it.  */
 unsigned char *
-ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
+ctf_link_write (ctf_dict_t *fp, size_t *size)
 {
   ctf_name_list_accum_cb_arg_t arg;
   char *transformed_name = NULL;
@@ -2014,9 +2009,6 @@ ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
 	  goto err;
 	}
     }
-
-  if (is_btf)
-    *is_btf = 0;
 
   /* Writing an archive.  Stick ourselves (the shared repository, parent of all
      other archives) on the front of it with the default name, unless
@@ -2078,8 +2070,7 @@ ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
       goto err_no;
     }
 
-  if ((err = ctf_arc_write_fd (fileno (f), arg.files, arg.i,
-			       threshold, flags)) != 0)
+  if ((err = ctf_arc_write_fd (fileno (f), arg.files, arg.i, flags)) != 0)
     {
       errloc = NULL;				/* errno is set for us.  */
       goto err_set;
@@ -2115,29 +2106,6 @@ ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
 	errloc = "reading archive from temporary file";
 	goto err_no;
       }
-
-  /* If the user wanted to know if we wrote BTF out, normally we ask this about
-     the entire archive, link-against dicts, we only wrote one dict out, so we
-     want to make sure that that dict alone is BTF.  */
-  if (is_btf)
-    {
-      if (!(fp->ctf_link_flags & CTF_LINK_DEDUP_AGAINST_FIRST))
-	{
-	  if ((*is_btf = ctf_link_output_is_btf (fp)) < 0)
-	    {
-	      errloc = "determining if archive is BTF";
-	      goto err;			/* errno is set for us.  */
-	    }
-	}
-      else
-	{
-	  if ((*is_btf = ctf_serialize_output_dict_is_btf (arg.files[0])) < 0)
-	    {
-	      errloc = "determining if archive is BTF";
-	      goto err;			/* errno is set for us.  */
-	    }
-	}
-    }
 
   /* Turn off the is-linking flag, and any other flags we flipped, on all the
      dicts in this link.  */
