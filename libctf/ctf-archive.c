@@ -42,7 +42,7 @@
    it's just a concatenated stream of dicts followed by a magic number and
    strtab: that doesn't fit into C structs in any useful fashion.  */
 
-static ctf_ret_t arc_write_one_ctf (ctf_dict_t *fp, int fd, size_t threshold);
+static ctf_ret_t arc_write_one_ctf (ctf_dict_t *fp, int fd);
 static ctf_ret_t ctf_arc_flip_v1_modents (ctf_archive_v1_modent_t *modent, uint64_t els,
 					  unsigned char *ents, uint64_t base,
 					  size_t arc_len, ctf_error_t *errp);
@@ -76,8 +76,7 @@ static ctf_dict_t enosym;
    Updates the first dict in the archive with the errno value.  */
 
 static ctf_error_t
-ctf_arc_preserialize (ctf_dict_t **ctf_dicts, ssize_t ctf_dict_cnt,
-		      size_t threshold)
+ctf_arc_preserialize (ctf_dict_t **ctf_dicts, ssize_t ctf_dict_cnt)
 {
   uint64_t old_parent_strlen, all_strlens = 0;
   ssize_t i;
@@ -88,7 +87,7 @@ ctf_arc_preserialize (ctf_dict_t **ctf_dicts, ssize_t ctf_dict_cnt,
   /* Preserialize everything, doing everything but strtab generation and things
      that depend on that.  */
   for (i = 0; i < ctf_dict_cnt; i++)
-    if (ctf_preserialize (ctf_dicts[i], threshold != (size_t) -1) < 0)
+    if (ctf_preserialize (ctf_dicts[i]) < 0)
       goto err;
 
   for (i = 0; i < ctf_dict_cnt; i++)
@@ -138,7 +137,7 @@ ctf_arc_preserialize (ctf_dict_t **ctf_dicts, ssize_t ctf_dict_cnt,
    Returns 0 on success, or an errno, or an ECTF_* value.  */
 ctf_error_t
 ctf_arc_write_fd (int fd, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
-		  size_t threshold, ctf_arc_write_flags_t flags)
+		  ctf_arc_write_flags_t flags)
 {
   size_t i;
   ssize_t j;
@@ -160,12 +159,12 @@ ctf_arc_write_fd (int fd, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
      lot of space and thus is more likely to fail.  Between this point and
      arc_write_one_ctf(), immediately below, type and string additions will
      corrupt the dict.  */
-  if ((err = ctf_arc_preserialize (ctf_dicts, ctf_dict_cnt, threshold)) != 0)
+  if ((err = ctf_arc_preserialize (ctf_dicts, ctf_dict_cnt)) != 0)
     return err;
 
   for (i = 0; i < ctf_dict_cnt; i++)
     {
-      if (arc_write_one_ctf (ctf_dicts[i], fd, threshold) < 0)
+      if (arc_write_one_ctf (ctf_dicts[i], fd) < 0)
 	{
 	  errmsg = N_("cannot write CTF file to archive");
 	  goto err;
@@ -238,7 +237,7 @@ err:
    Returns 0 on success, or an errno, or an ECTF_* value.  */
 ctf_error_t
 ctf_arc_write (const char *file, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
-	       size_t threshold, ctf_arc_write_flags_t flags)
+	       ctf_arc_write_flags_t flags)
 {
   ctf_error_t err;
   int fd;
@@ -256,7 +255,7 @@ ctf_arc_write (const char *file, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
       return errno;
     }
 
-  err = ctf_arc_write_fd (fd, ctf_dicts, ctf_dict_cnt, threshold, flags);
+  err = ctf_arc_write_fd (fd, ctf_dicts, ctf_dict_cnt, flags);
   if (err)
     goto err_close;
 
@@ -279,14 +278,14 @@ ctf_arc_write (const char *file, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
    file, but if it is, it will be at an 8-byte aligned offset.  Sets errno
    on error.  */
 static ctf_ret_t
-arc_write_one_ctf (ctf_dict_t *fp, int fd, size_t threshold)
+arc_write_one_ctf (ctf_dict_t *fp, int fd)
 {
   off_t off, end_off;
 
   if ((off = lseek (fd, 0, SEEK_CUR)) < 0)
     return -1;
 
-  if (ctf_write_thresholded (fp, fd, threshold) != 0)
+  if (ctf_write (fp, fd) != 0)
     {
       errno = fp->ctf_errno;
       return -1;

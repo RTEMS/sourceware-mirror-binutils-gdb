@@ -1984,12 +1984,11 @@ ctf_accumulate_archives (void *key, void *value, void *arg_)
 
 /* Write out a CTF archive (if there are per-CU CTF files) or a CTF file
    (otherwise) into a new dynamically-allocated string, and return it.
-   Members with sizes above THRESHOLD are compressed.
 
    The optional arg IS_BTF is set to 1 if the written output is valid BTF
    (no archives, no CTF-specific types).  */
 unsigned char *
-ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
+ctf_link_write (ctf_dict_t *fp, size_t *size, int *is_btf)
 {
   ctf_name_list_accum_cb_arg_t arg;
   char *transformed_name = NULL;
@@ -2078,8 +2077,7 @@ ctf_link_write (ctf_dict_t *fp, size_t *size, size_t threshold, int *is_btf)
       goto err_no;
     }
 
-  if ((err = ctf_arc_write_fd (fileno (f), arg.files, arg.i,
-			       threshold, flags)) != 0)
+  if ((err = ctf_arc_write_fd (fileno (f), arg.files, arg.i, flags)) != 0)
     {
       errloc = NULL;				/* errno is set for us.  */
       goto err_set;
