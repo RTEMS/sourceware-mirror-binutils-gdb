@@ -301,7 +301,7 @@ typedef int ctf_func_type_flags_t;
   _CTF_ITEM (ECTF_NOSYMTAB, "symbol table information is not available") \
   _CTF_ITEM (ECTF_NOPARENT, "the parent CTF dictionary is needed but unavailable") \
   _CTF_ITEM (ECTF_LINKADDEDLATE, "file added to link too late") \
-  _CTF_ITEM (ECTF_ZALLOC, "failed to allocate (de)compression buffer") \
+  _CTF_ITEM (ECTF_ZALLOC, "failed to allocate decompression buffer") \
   _CTF_ITEM (ECTF_DECOMPRESS, "failed to decompress CTF data") \
   _CTF_ITEM (ECTF_STRTAB, "external string table is not available") \
   _CTF_ITEM (ECTF_BADNAME, "string name offset is corrupt") \
@@ -320,7 +320,6 @@ typedef int ctf_func_type_flags_t;
   _CTF_ITEM (ECTF_FULL, "implementation limit: CTF dict or type is full") \
   _CTF_ITEM (ECTF_DUPLICATE, "duplicate member, enumerator, datasec, or variable name") \
   _CTF_ITEM (ECTF_CONFLICT, "conflicting type is already defined") \
-  _CTF_ITEM (ECTF_COMPRESS, "failed to compress CTF data") \
   _CTF_ITEM (ECTF_ARCREATE, "error creating CTF archive") \
   _CTF_ITEM (ECTF_ARNNAME, "name not found in CTF archive") \
   _CTF_ITEM (ECTF_SLICEOVERFLOW, "overflow of type bitness or offset in slice") \
@@ -682,7 +681,7 @@ extern const char *ctf_errmsg (ctf_error_t);
 
    - LIBCTF_BTM_ALWAYS writes out full-blown CTFv4 at all times
    - LIBCTF_BTM_POSSIBLE writes out CTFv4 if needed to avoid information loss,
-     BTF otherwise.  If compressing, the same as LIBCTF_BTM_ALWAYS.
+     BTF otherwise.
    - LIBCTF_BTM_BTF writes out BTF always, and errors otherwise.
    - LIBCTF_BTM_QUERY means "don't change the current level".
 
@@ -1242,19 +1241,14 @@ extern ctf_ret_t ctf_rollback (ctf_dict_t *, ctf_snapshot_id_t);
 
 /* Dict writeout.  See ctf_version().
 
-   ctf_write: write out an uncompressed dict to an fd.
-   ctf_compress_write: write out a compressed dict to an fd (currently always
-   gzip, but this may change in future).
-   ctf_write_mem: write out a dict to a buffer and return it and its size,
-   compressing it if its uncompressed size is over THRESHOLD.
+   ctf_write: write out a dict to an fd.
+   ctf_write_mem: write out a dict to a buffer and return it and its size.
 
-   If the ctf_btf_mode is not LIBCTF_BTM_ALWAYS and the threshold is -1,
-   the resulting dict may be pure BTF.
-  */
+   If the ctf_btf_mode is not LIBCTF_BTM_ALWAYS, the resulting dict may be pure
+   BTF.  */
 
 extern int ctf_write (ctf_dict_t *, int);
-extern int ctf_compress_write (ctf_dict_t * fp, int fd);
-extern unsigned char *ctf_write_mem (ctf_dict_t *, size_t *, size_t threshold);
+extern unsigned char *ctf_write_mem (ctf_dict_t *, size_t *);
 
 /* Create a CTF archive named FILE from CTF_DICTS inputs (or write it to the
    passed-in fd).  The member names are derived from the cunames of the
@@ -1266,8 +1260,8 @@ typedef enum ctf_arc_write_flags
   } ctf_arc_write_flags_t;
 
 extern ctf_error_t ctf_arc_write (const char *file, ctf_dict_t **ctf_dicts, size_t,
-				  size_t, ctf_arc_write_flags_t);
-extern ctf_error_t ctf_arc_write_fd (int, ctf_dict_t **, size_t, size_t,
+				  ctf_arc_write_flags_t);
+extern ctf_error_t ctf_arc_write_fd (int, ctf_dict_t **, size_t,
 				     ctf_arc_write_flags_t);
 
 /* Prohibit writeout of this type kind: attempts to write it out cause
@@ -1348,12 +1342,12 @@ extern ctf_ret_t ctf_link_shuffle_syms (ctf_dict_t *);
 
 /* Determine the file format of the dict that will be written out after the
    calls above is compatible with pure BTF or would require CTF.  (Other things
-   may nonetheless require CTF, in particular, compression.)  */
+   may nonetheless require CTF.)  */
 
 extern ctf_ret_t ctf_link_output_is_btf (ctf_dict_t *);
 
 /* Return the serialized form of this ctf_linked dict as a new
-   dynamically-allocated string, compressed if size over THRESHOLD.
+   dynamically-allocated string.
 
    May be a CTF dict or a CTF archive (this library mostly papers over the
    differences so you can open both the same way, treat both as ctf_archive_t
@@ -1364,8 +1358,7 @@ extern ctf_ret_t ctf_link_output_is_btf (ctf_dict_t *);
    If IS_BTF is set on return, the output is BTF-compatible and can be stored
    in a .BTF section.  */
 
-extern unsigned char *ctf_link_write (ctf_dict_t *, size_t *size,
-				      size_t threshold, int *is_btf);
+extern unsigned char *ctf_link_write (ctf_dict_t *, size_t *size, int *is_btf);
 
 /* Specialist linker functions.  These functions are not used by ld, but can be
    used by other programs making use of the linker machinery for other purposes

@@ -4301,8 +4301,7 @@ lang_write_ctf (int late)
      CTF in the end.  Errors are handled below, if this section is actually
      output.  */
   if (!err)
-    contents = ctf_link_write (ctf_output, &output_size,
-			       (size_t) -1, &really_btf);
+    contents = ctf_link_write (ctf_output, &output_size, &really_btf);
 
   /* Emit CTF or BTF, whichever was used and is needed.  We decide which to
      emit to based on the decision taken by section removal, above, not

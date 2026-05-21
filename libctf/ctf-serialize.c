@@ -21,7 +21,6 @@
 #include <assert.h>
 #include <string.h>
 #include <unistd.h>
-#include <zlib.h>
 
 #include <elf.h>
 #include "elf-bfd.h"
@@ -1411,19 +1410,17 @@ ctf_serialize_output_dict_is_btf (ctf_dict_t *fp)
    ID assignment.  The resulting dict must not be modified in any way before
    serialization.  (This is not enforced, as this feature is internal-only,
    employed by the archive writeout machinery, which does a serialization right
-   after preserialization and string dedup.)
-
-   If FORCE_CTF is enabled, always emit CTF in LIBCTF_BTM_POSSIBLE mode, and
-   error in LIBCTF_BTM_BTF mode.  */
+   after preserialization and string dedup.)  */
 
 ctf_ret_t
-ctf_preserialize (ctf_dict_t *fp, int force_ctf)
+ctf_preserialize (ctf_dict_t *fp)
 {
   ctf_header_t hdr;
   ctf_dtdef_t *dtd;
   int sym_functions = 0;
   size_t hdr_len;
   int ctf_adjustment = 0;
+  int force_ctf = 0;
 
   unsigned char *t;
   size_t buf_size, type_size, objt_size, func_size;
@@ -1675,7 +1672,7 @@ ctf_depreserialize (ctf_dict_t *fp)
    on visible operation).  */
 
 static unsigned char *
-ctf_serialize (ctf_dict_t *fp, size_t *bufsiz, int force_ctf)
+ctf_serialize (ctf_dict_t *fp, size_t *bufsiz)
 {
   const ctf_strs_writable_t *strtab;
   unsigned char *buf, *newbuf;
@@ -1684,7 +1681,7 @@ ctf_serialize (ctf_dict_t *fp, size_t *bufsiz, int force_ctf)
   /* Preserialize, if we need to.  */
 
   if (!fp->ctf_serialize.cs_buf)
-    if (ctf_preserialize (fp, force_ctf) < 0)
+    if (ctf_preserialize (fp) < 0)
       return NULL;				/* errno is set for us.  */
 
   /* Freshly-created parent and child during linking.  Construct the final
@@ -1751,28 +1748,21 @@ err:
 
 /* File writing.  */
 
-/* Optionally compress the specified CTF data stream and return it as a new
-   dynamically-allocated string.  Possibly write it with reversed
-   endianness.  */
+/* Serialize and return the specified CTF dictionary as a new dynamically-
+   allocated string.  Possibly write it with reversed endianness.  */
 unsigned char *
-ctf_write_mem (ctf_dict_t *fp, size_t *size, size_t threshold)
+ctf_write_mem (ctf_dict_t *fp, size_t *size)
 {
-  unsigned char *rawbuf;
-  unsigned char *buf = NULL;
+  unsigned char *buf;
   unsigned char *bp;
-  ctf_header_t *rawhp, *hp;
-  unsigned char *src;
-  size_t rawbufsiz;
-  size_t alloc_len = 0;
+  ctf_header_t *hp;
+  size_t len = 0;
   size_t hdrlen;
-  int uncompressed = 0;
   int flip_endian;
-  int rc;
 
   flip_endian = getenv ("LIBCTF_WRITE_FOREIGN_ENDIAN") != NULL;
 
-  if ((rawbuf = ctf_serialize (fp, &rawbufsiz,
-			       threshold != (size_t) -1)) == NULL)
+  if ((buf = ctf_serialize (fp, &len)) == NULL)
     return NULL;				/* errno is set for us.  */
 
   if (fp->ctf_serialize.cs_is_btf)
@@ -1780,87 +1770,33 @@ ctf_write_mem (ctf_dict_t *fp, size_t *size, size_t threshold)
   else
     hdrlen = sizeof (ctf_header_t);
 
-  if (!ctf_assert (fp, rawbufsiz >= hdrlen))
+  if (!ctf_assert (fp, len >= hdrlen))
     goto err;
 
-  if (rawbufsiz >= threshold && !fp->ctf_serialize.cs_is_btf)
-    alloc_len = compressBound (rawbufsiz - sizeof (ctf_header_t))
-      + sizeof (ctf_header_t);
+  *size = len;
 
-  /* Trivial operation if the buffer is too small to bother compressing, and
-     we're not doing a forced write-time flip.  */
+  /* Trivial operation if we're not doing a forced write-time flip.  */
 
-  if (rawbufsiz < threshold || fp->ctf_serialize.cs_is_btf)
-    {
-      alloc_len = rawbufsiz;
-      uncompressed = 1;
-    }
+  if (!flip_endian)
+    return buf;
 
-  if (!flip_endian && uncompressed)
-    {
-      *size = rawbufsiz;
-      return rawbuf;
-    }
-
-  if ((buf = malloc (alloc_len)) == NULL)
-    {
-      ctf_err (err_locus (fp), ENOMEM, _("cannot allocate %li bytes"),
-	       (unsigned long) (alloc_len));
-      goto err;
-    }
-
-  rawhp = (ctf_header_t *) rawbuf;
   hp = (ctf_header_t *) buf;
+  bp = buf + sizeof (ctf_btf_header_t);
 
-  memcpy (hp, rawbuf, hdrlen);
-  bp = buf + hdrlen;
-  *size = hdrlen;
+  if (ctf_flip_header (hp, 1, fp->ctf_serialize.cs_is_btf, 0) < 0)
+    goto err;				/* errno is set for us.  */
+  if (ctf_flip (fp, hp, bp, fp->ctf_serialize.cs_is_btf, 1) < 0)
+    goto err;				/* errno is set for us.  */
 
-  if (!uncompressed && !fp->ctf_serialize.cs_is_btf)
-    hp->cth_flags |= CTF_F_COMPRESS;
-
-  src = rawbuf + hdrlen;
-
-  if (flip_endian)
-    {
-      if (ctf_flip_header (hp, 1, fp->ctf_serialize.cs_is_btf, 0) < 0)
-	goto err;				/* errno is set for us.  */
-      if (ctf_flip (fp, rawhp, src, fp->ctf_serialize.cs_is_btf, 1) < 0)
-	goto err;				/* errno is set for us.  */
-    }
-
-  /* Must be CTFv4.  */
-  if (!uncompressed)
-    {
-      size_t compress_len = alloc_len - sizeof (ctf_header_t);
-
-      if ((rc = compress (bp, (uLongf *) &compress_len,
-			  src, rawbufsiz - hdrlen)) != Z_OK)
-	{
-	  ctf_err (err_locus (fp), ECTF_COMPRESS,
-		   _("zlib deflate err: %s"), zError (rc));
-	  goto err;
-	}
-      *size += compress_len;
-    }
-  else
-    {
-      memcpy (bp, src, rawbufsiz - hdrlen);
-      *size += rawbufsiz - hdrlen;
-    }
-
-  free (rawbuf);
   return buf;
 err:
   free (buf);
-  free (rawbuf);
   return NULL;
 }
 
-/* Write the compressed CTF data stream to the specified file descriptor,
-   possibly compressed.  Internal only (for now).  */
+/* Write the given CTF data stream to the specified file descriptor.  */
 ctf_ret_t
-ctf_write_thresholded (ctf_dict_t *fp, int fd, size_t threshold)
+ctf_write (ctf_dict_t *fp, int fd)
 {
   unsigned char *buf;
   unsigned char *bp;
@@ -1869,7 +1805,7 @@ ctf_write_thresholded (ctf_dict_t *fp, int fd, size_t threshold)
   ssize_t len;
   ctf_ret_t ret = -1;
 
-  if ((buf = ctf_write_mem (fp, &tmp, threshold)) == NULL)
+  if ((buf = ctf_write_mem (fp, &tmp)) == NULL)
     return -1;					/* errno is set for us.  */
 
   buf_len = tmp;
@@ -1890,19 +1826,4 @@ ctf_write_thresholded (ctf_dict_t *fp, int fd, size_t threshold)
 ret:
   free (buf);
   return ret;
-}
-
-/* Compress the specified CTF data stream and write it to the specified file
-   descriptor.  */
-int
-ctf_compress_write (ctf_dict_t *fp, int fd)
-{
-  return ctf_write_thresholded (fp, fd, 0);
-}
-
-/* Write the uncompressed CTF data stream to the specified file descriptor.  */
-int
-ctf_write (ctf_dict_t *fp, int fd)
-{
-  return ctf_write_thresholded (fp, fd, (size_t) -1);
 }

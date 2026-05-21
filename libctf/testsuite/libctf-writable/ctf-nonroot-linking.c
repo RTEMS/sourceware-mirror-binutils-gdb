@@ -74,7 +74,7 @@ main (int argc, char *argv[])
   /* Write it out.  We need a new buf here, because the archive is still
      using the other buf.  */
 
-  if ((buf2 = ctf_link_write (fp, &buf2_sz, 4096)) == NULL)
+  if ((buf2 = ctf_link_write (fp, &buf2_sz)) == NULL)
     goto link_err;
 
   /* Read it back in.  */
