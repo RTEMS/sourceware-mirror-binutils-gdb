@@ -881,7 +881,7 @@ extern const ctf_strs_writable_t *ctf_str_write_strtab (ctf_dict_t *);
 
 extern ctf_ret_t ctf_serialize_output_format (ctf_dict_t *fp, int force_ctf);
 extern ctf_ret_t ctf_serialize_output_dict_is_btf (ctf_dict_t *fp);
-extern ctf_ret_t ctf_preserialize (ctf_dict_t *fp, int force_ctf);
+extern ctf_ret_t ctf_preserialize (ctf_dict_t *fp);
 extern void ctf_depreserialize (ctf_dict_t *fp);
 
 extern struct ctf_archive_internal *
