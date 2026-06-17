@@ -859,18 +859,12 @@ ctf_link_deduplicating_close_inputs (ctf_dict_t *fp, ctf_dynhash_t *cu_names,
    nonexistent: 0: already exists.  */
 
 static int
-check_sym (ctf_dict_t *fp, const char *name, ctf_id_t type, int functions)
+check_sym (ctf_dict_t *fp, const char *name, ctf_id_t type)
 {
-  ctf_dynhash_t *thishash = functions ? fp->ctf_funchash : fp->ctf_objthash;
-  ctf_dynhash_t *thathash = functions ? fp->ctf_objthash : fp->ctf_funchash;
   void *value;
 
-  /* Wrong type (function when object is wanted, etc).  */
-  if (ctf_dynhash_lookup_kv (thathash, name, NULL, NULL))
-    return -1;
-
   /* Not present at all yet.  */
-  if (!ctf_dynhash_lookup_kv (thishash, name, NULL, &value))
+  if (!ctf_dynhash_lookup_kv (fp->ctf_symtypehash, name, NULL, &value))
     return 1;
 
   /* Already present.  */
@@ -881,18 +875,17 @@ check_sym (ctf_dict_t *fp, const char *name, ctf_id_t type, int functions)
   return -1;
 }
 
-/* Do a deduplicating link of one symtypetab (function info or data object) in
-   one input dict.  */
+/* Do a deduplicating link of the symtypetab to one input dict.  */
 
 static ctf_ret_t
 ctf_link_deduplicating_one_symtypetab (ctf_dict_t *fp, ctf_dict_t *input,
-				       int cu_mapped, int functions)
+				       int cu_mapped)
 {
   ctf_next_t *it = NULL;
   const char *name;
   ctf_id_t type;
 
-  while ((type = ctf_symbol_next (input, &it, &name, functions)) != CTF_ERR)
+  while ((type = ctf_symbol_next (input, &it, &name)) != CTF_ERR)
     {
       ctf_id_t dst_type;
       ctf_dict_t *per_cu_out_fp;
@@ -908,7 +901,7 @@ ctf_link_deduplicating_one_symtypetab (ctf_dict_t *fp, ctf_dict_t *input,
 	  if (!ctf_assert (fp, ctf_type_isparent (fp, dst_type)))
 	    goto err;				/* errno is set for us.  */
 
-	  sym = check_sym (fp, name, dst_type, functions);
+	  sym = check_sym (fp, name, dst_type);
 
 	  /* Already present: next symbol.  */
 	  if (sym == 0)
@@ -916,8 +909,7 @@ ctf_link_deduplicating_one_symtypetab (ctf_dict_t *fp, ctf_dict_t *input,
 	  /* Not present: add it.  */
 	  else if (sym > 0)
 	    {
-	      if (ctf_add_funcobjt_sym (fp, functions,
-					name, dst_type) < 0)
+	      if (ctf_add_sym (fp, name, dst_type) < 0)
 		goto err; 			/* errno is set for us.  */
 	      continue;
 	    }
@@ -954,7 +946,7 @@ ctf_link_deduplicating_one_symtypetab (ctf_dict_t *fp, ctf_dict_t *input,
 	    }
 	}
 
-      sym = check_sym (per_cu_out_fp, name, dst_type, functions);
+      sym = check_sym (per_cu_out_fp, name, dst_type);
 
       /* Already present: next symbol.  */
       if (sym == 0)
@@ -962,8 +954,7 @@ ctf_link_deduplicating_one_symtypetab (ctf_dict_t *fp, ctf_dict_t *input,
       /* Not present: add it.  */
       else if (sym > 0)
 	{
-	  if (ctf_add_funcobjt_sym (per_cu_out_fp, functions,
-				    name, dst_type) < 0)
+	  if (ctf_add_sym (per_cu_out_fp, name, dst_type) < 0)
 	    goto err;				/* errno is set for us.  */
 	}
       else
@@ -977,9 +968,8 @@ ctf_link_deduplicating_one_symtypetab (ctf_dict_t *fp, ctf_dict_t *input,
     }
   if (ctf_errno (input) != ECTF_NEXT_END)
     {
-      return ctf_err (link_err_locus (fp, input, -1), 0, functions ?
-		      _("iterating over function symbols") :
-		      _("iterating over data symbols"));
+      return ctf_err (link_err_locus (fp, input, -1), 0,
+		      _("iterating over symbols"));
     }
 
   return 0;
@@ -1000,11 +990,7 @@ ctf_link_deduplicating_syms (ctf_dict_t *fp, ctf_dict_t **inputs,
   for (i = 0; i < ninputs; i++)
     {
       if (ctf_link_deduplicating_one_symtypetab (fp, inputs[i],
-						 cu_mapped, 0) < 0)
-	return -1;				/* errno is set for us.  */
-
-      if (ctf_link_deduplicating_one_symtypetab (fp, inputs[i],
-						 cu_mapped, 1) < 0)
+						 cu_mapped) < 0)
 	return -1;				/* errno is set for us.  */
     }
 

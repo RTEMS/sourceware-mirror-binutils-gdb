@@ -167,8 +167,7 @@ ctf_dict_flag (ctf_dict_t *fp, ctf_dict_flags_t flag)
       return (fp->ctf_header->cth_objt_len > 0
 	      || fp->ctf_header->cth_func_len > 0
 	      || fp->ctf_dynsymidx
-	      || (fp->ctf_objthash && ctf_dynhash_elements (fp->ctf_objthash) > 0)
-	      || (fp->ctf_funchash && ctf_dynhash_elements (fp->ctf_funchash) > 0));
+	      || (fp->ctf_symtypehash && ctf_dynhash_elements (fp->ctf_symtypehash) > 0));
     default:
       return (ctf_set_errno (fp, ECTF_BADFLAG));
     }
