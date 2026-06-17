@@ -105,9 +105,9 @@ typedef enum ctf_elfsect_names
    filling in ctf_sect_t structures and passing them to ctf_bufopen et al via
    the ctf_open_sect_t function.
 
-   At read time, the symbol table endianness is derived from the BFD target (if
-   BFD is in use): if a BFD target is not in use, please call
-   ctf_symsect_endianness or ctf_arc_symsect_endianness.  */
+   At read time, the symbol table endianness is derived from the BFD target
+   (if BFD is in use): if a BFD target is not in use, please call
+   ctf_arc_symsect_endianness.  */
 
 typedef struct ctf_sect
 {
@@ -738,17 +738,10 @@ extern const char **ctf_func_arg_names (ctf_dict_t *, ctf_id_t, size_t *nargs);
 
 extern ctf_linkages_t ctf_type_linkage (ctf_dict_t *, ctf_id_t);
 
-/* Traverse all (function or data) symbols in a dict, one by one, and return the
-   type of each and (if NAME is non-NULL) optionally its name.  */
+/* Traverse all symbols in a dict, one by one, and return the type of each
+   and (if NAME is non-NULL) optionally its name.  */
 
-typedef enum ctf_funcobjt
-  {
-    CTF_STT_OBJT = 0,
-    CTF_STT_FUNC = 1
-  } ctf_funcobjt_t;
-
-extern ctf_id_t ctf_symbol_next (ctf_dict_t *, ctf_next_t **,
-				 const char **name, ctf_funcobjt_t functions);
+extern ctf_id_t ctf_symbol_next (ctf_dict_t *, ctf_next_t **, const char **name);
 
 /* Look up an identifier (type or variable) by name: some simple C type parsing
    is done, but this is by no means comprehensive.  Structures, unions and enums
@@ -1226,12 +1219,11 @@ extern ctf_ret_t ctf_array_set_info (ctf_dict_t *, ctf_id_t, const ctf_arinfo_t 
 extern ctf_ret_t ctf_type_set_conflicting (ctf_dict_t *, ctf_id_t type,
 					   const char *cuname);
 
-/* Add a function or object symbol type with a particular name, without saying
-   anything about the actual symbol index.  (The linker will then associate them
-   with actual symbol indexes using the ctf_link functions below.)  */
+/* Add a type for a symbol with a particular name, without saying anything
+   about the actual symbol index.  (The linker will then associate them with
+   actual symbol indexes using the ctf_link functions below.)  */
 
-extern ctf_ret_t ctf_add_funcobjt_sym (ctf_dict_t *fp, ctf_funcobjt_t function,
-				       const char *name, ctf_id_t id);
+extern ctf_ret_t ctf_add_sym (ctf_dict_t *fp, const char *name, ctf_id_t id);
 
 /* Snapshot/rollback.  Call ctf_snapshot to return a snapshot ID: pass
   one of these IDs to ctf_rollback to discard all types added since the
@@ -1388,12 +1380,11 @@ typedef char *ctf_link_memb_name_changer_f (ctf_dict_t *,
 extern void ctf_link_set_memb_name_changer
   (ctf_dict_t *, ctf_link_memb_name_changer_f *, void *);
 
-/* Filter out unwanted variables, which can be very voluminous, and (unlike
-   symbols) cause the CTF string table to grow to hold their names.  The
-   variable filter should return nonzero if a variable should not appear in the
-   output.  */
-typedef ctf_bool_t ctf_link_variable_filter_f (ctf_dict_t *, const char *, ctf_id_t,
-					       void *);
+/* Filter out unwanted variables, which can be very voluminous, and cause the
+   CTF string table to grow to hold their names.  The variable filter should
+   return nonzero if a variable (or symbol) should not appear in the output.  */
+typedef ctf_bool_t ctf_link_variable_filter_f (ctf_dict_t *, const char *,
+					       ctf_id_t, void *);
 extern ctf_bool_t ctf_link_set_variable_filter (ctf_dict_t *,
 						ctf_link_variable_filter_f *, void *);
 

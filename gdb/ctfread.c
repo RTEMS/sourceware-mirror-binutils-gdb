@@ -1081,11 +1081,10 @@ ctf_add_var_cb (ctf_dict_t *fp, const char *name, ctf_id_t id,
   set_symbol_address (ccp->of, sym, name);
 }
 
-/* Add entries in either data objects or function info section, controlled
-   by FUNCTIONS.  */
+/* Add entries in the symtypetab.  */
 
 static void
-add_stt_entries (struct ctf_context *ccp, ctf_funcobjt_t functions)
+add_stt_entries (struct ctf_context *ccp)
 {
   ctf_next_t *i = nullptr;
   const char *tname;
@@ -1093,7 +1092,7 @@ add_stt_entries (struct ctf_context *ccp, ctf_funcobjt_t functions)
   struct symbol *sym = nullptr;
   struct type *type;
 
-  while ((tid = ctf_symbol_next (ccp->dict, &i, &tname, functions)) != CTF_ERR)
+  while ((tid = ctf_symbol_next (ccp->dict, &i, &tname)) != CTF_ERR)
     {
       type = get_tid_type (ccp->of, tid);
       if (type == nullptr)
@@ -1101,28 +1100,14 @@ add_stt_entries (struct ctf_context *ccp, ctf_funcobjt_t functions)
       sym = new (&ccp->of->objfile_obstack) symbol;
       OBJSTAT (ccp->of, n_syms++);
       sym->set_type (type);
-      sym->set_domain (functions ? FUNCTION_DOMAIN : VAR_DOMAIN);
+      /* XXX use the stt_type.  */
+      sym->set_domain (ctf_type_kind (ccp->dict, tid) == CTF_K_FUNCTION
+		       ? FUNCTION_DOMAIN : VAR_DOMAIN);
       sym->set_loc_class_index (LOC_STATIC);
       sym->compute_and_set_names (tname, false, ccp->of->per_bfd);
       add_symbol_to_list (sym, ccp->builder->get_global_symbols ());
       set_symbol_address (ccp->of, sym, tname);
     }
-}
-
-/* Add entries in data objects section.  */
-
-static void
-add_stt_obj (struct ctf_context *ccp)
-{
-  add_stt_entries (ccp, CTF_STT_OBJT);
-}
-
-/* Add entries in function info section.  */
-
-static void
-add_stt_func (struct ctf_context *ccp)
-{
-  add_stt_entries (ccp, CTF_STT_FUNC);
 }
 
 /* Get text section base for OBJFILE, TSIZE contains the size.  */
@@ -1159,27 +1144,33 @@ ctf_psymtab_add_enums (struct ctf_context *ccp, ctf_id_t tid)
 	       ctf_errmsg (ctf_errno (ccp->dict)));
 }
 
-/* Add entries in either data objects or function info section, controlled
-   by FUNCTIONS, to psymtab.  */
+/* Add entries in the symtypetab to the psymtab.  */
 
 static void
 ctf_psymtab_add_stt_entries (ctf_dict_t *dict, ctf_psymtab *pst,
-			     struct objfile *of, ctf_funcobjt_t functions)
+			     struct objfile *of)
 {
   ctf_next_t *i = nullptr;
   ctf_id_t tid;
   const char *tname;
 
-  while ((tid = ctf_symbol_next (dict, &i, &tname, functions)) != CTF_ERR)
+  while ((tid = ctf_symbol_next (dict, &i, &tname)) != CTF_ERR)
     {
       ctf_kind_t kind = ctf_type_kind (dict, tid);
       location_class loc_class;
-      domain_enum tdomain = functions ? FUNCTION_DOMAIN : VAR_DOMAIN;
+      domain_enum tdomain;
 
       if (kind == CTF_K_FUNCTION)
-	loc_class = LOC_BLOCK;
+	{
+	  /* XXX should use stt_type.  */
+	  tdomain = FUNCTION_DOMAIN;
+	  loc_class = LOC_BLOCK;
+	}
       else
-	loc_class = LOC_STATIC;
+	{
+	  tdomain = VAR_DOMAIN;
+	  loc_class = LOC_STATIC;
+	}
 
       pst->add_psymbol (tname, true,
 			tdomain, loc_class, -1,
@@ -1189,22 +1180,12 @@ ctf_psymtab_add_stt_entries (ctf_dict_t *dict, ctf_psymtab *pst,
     }
 }
 
-/* Add entries in data objects section to psymtab.  */
+/* Add entries in symtypetab to psymtab.  */
 
 static void
-ctf_psymtab_add_stt_obj (ctf_dict_t *dict, ctf_psymtab *pst,
-			 struct objfile *of)
+ctf_psymtab_add_stt (ctf_dict_t *dict, ctf_psymtab *pst, struct objfile *of)
 {
-  ctf_psymtab_add_stt_entries (dict, pst, of, CTF_STT_OBJT);
-}
-
-/* Add entries in function info section to psymtab.  */
-
-static void
-ctf_psymtab_add_stt_func (ctf_dict_t *dict, ctf_psymtab *pst,
-			  struct objfile *of)
-{
-  ctf_psymtab_add_stt_entries (dict, pst, of, CTF_STT_FUNC);
+  ctf_psymtab_add_stt_entries (dict, pst, of);
 }
 
 /* Read in full symbols for PST, and anything it depends on.  */
@@ -1239,9 +1220,8 @@ ctf_psymtab::expand_psymtab (struct objfile *objfile)
     complaint (_("ctf_type_kind_next (variables) psymtab_to_symtab failed - %s"),
 	       ctf_errmsg (ctf_errno (ccp->dict)));
 
-  /* Add entries in data objects and function info sections.  */
-  add_stt_obj (ccp);
-  add_stt_func (ccp);
+  /* Add entries in symtypetab.  */
+  add_stt_entries (ccp);
 
   readin = true;
 }
@@ -1429,11 +1409,10 @@ scan_partial_symbols (ctf_dict_t *dict, psymtab_storage *partial_symtabs,
     complaint (_("ctf_type_kind_next (variables) scan_partial_symbols failed - %s"),
 	       ctf_errmsg (ctf_errno (dict)));
 
-  /* Scan CTF object and function sections which correspond to each
-     STT_FUNC or STT_OBJECT entry in the symbol table,
-     pick up what init_symtab has done.  */
-  ctf_psymtab_add_stt_obj (dict, pst, of);
-  ctf_psymtab_add_stt_func (dict, pst, of);
+  /* Scan CTF symtypetab sections which correspond to each STT_FUNC or
+     STT_OBJECT entry in the symbol table, pick up what init_symtab has
+     done.  */
+  ctf_psymtab_add_stt (dict, pst, of);
 
   pst->end ();
 }

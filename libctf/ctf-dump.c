@@ -570,23 +570,20 @@ ctf_dump_header (ctf_dict_t *fp, ctf_dump_state_t *state)
   return (ctf_set_errno (fp, errno));
 }
 
-/* Dump all the object or function entries into the cds_items.  */
+/* Dump all the symtypetab entries into the cds_items.  */
 
 static int
-ctf_dump_objts (ctf_dict_t *fp, ctf_dump_state_t *state, ctf_funcobjt_t functions)
+ctf_dump_symtypetabs (ctf_dict_t *fp, ctf_dump_state_t *state)
 {
   const char *name;
   ctf_id_t id;
   ctf_next_t *i = NULL;
   char *str = NULL;
 
-  if ((functions && fp->ctf_funcidx_names)
-      || (!functions && fp->ctf_objtidx_names))
-    str = str_append (str, _("Section is indexed.\n"));
-  else if (fp->ctf_ext_symtab.cts_data == NULL)
+  if (fp->ctf_ext_symtab.cts_data == NULL)
     str = str_append (str, _("No symbol table.\n"));
 
-  while ((id = ctf_symbol_next (fp, &i, &name, functions)) != CTF_ERR)
+  while ((id = ctf_symbol_next (fp, &i, &name)) != CTF_ERR)
     {
       char *typestr = NULL;
 
@@ -1033,12 +1030,10 @@ ctf_dump (ctf_dict_t *fp, ctf_dump_state_t **statep, ctf_sect_names_t sect,
 	case CTF_SECT_HEADER:
 	  ctf_dump_header (fp, state);
 	  break;
+	/* UPTODO: fix this for ELF-section symtypetabs.  */
 	case CTF_SECT_OBJT:
-	  if (ctf_dump_objts (fp, state, CTF_STT_OBJT) < 0)
-	    goto err;			/* errno is set for us.  */
-	  break;
 	case CTF_SECT_FUNC:
-	  if (ctf_dump_objts (fp, state, CTF_STT_FUNC) < 0)
+	  if (ctf_dump_symtypetabs (fp, state) < 0)
 	    goto err;			/* errno is set for us.  */
 	  break;
 	case CTF_SECT_VAR:

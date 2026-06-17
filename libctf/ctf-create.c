@@ -2221,27 +2221,24 @@ ctf_remove_datasec (ctf_dict_t *fp, ctf_id_t type, const char *name,
 	     _("iteration error rolling back addition of variable %s"), name);
 }
 
-/* Add a function or object symbol regardless of whether or not it is already
+/* Add a type for a symbol regardless of whether or not it is already
    present (already existing symbols are silently overwritten).
 
    Internal use only.  */
 ctf_ret_t
-ctf_add_funcobjt_sym_forced (ctf_dict_t *fp, int is_function, const char *name, ctf_id_t id)
+ctf_add_sym_forced (ctf_dict_t *fp, const char *name, ctf_id_t id)
 {
   ctf_dict_t *tmp = fp;
   char *dupname;
-  ctf_dynhash_t *h = is_function ? fp->ctf_funchash : fp->ctf_objthash;
 
   if (ctf_lookup_by_id (&tmp, id, NULL) == NULL)
     return -1;				/* errno is set for us.  */
-
-  if (is_function && ctf_type_kind (fp, id) != CTF_K_FUNCTION)
-    return (ctf_set_errno (fp, ECTF_NOTFUNC));
-
+  
   if ((dupname = strdup (name)) == NULL)
     return (ctf_set_errno (fp, ENOMEM));
 
-  if (ctf_dynhash_insert (h, dupname, (void *) (uintptr_t) id) < 0)
+  if (ctf_dynhash_insert (fp->ctf_symtypehash, dupname,
+			  (void *) (uintptr_t) id) < 0)
     {
       free (dupname);
       return (ctf_set_errno (fp, ENOMEM));
@@ -2250,14 +2247,14 @@ ctf_add_funcobjt_sym_forced (ctf_dict_t *fp, int is_function, const char *name, 
 }
 
 ctf_ret_t
-ctf_add_funcobjt_sym (ctf_dict_t *fp, ctf_funcobjt_t function, const char *name, ctf_id_t id)
+ctf_add_sym (ctf_dict_t *fp, const char *name, ctf_id_t id)
 {
-  if (ctf_lookup_by_sym_or_name (fp, 0, name, 0, function) != CTF_ERR)
+  if (ctf_lookup_by_sym_or_name (fp, 0, name, 0) != CTF_ERR)
     return (ctf_set_errno (fp, ECTF_DUPLICATE));
 
   fp->ctf_serialize.cs_initialized = 0;
 
-  return ctf_add_funcobjt_sym_forced (fp, function, name, id);
+  return ctf_add_sym_forced (fp, name, id);
 }
 
 /* Sort function used by ctf_datasec_sort.  */

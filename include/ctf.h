@@ -50,33 +50,54 @@ extern "C"
    typically named .ctf.  Data structures are aligned so that a raw CTF file or
    CTF ELF section may be manipulated using mmap(2).
 
-   The CTF file or section is a superset of BTF, and has the following structure:
+   The CTF file or section is a superset of BTF, and has a similar structure:
 
-   +--------+--------+---------+----------+--------+----------+...
-   +   BTF  |   CTF  |  data   | function | object | function |...
-   | header | header | objects |   info   | index  |  index   |...
-   +--------+--------+----------+--------+-------------------+...
-
-   ...+-------+--------+--------+
-   ...| data  | kind   | string |
-   ...| types | layout | table  |
-      +-------+--------+--------+
+   hdr_len->|
+   +--------+--------+-------+--------+--------+
+   +   BTF  |   CTF  | data  | kind   | string |
+   | header | header | types | layout | table  |
+   +--------+--------+-------+--------+--------+
 
    The file header stores a magic number and version information, encoding
-   flags, and the byte offset and length of each of the sections relative to
-   the end of the header itself.  There are two headers: the BTF header contains
+   flags, and the byte offset and length of each of the sections relative to the
+   end of the header itself.  There are two headers: the BTF header contains
    offsets relative to the end of the BTF header, and immediately following it
-   there may be a CTF header containing offsets relative to the end of the CTF
-   header.  If the BTF header is not followed by a CTFv4_MAGIC, no CTF header
-   is present and this dict is pure BTF (and cannot contain CTF-specific type
-   kinds).
+   there may be a CTF header: this header contains no sections at present, just
+   other non-sectoin fields.  If the BTF header is not followed by a
+   CTFv4_MAGIC, no CTF header is present and this dict is pure BTF (and cannot
+   contain CTF-specific type kinds).
 
    If the CTF data has been uniquified against another set of CTF data, a
    reference to that data also appears in the the header.  This reference is the
    name of the parent dict containing the types uniquified against.
 
+   The data types section is a list of variable size records that represent each
+   type, in order by their ID.  The types themselves form a directed graph,
+   where each node may contain one or more outgoing edges to other type nodes,
+   denoted by their ID.  Most type nodes are standalone or point backwards to
+   earlier nodes, but this is not required: nodes can point to later nodes,
+   particularly structure and union members.
+
+   Variables records are stored as in BTF.  Unlike in BTF, we can encode
+   arbitrary variables that way, and usually store either everything, or
+   everything that has corresponding entries in the symtypetabs.  We do not
+   define how the consumer maps these variable names to addresses or anything
+   else, or indeed what these names represent: they might be names looked up at
+   runtime via dlsym() or names extracted at runtime by a debugger or anything
+   else the consumer likes.
+
+   In BTF-compatible mode, strings are recorded as a straight byte offset into
+   the string table, which is deduplicated against the parent and itself and
+   sorted into ASCIIbetical order.  In BTF-incompatible mode (dict flag of
+   CTF_DICT_BTF_INCOMPAT), strings are recorded as a string table ID (0 or 1)
+   and a byte offset into the string table.  String table 0 is the internal CTF
+   string table.  String table 1 is the external string table, which is usually
+   the string table associated with the ELF dynamic symbol table for this
+   object.  CTF does not record any strings that are already in the symbol
+   table, and the CTF string table does not contain any duplicated strings.
+
    Data object and function records (collectively, "symtypetabs") are stored in
-   the same order as they appear in the corresponding symbol table, except that
+   separate ELF sections named the same order as they appear in the corresponding symbol table, except that
    symbols marked SHN_UNDEF are not stored and symbols that have no type data
    are padded out with zeroes.  For each entry in these tables, the type ID (a
    small integer) is recorded.  (Functions get CTF_K_FUNCTION types, just like
@@ -89,29 +110,6 @@ extern "C"
    corresponding data object / function info section, giving each entry in those
    sections a name so that the linker can correlate them with final symtab
    entries and reorder them accordingly (dropping the indexes in the process).
-
-   Variable records (as distinct from data objects) provide a modicum of support
-   for non-ELF systems, mapping a variable or function name to a CTF type ID.
-   The names are sorted into ASCIIbetical order, permitting binary searching.
-   We do not define how the consumer maps these variable names to addresses or
-   anything else, or indeed what these names represent: they might be names
-   looked up at runtime via dlsym() or names extracted at runtime by a debugger
-   or anything else the consumer likes.  Variable records with identically-
-   named entries in the data object or function index section are removed.
-
-   The data types section is a list of variable size records that represent each
-   type, in order by their ID.  The types themselves form a directed graph,
-   where each node may contain one or more outgoing edges to other type nodes,
-   denoted by their ID.  Most type nodes are standalone or point backwards to
-   earlier nodes, but this is not required: nodes can point to later nodes,
-   particularly structure and union members.
-
-   Strings are recorded as a string table ID (0 or 1) and a byte offset into the
-   string table.  String table 0 is the internal CTF string table.  String table
-   1 is the external string table, which is the string table associated with the
-   ELF dynamic symbol table for this object.  CTF does not record any strings
-   that are already in the symbol table, and the CTF string table does not
-   contain any duplicated strings.
 
    If the CTF data has been merged with another parent CTF object, some outgoing
    edges may refer to type nodes that exist in another CTF object.  The debugger
@@ -289,11 +287,13 @@ typedef struct ctf_header
 
 #define CTF_BTF_VERSION 1
 
-/* All of these flags bar CTF_F_COMPRESS and CTF_F_IDXSORTED are bug-workaround
-   flags and are valid only in format v3: in v2 and below they cannot occur and
-   in v4 and later, they will be recycled for other purposes.  CTF_F_COMPRESS
-   is only valid in CTFv3 and below: CTFv4 relies on external compression (such
-   as ELF compresed sections).  */
+/* All of these flags bar CTF_F_COMPRESS and CTF_F_IDXSORTED are
+   bug-workaround flags; all of these flags without exception are valid only
+   in format v3: in v2 and below they cannot occur and in v4 and later,
+   their values will be recycled for other purposes.  Of the
+   non-bug-workaround flags, CTFv4 relies on external compression (such as
+   ELF compresed sections), and libctf figures out whether the index section
+   is sorted without needing flags to help.  */
 
 #define CTF_F_COMPRESS	0x1		/* Data buffer is compressed by libctf.  */
 #define CTF_F_NEWFUNCINFO 0x2		/* New v3 func info section format.  */
