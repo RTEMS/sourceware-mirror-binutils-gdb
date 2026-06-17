@@ -536,3 +536,122 @@ flip_vars_v3 (void *start, size_t len)
     }
 }
 
+/* Initialize the symtab translation table as appropriate for its indexing
+   state.  For unindexed symtypetabs, fill each entry with the offset of the CTF
+   type or function data corresponding to each STT_FUNC or STT_OBJECT entry in
+   the symbol table.  For indexed symtypetabs, do nothing: the needed
+   initialization for indexed lookups may be quite expensive, so it is done only
+   as needed, when lookups happen.  (In particular, the majority of indexed
+   symtypetabs come from the compiler, and all the linker does is iteration over
+   all entries, which doesn't need this initialization.)
+
+   The SP symbol table section may be NULL if there is no symtab.
+
+   If init_symtab works on one call, it cannot fail on future calls to the same
+   fp: ctf_symsect_endianness relies on this.  */
+
+ctf_error_t
+upgrade_symtab_v3 (ctf_dict_t *fp, const ctf_header_t *hp, const ctf_sect_t *sp)
+{
+  const unsigned char *symp;
+  int skip_func_info = 0;
+  int i;
+  uint32_t *xp = fp->ctf_sxlate;
+  uint32_t *xend = PTR_ADD (xp, fp->ctf_nsyms);
+
+  uint32_t objtoff = hp->cth_objt_off;
+  uint32_t funcoff = hp->cth_func_off;
+
+  /* If this is a v3 dict, and the CTF_F_NEWFUNCINFO flag is not set, pretend
+     the func info section is empty: this compiler is too old to emit a function
+     info section we understand.  */
+
+  if (fp->ctf_v3_header && !(fp->ctf_v3_header->cth_flags & CTF_F_NEWFUNCINFO))
+    skip_func_info = 1;
+
+  if (hp->cth_symidx_len > 0)
+    fp->ctf_symidx_names = (uint32_t *) (fp->ctf_buf + hp->cth_funcidx_off);
+  if (hp->cth_funcidx_len > 0 && !skip_func_info)
+    fp->ctf_funcidx_names = (uint32_t *) (fp->ctf_buf + hp->cth_funcidx_off);
+
+  /* Don't bother doing the rest if everything is indexed, or if we don't have a
+     symbol table: we will never use it.  */
+  if ((fp->ctf_objtidx_names && fp->ctf_funcidx_names) || !sp || !sp->cts_data)
+    return 0;
+
+  /* The CTF data object and function type sections are ordered to match the
+     relative order of the respective symbol types in the symtab, unless there
+     is an index section, in which case the order is arbitrary and the index
+     gives the mapping.  If no type information is available for a symbol table
+     entry, a pad is inserted in the CTF section.  As a further optimization,
+     anonymous or undefined symbols are omitted from the CTF data.  If an
+     index is available for function symbols but not object symbols, or vice
+     versa, we populate the xslate table for the unindexed symbols only.  */
+
+  for (i = 0, symp = sp->cts_data; xp < xend; xp++, symp += sp->cts_entsize,
+	 i++)
+    {
+      ctf_link_sym_t sym;
+
+      switch (sp->cts_entsize)
+	{
+	case sizeof (Elf64_Sym):
+	  {
+	    const Elf64_Sym *symp64 = (Elf64_Sym *) (uintptr_t) symp;
+	    ctf_elf64_to_link_sym (fp, &sym, symp64, i);
+	  }
+	  break;
+	case sizeof (Elf32_Sym):
+	  {
+	    const Elf32_Sym *symp32 = (Elf32_Sym *) (uintptr_t) symp;
+	    ctf_elf32_to_link_sym (fp, &sym, symp32, i);
+	  }
+	  break;
+	default:
+	  return ECTF_SYMTAB;
+	}
+
+      /* This call may be led astray if our idea of the symtab's endianness is
+	 wrong, but when this is fixed by a call to ctf_symsect_endianness,
+	 init_symtab will be called again with the right endianness in
+	 force.  */
+      if (ctf_symtab_skippable (&sym))
+	{
+	  *xp = -1u;
+	  continue;
+	}
+
+      switch (sym.st_type)
+	{
+	case STT_OBJECT:
+	  if (fp->ctf_objtidx_names || (objtoff - hp->cth_objt_off) >= hp->cth_objt_len)
+	    {
+	      *xp = -1u;
+	      break;
+	    }
+
+	  *xp = objtoff;
+	  objtoff += sizeof (uint32_t);
+	  break;
+
+	case STT_FUNC:
+	  if (fp->ctf_funcidx_names || (funcoff - hp->cth_func_off) >= hp->cth_func_len
+	      || skip_func_info)
+	    {
+	      *xp = -1u;
+	      break;
+	    }
+
+	  *xp = funcoff;
+	  funcoff += sizeof (uint32_t);
+	  break;
+
+	default:
+	  *xp = -1u;
+	  break;
+	}
+    }
+
+  ctf_dprintf ("loaded %lu symtab entries\n", fp->ctf_nsyms);
+  return 0;
+}

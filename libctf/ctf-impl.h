@@ -44,15 +44,6 @@ extern "C"
 {
 #endif
 
-/* Tuning.  */
-
-/* The proportion of symtypetab entries which must be pads before we consider it
-   worthwhile to emit a symtypetab section as an index.  Indexes cost time to
-   look up, but save space all told.  Do not set to 1, since this will cause
-   indexes to be eschewed completely, even in child dicts, at considerable space
-   cost.  */
-#define CTF_INDEX_PAD_THRESHOLD .75
-
 /* Compiler attributes.  */
 
 #if defined (__GNUC__)
@@ -446,9 +437,6 @@ struct ctf_dict
   ctf_sect_t ctf_ext_symtab;	    /* Symbol table from object file.  */
   ctf_sect_t ctf_ext_strtab;	    /* String table from object file.  */
   int ctf_symsect_little_endian;    /* Endianness of the ctf_ext_symtab.  */
-  ctf_dynhash_t *ctf_symhash_func;  /* (partial) hash, symsect name -> idx. */
-  ctf_dynhash_t *ctf_symhash_objt;  /* ditto, for object symbols.  */
-  size_t ctf_symhash_latest;	    /* Amount of symsect scanned so far.  */
   ctf_dynhash_t *ctf_prov_strtab;   /* Maps provisional-strtab offsets
 				       to names.  */
   ctf_dynhash_t *ctf_syn_ext_strtab; /* Maps ext-strtab offsets to names.  */
@@ -480,9 +468,6 @@ struct ctf_dict
   ctf_btf_layout_t *ctf_layout;	  /* CTF layout section (if any).  */
   int ctf_alien;		  /* True if this dict contains foreign kinds.  */
   ctf_serialize_t ctf_serialize;  /* State internal to ctf-serialize.c.  */
-  uint32_t *ctf_sxlate;		  /* Translation table for unindexed symtypetab
-				     entries.  */
-  unsigned long ctf_nsyms;	  /* Number of entries in symtab xlate table.  */
   ctf_type_t **ctf_txlate;	  /* Translation table for type IDs.  */
   uint32_t *ctf_ptrtab;		  /* Translation table for pointer-to lookups.  */
   size_t ctf_ptrtab_len;	  /* Num types storable in ptrtab currently.  */
@@ -492,15 +477,11 @@ struct ctf_dict
   ctf_type_t *ctf_void_type;	  /* void type, if dynamically constructed. (More
 				     space allocated, due to vlen.)  */
   ctf_dynset_t *ctf_conflicting_enums;	/* Tracks enum constants that conflict.  */
-  uint32_t *ctf_funcidx_names;	  /* Name of each function symbol in symtypetab
-				     (if indexed).  */
-  uint32_t *ctf_objtidx_names;	  /* Likewise, for object symbols.  */
-  size_t ctf_nfuncidx;		  /* Number of funcidx entries.  */
-  uint32_t *ctf_funcidx_sxlate;	  /* Offsets into funcinfo for a given funcidx.  */
-  uint32_t *ctf_objtidx_sxlate;	  /* Likewise, for ctf_objtidx.  */
-  size_t ctf_nobjtidx;		  /* Number of objtidx entries.  */
-  ctf_dynhash_t *ctf_objthash;	  /* Dynamic: name -> type ID.  */
-  ctf_dynhash_t *ctf_funchash;	  /* Dynamic: name -> CTF_K_FUNCTION type ID.  */
+  uint32_t *ctf_symtypeidx_names; /* Name of each symbol in symtypetab (if indexed).  */
+  uint32_t *ctf_symtypeidx_alloc; /* Dynamically-allocated ctf_symidx_names.  */
+  size_t ctf_nsymtypeidx;	  /* Number of indexed type entries.  */
+  uint32_t *ctf_symtypeidx_sxlate;/* Offsets into syminfo for a given symtypeidx.  */
+  ctf_dynhash_t *ctf_symtypehash; /* Dynamic: name -> type ID.  */
 
   /* The next three are linker-derived state found in ctf_link targets only.  */
 
@@ -619,7 +600,6 @@ struct ctf_archive_internal
   int ctfi_has_strtab;		    /* 1 if this archive has a strtab.  */
   ctf_dict_t *ctfi_parent;	    /* Parent dict.  */
   ctf_dynhash_t *ctfi_dicts;	    /* Dicts we have opened and cached.  */
-  ctf_dict_t *ctfi_crossdict_cache; /* Cross-dict caching.  */
   ctf_dict_t **ctfi_symdicts;	    /* Array of index -> ctf_dict_t *.  */
   ctf_dynhash_t *ctfi_symnamedicts; /* Hash of name -> ctf_dict_t *.  */
   ctf_sect_t ctfi_symsect;
@@ -731,8 +711,7 @@ extern const ctf_type_t *ctf_lookup_by_id (ctf_dict_t **, ctf_id_t,
 extern const ctf_type_t *ctf_find_prefix (ctf_dict_t *, const ctf_type_t *,
 					  ctf_kind_t kind);
 extern ctf_id_t ctf_lookup_by_sym_or_name (ctf_dict_t *, unsigned long symidx,
-					   const char *symname, int try_parent,
-					   int is_function);
+					   const char *symname, int try_parent);
 extern int ctf_refresh_pptrtab (ctf_dict_t *);
 extern ctf_id_t ctf_lookup_by_rawname (ctf_dict_t *, ctf_kind_t, const char *);
 extern ctf_id_t ctf_lookup_by_symbol (ctf_dict_t *, unsigned long);
@@ -740,7 +719,7 @@ extern ctf_id_t ctf_lookup_by_symbol_name (ctf_dict_t *, const char *);
 
 extern void ctf_set_ctl_hashes (ctf_dict_t *);
 extern ctf_id_t ctf_symbol_next_static (ctf_dict_t *, ctf_next_t **,
-					const char **, ctf_funcobjt_t);
+					const char **);
 
 extern int ctf_symtab_skippable (ctf_link_sym_t *sym);
 
@@ -839,8 +818,7 @@ extern ctf_dtdef_t *ctf_dynamic_type (const ctf_dict_t *, ctf_id_t);
 
 extern ctf_id_t ctf_add_encoded (ctf_dict_t *, const char *,
 				 const ctf_encoding_t *, ctf_kind_t kind);
-extern ctf_ret_t ctf_add_funcobjt_sym_forced (ctf_dict_t *, int is_function,
-					      const char *, ctf_id_t);
+extern ctf_ret_t ctf_add_sym_forced (ctf_dict_t *, const char *, ctf_id_t);
 
 extern int ctf_insert_type_decl_tag (ctf_dict_t *, ctf_id_t, const char *);
 extern int ctf_insert_decl_tag_rmap (ctf_dict_t *fp, ctf_id_t tag_type,
@@ -915,7 +893,6 @@ extern ctf_dict_t *ctf_bufopen_len (ctf_open_sect_t *sects,
 				    ctf_archive_t *ctf_archive,
 				    ctf_import_flags_t import_flags,
 				    ctf_error_t *errp);
-extern void ctf_symsect_endianness (ctf_dict_t *fp, int little_endian);
 
 extern ctf_ret_t ctf_write_thresholded (ctf_dict_t *fp, int fd, size_t threshold);
 
