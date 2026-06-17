@@ -949,7 +949,7 @@ ctf_arc_symsect_endianness (struct ctf_archive_internal *arci, int little_endian
 {
   arci->ctfi_symsect_little_endian = !!little_endian;
   if (arci->ctfi_dict)
-    ctf_symsect_endianness (arci->ctfi_dict, arci->ctfi_symsect_little_endian);
+    arci->ctfi_dict->ctf_symsect_little_endian = !!little_endian;
 }
 
 /* Return various ELF sections related to CTF.  The archive counterpart of
@@ -1243,8 +1243,7 @@ ctf_arc_set_parent (struct ctf_archive_internal *arci, ctf_dict_t *parent)
 static ctf_dict_t *
 ctf_dict_open_by_offset (struct ctf_archive_internal *arci,
 			 ctf_open_sect_t *sects, size_t offset, size_t len,
-			 ctf_dict_t *parent, int little_endian_symtab,
-			 ctf_error_t *errp)
+			 ctf_dict_t *parent, ctf_error_t *errp)
 {
   ctf_sect_t ctfsect = {0};
   ctf_dict_t *fp;
@@ -1271,8 +1270,8 @@ ctf_dict_open_by_offset (struct ctf_archive_internal *arci,
   if (!fp)
     return NULL;				/* errno is set for us.  */
 
-  if (little_endian_symtab >= 0)
-    ctf_symsect_endianness (fp, little_endian_symtab);
+  if (arci->ctfi_symsect_little_endian >= 0)
+    fp->ctf_symsect_little_endian = arci->ctfi_symsect_little_endian;
 
   /* Set the CU name if unset, either by looking up the name for the member
      at this offset in the strtab, or by using a linker-set default
@@ -1355,7 +1354,7 @@ ctf_dict_open_by_index (struct ctf_archive_internal *arci, size_t index,
 
       fp = ctf_dict_open_by_offset (arci, ctf_open_sect (ctf_open_sect (NULL, symsectp), strsectp),
 				    arci->ctfi_members[index], len, parent,
-				    arci->ctfi_symsect_little_endian, errp);
+				    errp);
       if (fp)
 	{
 	  fp->ctf_archive = (struct ctf_archive_internal *) arci;
@@ -1424,8 +1423,7 @@ ctf_cached_dict_close (void *fp)
 }
 
 /* Return the ctf_dict_t with the given index and cache it in the archive's
-   ctfi_dicts.  If this is the first cached dict, designate it the
-   crossdict_cache.  The archive is already known not to be a wrapper.  */
+   ctfi_dicts.  The archive is already known not to be a wrapper.  */
 static ctf_dict_t *
 ctf_dict_open_cached (struct ctf_archive_internal *arci, size_t index,
 		      ctf_error_t *errp)
@@ -1464,9 +1462,6 @@ ctf_dict_open_cached (struct ctf_archive_internal *arci, size_t index,
     goto oom;
   fp->ctf_refcnt++;
 
-  if (arci->ctfi_crossdict_cache == NULL)
-    arci->ctfi_crossdict_cache = fp;
-
   /* If this archive has multiple members, and this is a parent, pretend
      that we have opened at least one child.  This forces type and string
      allocations in the parent to use provisional IDs, permitting you to
@@ -1498,7 +1493,6 @@ ctf_arc_flush_caches (struct ctf_archive_internal *arci)
   arci->ctfi_symdicts = NULL;
   arci->ctfi_symnamedicts = NULL;
   arci->ctfi_dicts = NULL;
-  arci->ctfi_crossdict_cache = NULL;
 }
 
 /* Return the number of members in an archive.  */

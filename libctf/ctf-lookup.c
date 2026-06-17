@@ -17,6 +17,7 @@
    along with this program; see the file COPYING.  If not see
    <http://www.gnu.org/licenses/>.  */
 
+#include "ctf-api.h"
 #include <ctf-impl.h>
 #include <elf.h>
 #include <string.h>
@@ -687,14 +688,16 @@ sort_symidx_by_name (const void *one_, const void *two_, void *arg_)
 /* Sort a symbol index section by name.  Takes a 1:1 mapping of names to the
    corresponding symbol table.  Returns a lexicographically sorted array of idx
    indexes (and thus, of indexes into the corresponding func info / data object
-   section).  */
+   section).  The array is only sorted if necessary.  Only called once for
+   any given symbol index section.  */
 
 static uint32_t *
-ctf_symidx_sort (ctf_dict_t *fp, uint32_t *idx, size_t *nidx,
-		 size_t len)
+ctf_symidx_sort (ctf_dict_t *fp, uint32_t *idx, size_t *nidx, size_t len)
 {
-  uint32_t *sorted;
+  uint32_t *sorted = NULL;
   size_t i;
+  int needs_sort = 0;
+  const char *last = NULL;
 
   if ((sorted = malloc (len)) == NULL)
     {
@@ -706,22 +709,35 @@ ctf_symidx_sort (ctf_dict_t *fp, uint32_t *idx, size_t *nidx,
   for (i = 0; i < *nidx; i++)
     sorted[i] = i;
 
-  if (!(fp->ctf_header->cth_flags & CTF_F_IDXSORTED))
+  /* Avoid resorting if already sorted.  */
+  for (i = 0; i < *nidx; i++)
+    {
+      const char *str = ctf_strptr (fp, idx[i]);
+
+      if (last && strcmp (last, str) > 0)
+	{
+	  needs_sort = 1;
+	  break; /* Needs sorting.  */
+	}
+      last = str;
+    }
+
+  if (needs_sort)
     {
       ctf_symidx_sort_arg_cb_t arg = { fp, idx };
       ctf_dprintf ("Index section unsorted: sorting.\n");
       ctf_qsort_r (sorted, *nidx, sizeof (uint32_t), sort_symidx_by_name, &arg);
-      fp->ctf_header->cth_flags |= CTF_F_IDXSORTED;
     }
 
   return sorted;
 }
 
-/* Given a symbol index, return the name of that symbol from the table provided
-   by ctf_link_shuffle_syms, or failing that from the secondary string table, or
-   the null string.  */
+/* Given a symbol index, return the name of that symbol from the table
+   provided by ctf_link_shuffle_syms, or failing that from the secondary
+   string table, or the null string; also optionally say whether it's a
+   function or object symbol.  */
 static const char *
-ctf_lookup_symbol_name (ctf_dict_t *fp, unsigned long symidx)
+ctf_lookup_symbol_info (ctf_dict_t *fp, unsigned long symidx)
 {
   const ctf_sect_t *sp = &fp->ctf_ext_symtab;
   ctf_link_sym_t sym;
@@ -745,7 +761,7 @@ ctf_lookup_symbol_name (ctf_dict_t *fp, unsigned long symidx)
   if (sp->cts_data == NULL)
     goto try_parent;
 
-  if (symidx >= fp->ctf_nsyms)
+  if (symidx >= (sp->cts_size / sp->cts_entsize))
     goto try_parent;
 
   switch (sp->cts_entsize)
@@ -775,8 +791,8 @@ ctf_lookup_symbol_name (ctf_dict_t *fp, unsigned long symidx)
   if (fp->ctf_parent)
     {
       const char *ret;
-      ret = ctf_lookup_symbol_name (fp->ctf_parent, symidx);
-      if (ret == NULL)
+      ret = ctf_lookup_symbol_info (fp->ctf_parent, symidx);
+      if (ret[0] == '\0')
 	ctf_set_errno (fp, ctf_errno (fp->ctf_parent));
       return ret;
     }
@@ -787,157 +803,18 @@ ctf_lookup_symbol_name (ctf_dict_t *fp, unsigned long symidx)
     }
 }
 
-/* Given a symbol name, return the index of that symbol, or -1 on error or if
-   not found.  If is_function is >= 0, return only function or data object
-   symbols, respectively.  */
-static unsigned long
-ctf_lookup_symbol_idx (ctf_dict_t *fp, const char *symname, int try_parent,
-		       int is_function)
-{
-  const ctf_sect_t *sp = &fp->ctf_ext_symtab;
-  ctf_link_sym_t sym;
-  void *known_idx;
-  ctf_error_t err;
-  ctf_dict_t *cache = fp;
+ctf_id_t
+ctf_symbol_next_static (ctf_dict_t *fp, ctf_next_t **it, const char **name);
 
-  if (fp->ctf_dynsyms)
-    {
-      err = EINVAL;
-
-      ctf_link_sym_t *symp;
-
-      if (((symp = ctf_dynhash_lookup (fp->ctf_dynsyms, symname)) == NULL)
-	  || (symp->st_type != STT_OBJECT && is_function == 0)
-	  || (symp->st_type != STT_FUNC && is_function == 1))
-	goto try_parent;
-
-      return symp->st_symidx;
-    }
-
-  err = ECTF_NOSYMTAB;
-  if (sp->cts_data == NULL)
-    goto try_parent;
-
-  /* First, try a hash lookup to see if we have already spotted this symbol
-     during a past iteration: create the hash first if need be.  The
-     lifespan of the strings is equal to the lifespan of the cts_data, so we
-     don't need to strdup them.  If this dict was opened as part of an
-     archive, and this archive has a crossdict_cache to cache results that
-     are the same across all dicts in an archive, use it.  */
-
-  if (fp->ctf_archive && fp->ctf_archive->ctfi_crossdict_cache)
-    cache = fp->ctf_archive->ctfi_crossdict_cache;
-
-  if (!cache->ctf_symhash_func)
-    if ((cache->ctf_symhash_func = ctf_dynhash_create (ctf_hash_string,
-						       ctf_hash_eq_string,
-						       NULL, NULL)) == NULL)
-      goto oom;
-
-  if (!cache->ctf_symhash_objt)
-    if ((cache->ctf_symhash_objt = ctf_dynhash_create (ctf_hash_string,
-						       ctf_hash_eq_string,
-						       NULL, NULL)) == NULL)
-      goto oom;
-
-  if (is_function != 0 &&
-      ctf_dynhash_lookup_kv (cache->ctf_symhash_func, symname, NULL, &known_idx))
-    return (unsigned long) (uintptr_t) known_idx;
-
-  if (is_function != 1 &&
-      ctf_dynhash_lookup_kv (cache->ctf_symhash_objt, symname, NULL, &known_idx))
-    return (unsigned long) (uintptr_t) known_idx;
-
-  /* Hash lookup unsuccessful: linear search, populating the hashtab for later
-     lookups as we go.  */
-
-  for (; cache->ctf_symhash_latest < sp->cts_size / sp->cts_entsize;
-       cache->ctf_symhash_latest++)
-    {
-      ctf_dynhash_t *h;
-
-      switch (sp->cts_entsize)
-	{
-	case sizeof (Elf64_Sym):
-	  {
-	    Elf64_Sym *symp = (Elf64_Sym *) sp->cts_data;
-
-	    ctf_elf64_to_link_sym (fp, &sym, &symp[cache->ctf_symhash_latest],
-				   cache->ctf_symhash_latest);
-	  }
-	  break;
-	case sizeof (Elf32_Sym):
-	  {
-	    Elf32_Sym *symp = (Elf32_Sym *) sp->cts_data;
-	    ctf_elf32_to_link_sym (fp, &sym, &symp[cache->ctf_symhash_latest],
-				   cache->ctf_symhash_latest);
-	    break;
-	  }
-	default:
-	  ctf_set_errno (fp, ECTF_SYMTAB);
-	  return (unsigned long) -1;
-	}
-
-      if (sym.st_type == STT_FUNC)
-	h = cache->ctf_symhash_func;
-      else if (sym.st_type == STT_OBJECT)
-	h = cache->ctf_symhash_objt;
-      else
-	continue;					/* Not of interest.  */
-
-      if (!ctf_dynhash_lookup_kv (h, sym.st_name,
-				  NULL, NULL))
-	if (ctf_dynhash_cinsert (h, sym.st_name,
-				 (const void *) (uintptr_t)
-				 cache->ctf_symhash_latest) < 0)
-	  goto oom;
-      if (strcmp (sym.st_name, symname) == 0)
-	return cache->ctf_symhash_latest++;
-    }
-
-  /* Searched everything, still not found.  */
-
-  return (unsigned long) -1;
-
- try_parent:
-  if (fp->ctf_parent && try_parent)
-    {
-      unsigned long psym;
-
-      if ((psym = ctf_lookup_symbol_idx (fp->ctf_parent, symname, try_parent,
-					 is_function))
-          != (unsigned long) -1)
-        return psym;
-
-      ctf_set_errno (fp, ctf_errno (fp->ctf_parent));
-      return (unsigned long) -1;
-    }
-  else
-    {
-      ctf_set_errno (fp, err);
-      return (unsigned long) -1;
-    }
-oom:
-  ctf_err (err_locus (fp), ENOMEM, _("allocating symbol lookup hashtab"));
-  return (unsigned long) -1;
-
-}
+/* Iterate over all symbols with types.  The name argument is not optional.
+   The return order is arbitrary, though is likely to be in symbol index or
+   name order.  Changing the value of 'functions' in the middle of iteration
+   has unpredictable effects (probably skipping symbols, etc) and is not
+   recommended.  Adding symbols while iteration is underway may also lead to
+   other symbols being skipped.  */
 
 ctf_id_t
-ctf_symbol_next_static (ctf_dict_t *fp, ctf_next_t **it, const char **name,
-			ctf_funcobjt_t functions);
-
-/* Iterate over all symbols with types: if FUNC, function symbols,
-   otherwise, data symbols.  The name argument is not optional.  The return
-   order is arbitrary, though is likely to be in symbol index or name order.
-   Changing the value of 'functions' in the middle of iteration has
-   unpredictable effects (probably skipping symbols, etc) and is not
-   recommended.  Adding symbols while iteration is underway may also lead
-   to other symbols being skipped.  */
-
-ctf_id_t
-ctf_symbol_next (ctf_dict_t *fp, ctf_next_t **it, const char **name,
-		 ctf_funcobjt_t functions)
+ctf_symbol_next (ctf_dict_t *fp, ctf_next_t **it, const char **name)
 {
   ctf_id_t sym = CTF_ERR;
   ctf_next_t *i = *it;
@@ -976,13 +853,12 @@ ctf_symbol_next (ctf_dict_t *fp, ctf_next_t **it, const char **name,
      finally because it's easier to work out what the name of each symbol is if
      we do that.  */
 
-  ctf_dynhash_t *dynh = functions ? fp->ctf_funchash : fp->ctf_objthash;
   void *dyn_name = NULL, *dyn_value = NULL;
-  size_t dyn_els = dynh ? ctf_dynhash_elements (dynh) : 0;
 
-  if (i->ctn_n < dyn_els)
+  if (i->ctn_n < ctf_dynhash_elements (fp->ctf_symtypehash))
     {
-      err = ctf_dynhash_next (dynh, &i->ctn_next, &dyn_name, &dyn_value);
+      err = ctf_dynhash_next (fp->ctf_symtypehash, &i->ctn_next,
+			      &dyn_name, &dyn_value);
 
       /* This covers errors and also end-of-iteration.  */
       if (err != 0)
@@ -995,7 +871,7 @@ ctf_symbol_next (ctf_dict_t *fp, ctf_next_t **it, const char **name,
       return sym;
     }
 
-  return ctf_symbol_next_static (fp, it, name, functions);
+  return ctf_symbol_next_static (fp, it, name);
 
  end:
   ctf_next_destroy (i);
@@ -1007,14 +883,21 @@ ctf_symbol_next (ctf_dict_t *fp, ctf_next_t **it, const char **name,
    implementation detail of ctf_symbol_next, but also used to simplify
    serialization.  */
 ctf_id_t
-ctf_symbol_next_static (ctf_dict_t *fp, ctf_next_t **it, const char **name,
-			ctf_funcobjt_t functions)
+ctf_symbol_next_static (ctf_dict_t *fp, ctf_next_t **it, const char **name)
 {
   ctf_id_t sym = CTF_ERR;
   ctf_next_t *i = *it;
-  ctf_dynhash_t *dynh = functions ? fp->ctf_funchash : fp->ctf_objthash;
-  size_t dyn_els = dynh ? ctf_dynhash_elements (dynh) : 0;
+  size_t dyn_els = 0;
   ctf_error_t err;
+
+  uint32_t *tab = (uint32_t *) (fp->ctf_buf + fp->ctf_header->cth_func_off);
+  size_t len = fp->ctf_header->cth_funcidx_len / sizeof (uint32_t);
+
+  if (!fp->ctf_symtypeidx_names)
+    return (ctf_set_typed_errno (fp, ECTF_NEXT_END));
+
+  if (fp->ctf_symtypehash)
+    dyn_els = ctf_dynhash_elements (fp->ctf_symtypehash);
 
   /* Only relevant for direct internal-to-library calls, not via
      ctf_symbol_next (but important then).  */
@@ -1042,81 +925,22 @@ ctf_symbol_next_static (ctf_dict_t *fp, ctf_next_t **it, const char **name,
       goto end;
     }
 
-  /* TODO: Indexed after non-indexed portions?  */
-
-  if ((!functions && fp->ctf_objtidx_names) ||
-      (functions && fp->ctf_funcidx_names))
+  do
     {
-      ctf_header_t *hp = fp->ctf_header;
-      uint32_t *idx = functions ? fp->ctf_funcidx_names : fp->ctf_objtidx_names;
-      uint32_t *tab;
-      size_t len;
-
-      if (functions)
-	{
-	  len = hp->cth_funcidx_len / sizeof (uint32_t);
-	  tab = (uint32_t *) (fp->ctf_buf + hp->cth_func_off);
-	}
-      else
-	{
-	  len = hp->cth_objtidx_len / sizeof (uint32_t);
-	  tab = (uint32_t *) (fp->ctf_buf + hp->cth_objt_off);
-	}
-
-      do
-	{
-	  if (i->ctn_n - dyn_els >= len)
-	    {
-	      err = ECTF_NEXT_END;
-	      goto end;
-	    }
-
-	  *name = ctf_strptr (fp, idx[i->ctn_n - dyn_els]);
-	  sym = tab[i->ctn_n - dyn_els];
-	  i->ctn_n++;
-	}
-      while (sym == -1u || sym == 0);
-    }
-  else
-    {
-      /* Skip over pads in ctf_sxlate, padding for typeless symbols in the
-	 symtypetab itself, and symbols in the wrong table.  */
-      for (; i->ctn_n - dyn_els < fp->ctf_nsyms; i->ctn_n++)
-	{
-	  ctf_header_t *hp = fp->ctf_header;
-	  size_t n = i->ctn_n - dyn_els;
-
-	  if (fp->ctf_sxlate[n] == -1u)
-	    continue;
-
-	  sym = *(uint32_t *) ((uintptr_t) fp->ctf_buf + fp->ctf_sxlate[n]);
-
-	  if (sym == 0)
-	    continue;
-
-	  if (functions)
-	    {
-	      if (fp->ctf_sxlate[n] >= hp->cth_func_off
-		  && fp->ctf_sxlate[n] < hp->cth_func_off + hp->cth_func_len)
-		break;
-	    }
-	  else
-	    {
-	      if (fp->ctf_sxlate[n] >= hp->cth_objt_off
-		  && fp->ctf_sxlate[n] < hp->cth_objt_off + hp->cth_objt_len)
-		break;
-	    }
-	}
-
-      if (i->ctn_n - dyn_els >= fp->ctf_nsyms)
+      if (i->ctn_n - dyn_els >= len)
 	{
 	  err = ECTF_NEXT_END;
 	  goto end;
 	}
 
-      *name = ctf_lookup_symbol_name (fp, i->ctn_n - dyn_els);
+      *name = ctf_lookup_symbol_info (fp, i->ctn_n);
+      if (*name[0] == 0)
+	continue;
+
+      sym = tab[i->ctn_n - dyn_els];
       i->ctn_n++;
     }
+  while (sym == -1u || sym == 0);
 
   return sym;
 
@@ -1126,7 +950,7 @@ ctf_symbol_next_static (ctf_dict_t *fp, ctf_next_t **it, const char **name,
   return (ctf_set_typed_errno (fp, err));
 }
 
-/* A bsearch function for function and object index names.  */
+/* A bsearch function for symtypetab symbol names.  */
 
 static int
 ctf_lookup_idx_name (const void *key_, const void *idx_)
@@ -1142,17 +966,13 @@ ctf_lookup_idx_name (const void *key_, const void *idx_)
    there (or pad).  */
 
 static ctf_id_t
-ctf_try_lookup_indexed (ctf_dict_t *fp, unsigned long symidx,
-			const char *symname, ctf_funcobjt_t functions)
+ctf_try_sym_lookup (ctf_dict_t *fp, unsigned long symidx, const char *symname)
 {
   struct ctf_header *hp = fp->ctf_header;
-  uint32_t *symtypetab;
-  uint32_t *names;
-  uint32_t *sxlate;
-  size_t nidx;
+  uint32_t *symtypetab = (uint32_t *) (fp->ctf_buf + hp->cth_func_off);
 
   if (symname == NULL)
-    symname = ctf_lookup_symbol_name (fp, symidx);
+    symname = ctf_lookup_symbol_info (fp, symidx);
 
   /* Dynamic dict with no static portion: just return.  */
   if (!hp)
@@ -1167,50 +987,24 @@ ctf_try_lookup_indexed (ctf_dict_t *fp, unsigned long symidx,
   if (symname[0] == '\0')
     return CTF_ERR;					/* errno is set for us.  */
 
-  if (functions)
+  if (!fp->ctf_symtypeidx_sxlate)
     {
-      if (!fp->ctf_funcidx_sxlate)
+      if ((fp->ctf_symtypeidx_sxlate
+	   = ctf_symidx_sort (fp, (uint32_t *)
+			      (fp->ctf_buf + hp->cth_funcidx_off),
+			      &fp->ctf_nsymtypeidx, hp->cth_funcidx_len))
+	  == NULL)
 	{
-	  if ((fp->ctf_funcidx_sxlate
-	       = ctf_symidx_sort (fp, (uint32_t *)
-				  (fp->ctf_buf + hp->cth_funcidx_off),
-				  &fp->ctf_nfuncidx, hp->cth_funcidx_len))
-	      == NULL)
-	    {
-	      ctf_err (err_locus (fp), 0, _("cannot sort function symidx"));
-	      return CTF_ERR;				/* errno is set for us.  */
-	    }
+	  ctf_err (err_locus (fp), 0, _("cannot sort symtypetab"));
+	  return CTF_ERR;				/* errno is set for us.  */
 	}
-      symtypetab = (uint32_t *) (fp->ctf_buf + hp->cth_func_off);
-      sxlate = fp->ctf_funcidx_sxlate;
-      names = fp->ctf_funcidx_names;
-      nidx = fp->ctf_nfuncidx;
-    }
-  else
-    {
-      if (!fp->ctf_objtidx_sxlate)
-	{
-	  if ((fp->ctf_objtidx_sxlate
-	       = ctf_symidx_sort (fp, (uint32_t *)
-				  (fp->ctf_buf + hp->cth_objtidx_off),
-				  &fp->ctf_nobjtidx, hp->cth_objtidx_len))
-	      == NULL)
-	    {
-	      ctf_err (err_locus (fp), 0, _("cannot sort object symidx"));
-	      return CTF_ERR;				/* errno is set for us. */
-	    }
-	}
-
-      symtypetab = (uint32_t *) (fp->ctf_buf + hp->cth_objt_off);
-      sxlate = fp->ctf_objtidx_sxlate;
-      names = fp->ctf_objtidx_names;
-      nidx = fp->ctf_nobjtidx;
     }
 
-  ctf_lookup_idx_key_t key = { fp, symname, names };
+  ctf_lookup_idx_key_t key = { fp, symname, fp->ctf_symtypeidx_names };
   uint32_t *idx;
 
-  idx = bsearch (&key, sxlate, nidx, sizeof (uint32_t), ctf_lookup_idx_name);
+  idx = bsearch (&key, fp->ctf_symtypeidx_sxlate, fp->ctf_nsymtypeidx,
+		 sizeof (uint32_t), ctf_lookup_idx_name);
 
   if (!idx)
     {
@@ -1219,7 +1013,7 @@ ctf_try_lookup_indexed (ctf_dict_t *fp, unsigned long symidx,
     }
 
   /* Should be impossible, but be paranoid.  */
-  if ((idx - sxlate) > (ptrdiff_t) nidx)
+  if ((idx - fp->ctf_symtypeidx_sxlate) > (ptrdiff_t) fp->ctf_nsymtypeidx)
     return (ctf_set_typed_errno (fp, ECTF_CORRUPT));
 
   ctf_dprintf ("Symbol %lx (%s) is of type %x\n", symidx, symname,
@@ -1233,15 +1027,11 @@ ctf_try_lookup_indexed (ctf_dict_t *fp, unsigned long symidx,
    ctf_link_shuffle_syms has been called to assign symbol indexes to symbol
    names.
 
-   If try_parent is false, do not check the parent dict too.
-
-   If is_function is > -1, only look for data objects or functions in
-   particular.  */
+   If try_parent is false, do not check the parent dict too.  */
 
 ctf_id_t
 ctf_lookup_by_sym_or_name (ctf_dict_t *fp, unsigned long symidx,
-			   const char *symname, int try_parent,
-			   int is_function)
+			   const char *symname, int try_parent)
 {
   const ctf_sect_t *sp = &fp->ctf_ext_symtab;
   ctf_id_t type = 0;
@@ -1272,9 +1062,7 @@ ctf_lookup_by_sym_or_name (ctf_dict_t *fp, unsigned long symidx,
 
 	  sym = fp->ctf_dynsymidx[symidx];
 	  err = ECTF_NOTYPEDAT;
-	  if (!sym || (sym->st_type != STT_OBJECT && sym->st_type != STT_FUNC)
-	      || (sym->st_type != STT_OBJECT && is_function == 0)
-	      || (sym->st_type != STT_FUNC && is_function == 1))
+	  if (!sym || (sym->st_type != STT_OBJECT && sym->st_type != STT_FUNC))
 	    goto try_parent;
 
 	  if (!ctf_assert (fp, !sym->st_nameidx_set))
@@ -1282,89 +1070,41 @@ ctf_lookup_by_sym_or_name (ctf_dict_t *fp, unsigned long symidx,
 	  symname = sym->st_name;
      }
 
-      if (fp->ctf_objthash == NULL
-	  || is_function == 1
+      if (fp->ctf_symtypehash == NULL
 	  || (type = (ctf_id_t) (uintptr_t)
-	      ctf_dynhash_lookup (fp->ctf_objthash, symname)) == 0)
-	{
-	  if (fp->ctf_funchash == NULL
-	      || is_function == 0
-	      || (type = (ctf_id_t) (uintptr_t)
-		  ctf_dynhash_lookup (fp->ctf_funchash, symname)) == 0)
-	    goto try_parent;
-	}
+	      ctf_dynhash_lookup (fp->ctf_symtypehash, symname)) == 0)
+	goto try_parent;
 
       return type;
     }
 
-  /* Dict not shuffled: look for a dynamic sym first, and look it up
-     directly.  */
-  if (symname)
-    {
-      if (fp->ctf_objthash != NULL
-	  && is_function != 1
-	  && ((type = (ctf_id_t) (uintptr_t)
-	       ctf_dynhash_lookup (fp->ctf_objthash, symname)) != 0))
-	return type;
-
-      if (fp->ctf_funchash != NULL
-	  && is_function != 0
-	  && ((type = (ctf_id_t) (uintptr_t)
-	       ctf_dynhash_lookup (fp->ctf_funchash, symname)) != 0))
-	return type;
-    }
+  /* Dict not shuffled: look for a dynamic sym.  */
+  if (symname && fp->ctf_symtypehash != NULL
+      && ((type = (ctf_id_t) (uintptr_t)
+	   ctf_dynhash_lookup (fp->ctf_symtypehash, symname)) != 0))
+    return type;
 
   err = ECTF_NOSYMTAB;
   if (sp->cts_data == NULL && symname == NULL &&
-      ((is_function && !fp->ctf_funcidx_names) ||
-       (!is_function && !fp->ctf_objtidx_names)))
+      !fp->ctf_symtypeidx_names)
     goto try_parent;
 
   /* This covers both out-of-range lookups by index and a dynamic dict which
      hasn't been shuffled yet.  */
   err = EINVAL;
-  if (symname == NULL && symidx >= fp->ctf_nsyms)
+  if (symname == NULL)
     goto try_parent;
 
   /* Try an indexed lookup.  We can only do indexed lookups if we have a string
      table.  */
 
-  if (fp->ctf_objtidx_names && is_function != 1)
-    {
-      if ((type = ctf_try_lookup_indexed (fp, symidx, symname, 0)) == CTF_ERR)
-	return CTF_ERR;				/* errno is set for us.  */
-    }
-  if (type == 0 && fp->ctf_funcidx_names && is_function != 0)
-    {
-      if ((type = ctf_try_lookup_indexed (fp, symidx, symname, 1)) == CTF_ERR)
-	return CTF_ERR;				/* errno is set for us.  */
-    }
+  if ((type = ctf_try_sym_lookup (fp, symidx, symname)) == CTF_ERR)
+    return CTF_ERR;				/* errno is set for us.  */
   if (type != 0)
     return type;
 
-  /* Indexed but no symbol found -> not present, try the parent.  */
+  /* No symbol found?  Not present, try the parent.  */
   err = ECTF_NOTYPEDAT;
-  if (fp->ctf_objtidx_names && fp->ctf_funcidx_names)
-    goto try_parent;
-
-  /* Table must be nonindexed.  */
-
-  ctf_dprintf ("Looking up object type %lx in 1:1 dict symtypetab\n", symidx);
-
-  if (symname != NULL)
-    if ((symidx = ctf_lookup_symbol_idx (fp, symname, try_parent, is_function))
-	== (unsigned long) -1)
-      goto try_parent;
-
-  if (fp->ctf_sxlate[symidx] == -1u)
-    goto try_parent;
-
-  type = *(uint32_t *) ((uintptr_t) fp->ctf_buf + fp->ctf_sxlate[symidx]);
-
-  if (type == 0)
-    goto try_parent;
-
-  return type;
 
  try_parent:
   if (!try_parent)
@@ -1373,8 +1113,7 @@ ctf_lookup_by_sym_or_name (ctf_dict_t *fp, unsigned long symidx,
   if (fp->ctf_parent)
     {
       ctf_id_t ret = ctf_lookup_by_sym_or_name (fp->ctf_parent, symidx,
-						symname, try_parent,
-						is_function);
+						symname, try_parent);
       if (ret == CTF_ERR)
 	ctf_set_errno (fp, ctf_errno (fp->ctf_parent));
       return ret;
@@ -1388,7 +1127,7 @@ ctf_lookup_by_sym_or_name (ctf_dict_t *fp, unsigned long symidx,
 ctf_id_t
 ctf_lookup_by_symbol (ctf_dict_t *fp, unsigned long symidx)
 {
-  return ctf_lookup_by_sym_or_name (fp, symidx, NULL, 1, -1);
+  return ctf_lookup_by_sym_or_name (fp, symidx, NULL, 1);
 }
 
 /* Given a symbol name, return the type of the function or data object described
@@ -1396,5 +1135,5 @@ ctf_lookup_by_symbol (ctf_dict_t *fp, unsigned long symidx)
 ctf_id_t
 ctf_lookup_by_symbol_name (ctf_dict_t *fp, const char *symname)
 {
-  return ctf_lookup_by_sym_or_name (fp, 0, symname, 1, -1);
+  return ctf_lookup_by_sym_or_name (fp, 0, symname, 1);
 }
