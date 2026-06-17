@@ -458,126 +458,6 @@ static const ctf_dictops_t ctf_dictops[] = {
    get_prefixed_vlen_v4, get_ctt_size_v4, get_vbytes_v4},
 };
 
-/* Initialize the symtab translation table as appropriate for its indexing
-   state.  For unindexed symtypetabs, fill each entry with the offset of the CTF
-   type or function data corresponding to each STT_FUNC or STT_OBJECT entry in
-   the symbol table.  For indexed symtypetabs, do nothing: the needed
-   initialization for indexed lookups may be quite expensive, so it is done only
-   as needed, when lookups happen.  (In particular, the majority of indexed
-   symtypetabs come from the compiler, and all the linker does is iteration over
-   all entries, which doesn't need this initialization.)
-
-   The SP symbol table section may be NULL if there is no symtab.
-
-   If init_symtab works on one call, it cannot fail on future calls to the same
-   fp: ctf_symsect_endianness relies on this.  */
-
-static ctf_error_t
-init_symtab (ctf_dict_t *fp, const ctf_header_t *hp, const ctf_sect_t *sp)
-{
-  const unsigned char *symp;
-  int skip_func_info = 0;
-  int i;
-  uint32_t *xp = fp->ctf_sxlate;
-  uint32_t *xend = PTR_ADD (xp, fp->ctf_nsyms);
-
-  uint32_t objtoff = hp->cth_objt_off;
-  uint32_t funcoff = hp->cth_func_off;
-
-  /* If this is a v3 dict, and the CTF_F_NEWFUNCINFO flag is not set, pretend
-     the func info section is empty: this compiler is too old to emit a function
-     info section we understand.  */
-
-  if (fp->ctf_v3_header && !(fp->ctf_v3_header->cth_flags & CTF_F_NEWFUNCINFO))
-    skip_func_info = 1;
-
-  if (hp->cth_objtidx_len > 0)
-    fp->ctf_objtidx_names = (uint32_t *) (fp->ctf_buf + hp->cth_objtidx_off);
-  if (hp->cth_funcidx_len > 0 && !skip_func_info)
-    fp->ctf_funcidx_names = (uint32_t *) (fp->ctf_buf + hp->cth_funcidx_off);
-
-  /* Don't bother doing the rest if everything is indexed, or if we don't have a
-     symbol table: we will never use it.  */
-  if ((fp->ctf_objtidx_names && fp->ctf_funcidx_names) || !sp || !sp->cts_data)
-    return 0;
-
-  /* The CTF data object and function type sections are ordered to match the
-     relative order of the respective symbol types in the symtab, unless there
-     is an index section, in which case the order is arbitrary and the index
-     gives the mapping.  If no type information is available for a symbol table
-     entry, a pad is inserted in the CTF section.  As a further optimization,
-     anonymous or undefined symbols are omitted from the CTF data.  If an
-     index is available for function symbols but not object symbols, or vice
-     versa, we populate the xslate table for the unindexed symbols only.  */
-
-  for (i = 0, symp = sp->cts_data; xp < xend; xp++, symp += sp->cts_entsize,
-	 i++)
-    {
-      ctf_link_sym_t sym;
-
-      switch (sp->cts_entsize)
-	{
-	case sizeof (Elf64_Sym):
-	  {
-	    const Elf64_Sym *symp64 = (Elf64_Sym *) (uintptr_t) symp;
-	    ctf_elf64_to_link_sym (fp, &sym, symp64, i);
-	  }
-	  break;
-	case sizeof (Elf32_Sym):
-	  {
-	    const Elf32_Sym *symp32 = (Elf32_Sym *) (uintptr_t) symp;
-	    ctf_elf32_to_link_sym (fp, &sym, symp32, i);
-	  }
-	  break;
-	default:
-	  return ECTF_SYMTAB;
-	}
-
-      /* This call may be led astray if our idea of the symtab's endianness is
-	 wrong, but when this is fixed by a call to ctf_symsect_endianness,
-	 init_symtab will be called again with the right endianness in
-	 force.  */
-      if (ctf_symtab_skippable (&sym))
-	{
-	  *xp = -1u;
-	  continue;
-	}
-
-      switch (sym.st_type)
-	{
-	case STT_OBJECT:
-	  if (fp->ctf_objtidx_names || (objtoff - hp->cth_objt_off) >= hp->cth_objt_len)
-	    {
-	      *xp = -1u;
-	      break;
-	    }
-
-	  *xp = objtoff;
-	  objtoff += sizeof (uint32_t);
-	  break;
-
-	case STT_FUNC:
-	  if (fp->ctf_funcidx_names || (funcoff - hp->cth_func_off) >= hp->cth_func_len
-	      || skip_func_info)
-	    {
-	      *xp = -1u;
-	      break;
-	    }
-
-	  *xp = funcoff;
-	  funcoff += sizeof (uint32_t);
-	  break;
-
-	default:
-	  *xp = -1u;
-	  break;
-	}
-    }
-
-  ctf_dprintf ("loaded %lu symtab entries\n", fp->ctf_nsyms);
-  return 0;
-}
-
 /* Reset the CTF base pointer and derive the buf pointer from it, initializing
    everything in the ctf_dict that depends on the base or buf pointers.
 
@@ -2497,13 +2377,10 @@ ctf_bufopen_len (ctf_open_sect_t *sects, ssize_t *len, ctf_dict_t *parent,
 				       NULL, NULL);
   fp->ctf_snapshots = 1;
 
-  fp->ctf_objthash = ctf_dynhash_create (ctf_hash_string, ctf_hash_eq_string,
-					   free, NULL);
-  fp->ctf_funchash = ctf_dynhash_create (ctf_hash_string, ctf_hash_eq_string,
-					 free, NULL);
+  fp->ctf_symtypehash = ctf_dynhash_create (ctf_hash_string, ctf_hash_eq_string,
+					    free, NULL);
 
-  if (!fp->ctf_dthash || !fp->ctf_snapshots || !fp->ctf_objthash
-      || !fp->ctf_funchash)
+  if (!fp->ctf_dthash || !fp->ctf_snapshots || !fp->ctf_symtypehash)
     {
       err = ENOMEM;
       goto bad;
@@ -2532,33 +2409,13 @@ ctf_bufopen_len (ctf_open_sect_t *sects, ssize_t *len, ctf_dict_t *parent,
 				format == IS_BTF)) != 0)
     goto bad;
 
-  /* Allocate and initialize the symtab translation table, pointed to by
-     ctf_sxlate, and the corresponding index sections.  This table may be too
-     large for the actual size of the object and function info sections: if so,
-     ctf_nsyms will be adjusted and the excess will never be used.  It's
-     possible to do indexed symbol lookups even without a symbol table, so check
-     even in that case.  Initially, we assume the symtab is native-endian: if it
-     isn't, the caller will inform us later by calling ctf_symsect_endianness.  */
+  /*  Initially, we assume the symtab is native-endian: if it isn't, the
+     caller will inform us later by calling ctf_symsect_endianness.  */
 #ifdef WORDS_BIGENDIAN
   fp->ctf_symsect_little_endian = 0;
 #else
   fp->ctf_symsect_little_endian = 1;
 #endif
-
-  if (symsect != NULL)
-    {
-      fp->ctf_nsyms = symsect->cts_size / symsect->cts_entsize;
-      fp->ctf_sxlate = malloc (fp->ctf_nsyms * sizeof (uint32_t));
-
-      if (fp->ctf_sxlate == NULL)
-	{
-	  err = ENOMEM;
-	  goto bad;
-	}
-    }
-
-  if ((err = init_symtab (fp, hp, symsect)) != 0)
-    goto bad;
 
   ctf_set_ctl_hashes (fp);
 
@@ -2701,12 +2558,8 @@ ctf_dict_close (ctf_dict_t *fp)
   ctf_dynhash_destroy (fp->ctf_var_datasecs);
   ctf_dynhash_destroy (fp->ctf_decl_tag_map);
 
-  ctf_dynhash_destroy (fp->ctf_symhash_func);
-  ctf_dynhash_destroy (fp->ctf_symhash_objt);
-  free (fp->ctf_funcidx_sxlate);
-  free (fp->ctf_objtidx_sxlate);
-  ctf_dynhash_destroy (fp->ctf_objthash);
-  ctf_dynhash_destroy (fp->ctf_funchash);
+  ctf_dynhash_destroy (fp->ctf_symtypehash);
+  free (fp->ctf_symtypeidx_sxlate);
   free (fp->ctf_dynsymidx);
   ctf_dynhash_destroy (fp->ctf_dynsyms);
   for (did = ctf_list_next (&fp->ctf_in_flight_dynsyms); did != NULL; did = nid)
@@ -2760,7 +2613,6 @@ ctf_dict_close (ctf_dict_t *fp)
     }
 
   free (fp->ctf_void_type);
-  free (fp->ctf_sxlate);
   free (fp->ctf_txlate);
   free (fp->ctf_ptrtab);
   free (fp->ctf_pptrtab);
@@ -2861,27 +2713,6 @@ ctf_elf_sect (const ctf_dict_t *fp, ctf_elfsect_names_t sect)
       error.cts_section = sect;
       return error;
     }
-}
-
-/* Set the endianness of the symbol table attached to FP.  */
-void
-ctf_symsect_endianness (ctf_dict_t *fp, int little_endian)
-{
-  int old_endianness = fp->ctf_symsect_little_endian;
-
-  fp->ctf_symsect_little_endian = !!little_endian;
-
-  /* Propagate to the archive iff it's a wrapper for this dict alone.  */
-
-  if (fp->ctf_archive && fp->ctf_archive->ctfi_dict)
-    fp->ctf_archive->ctfi_symsect_little_endian = fp->ctf_symsect_little_endian;
-
-  /* If we already have a symtab translation table, we need to repopulate it if
-     our idea of the endianness has changed.  */
-
-  if (old_endianness != fp->ctf_symsect_little_endian
-      && fp->ctf_sxlate != NULL && fp->ctf_ext_symtab.cts_data != NULL)
-    assert (init_symtab (fp, fp->ctf_header, &fp->ctf_ext_symtab) == 0);
 }
 
 /* Return the size in bytes of a given CTF section, 0 if none, or -1 on
