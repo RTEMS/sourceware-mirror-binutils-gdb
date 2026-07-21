@@ -1072,17 +1072,24 @@ _bfd_elf_make_section_from_shdr (bfd *abfd,
 	}
     }
 
-  /* Compress/decompress DWARF debug sections with names: .debug_*,
-     .zdebug_*, .gnu.debuglto_.debug_, after the section flags is set.  */
-  if ((newsect->flags & SEC_DEBUGGING) != 0
-      && (newsect->flags & SEC_HAS_CONTENTS) != 0
-      && (newsect->flags & SEC_ELF_OCTETS) != 0)
+  /* Compress/decompress DWARF debug sections and CTF/BTF sections with names:
+     .debug_*, .zdebug_*, .gnu.debuglto_.debug_, .ctf.*, .BTF, after the section
+     flags is set.  */
+  if ((newsect->flags & SEC_HAS_CONTENTS) != 0
+      && ((((newsect->flags & SEC_ELF_OCTETS) != 0
+	   && (newsect->flags & SEC_DEBUGGING) != 0))
+	  || (strcmp (name, ".BTF")
+	      || strcmp (name, ".ctf")
+	      || startswith (name, ".ctf.symtypetab"))))
     {
       enum { nothing, compress, decompress } action = nothing;
       int compression_header_size;
       bfd_size_type uncompressed_size;
       unsigned int uncompressed_align_power;
       enum compression_type ch_type = ch_none;
+      bool no_rename = (strcmp (name, ".BTF") ||
+			strcmp (name, ".ctf")
+			|| startswith (name, ".ctf.symtypetab"));
       bool compressed
 	= bfd_is_section_compressed_info (abfd, newsect,
 					  &compression_header_size,
@@ -1145,7 +1152,8 @@ _bfd_elf_make_section_from_shdr (bfd *abfd,
 	    }
 #endif
 	  if (abfd->is_linker_input
-	      && name[1] == 'z')
+	      && name[1] == 'z'
+	      && !no_rename)
 	    {
 	      /* Rename section from .zdebug_* to .debug_* so that ld
 		 scripts will see this section as a debug section.  */
@@ -7151,7 +7159,16 @@ _bfd_elf_assign_file_positions_for_non_load (bfd *abfd)
 	    ;
 	  else if (bfd_section_is_libctf_deduppable (sec))
 	    {
-	      /* Update section size and contents.	*/
+              /* Try to compress the section if possible.  Failure is not an
+		 error.  */
+	      if (abfd->flags & BFD_COMPRESS &&
+		  !bfd_is_section_compressed (abfd, sec))
+		{
+		  bfd_compress_section (abfd, sec, sec->contents);
+		  elf_section_flags (sec) |= SHF_COMPRESSED;
+		}
+
+	      /* Update section size and contents.  */
 	      shdrp->sh_size = sec->size;
 	      shdrp->contents = sec->contents;
 	    }
