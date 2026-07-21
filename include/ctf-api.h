@@ -301,7 +301,7 @@ typedef int ctf_func_type_flags_t;
   _CTF_ITEM (ECTF_NOSYMTAB, "symbol table information is not available") \
   _CTF_ITEM (ECTF_NOPARENT, "the parent CTF dictionary is needed but unavailable") \
   _CTF_ITEM (ECTF_LINKADDEDLATE, "file added to link too late") \
-  _CTF_ITEM (ECTF_ZALLOC, "failed to allocate (de)compression buffer") \
+  _CTF_ITEM (ECTF_ZALLOC, "failed to allocate decompression buffer") \
   _CTF_ITEM (ECTF_DECOMPRESS, "failed to decompress CTF data") \
   _CTF_ITEM (ECTF_STRTAB, "external string table is not available") \
   _CTF_ITEM (ECTF_BADNAME, "string name offset is corrupt") \
@@ -320,7 +320,6 @@ typedef int ctf_func_type_flags_t;
   _CTF_ITEM (ECTF_FULL, "implementation limit: CTF dict or type is full") \
   _CTF_ITEM (ECTF_DUPLICATE, "duplicate member, enumerator, datasec, or variable name") \
   _CTF_ITEM (ECTF_CONFLICT, "conflicting type is already defined") \
-  _CTF_ITEM (ECTF_COMPRESS, "failed to compress CTF data") \
   _CTF_ITEM (ECTF_ARCREATE, "error creating CTF archive") \
   _CTF_ITEM (ECTF_ARNNAME, "name not found in CTF archive") \
   _CTF_ITEM (ECTF_SLICEOVERFLOW, "overflow of type bitness or offset in slice") \
@@ -682,7 +681,7 @@ extern const char *ctf_errmsg (ctf_error_t);
 
    - LIBCTF_BTM_ALWAYS writes out full-blown CTFv4 at all times
    - LIBCTF_BTM_POSSIBLE writes out CTFv4 if needed to avoid information loss,
-     BTF otherwise.  If compressing, the same as LIBCTF_BTM_ALWAYS.
+     BTF otherwise.
    - LIBCTF_BTM_BTF writes out BTF always, and errors otherwise.
    - LIBCTF_BTM_QUERY means "don't change the current level".
 
