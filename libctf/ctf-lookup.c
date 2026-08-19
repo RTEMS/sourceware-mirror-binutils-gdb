@@ -450,13 +450,6 @@ ctf_find_prefix (ctf_dict_t *fp, const ctf_type_t *tp, ctf_kind_t kind)
   return tp;
 }
 
-typedef struct ctf_lookup_idx_key
-{
-  ctf_dict_t *clik_fp;
-  const char *clik_name;
-  uint32_t *clik_names;
-} ctf_lookup_idx_key_t;
-
 /* Look up some kind of thing in the name tables.  */
 
 ctf_id_t
@@ -668,100 +661,127 @@ ctf_lookup_enumerator_next (ctf_dict_t *fp, const char *name,
   return CTF_ERR;
 }
 
-typedef struct ctf_symidx_sort_arg_cb
-{
-  ctf_dict_t *fp;
-  uint32_t *names;
-} ctf_symidx_sort_arg_cb_t;
-
 static int
-sort_symidx_by_name (const void *one_, const void *two_, void *arg_)
+qsort_symtypetab (const void *one_, const void *two_)
 {
-  const uint32_t *one = one_;
-  const uint32_t *two = two_;
-  ctf_symidx_sort_arg_cb_t *arg = arg_;
+  const ctf_symtypetab_all_named_ent_t *one = one_;
+  const ctf_symtypetab_all_named_ent_t *two = two_;
 
-  return (strcmp (ctf_strptr (arg->fp, arg->names[*one]),
-		  ctf_strptr (arg->fp, arg->names[*two])));
+  if (one->sta_archive_member < two->sta_archive_member)
+    return -1;
+  else if (one->sta_archive_member > two->sta_archive_member)
+    return 1;
+
+  return (strcmp (one->sta_name, two->sta_name));
 }
 
-/* Sort a symbol index section by name.  Takes a 1:1 mapping of names to the
-   corresponding symbol table.  Returns a lexicographically sorted array of idx
-   indexes (and thus, of indexes into the corresponding func info / data object
-   section).  The array is only sorted if necessary.  Only called once for
-   any given symbol index section.  */
+/* Sort the ctf_symtypetab by name, and populate its name caches from the
+   underlying dictionaries.  The array is only sorted if necessary (but is
+   populated with names regardless).  Only called once for any given
+   table.  */
 
-static uint32_t *
-ctf_symidx_sort (ctf_dict_t *fp, uint32_t *idx, size_t *nidx, size_t len)
+static ctf_error_t
+ctf_symidx_populate_sort (ctf_archive_t *arc)
 {
-  uint32_t *sorted = NULL;
   size_t i;
   int needs_sort = 0;
-  const char *last = NULL;
+  ctf_error_t err;
+  ctf_symtypetab_all_named_ent_t *ent, *last = NULL;
 
-  if ((sorted = malloc (len)) == NULL)
+  /* Populate with names (opening everything necessary), and determine if
+     sorted.  */
+
+  for (i = 0; i < arc->ctfi_symtypetab_len; i++)
     {
-      ctf_set_errno (fp, ENOMEM);
-      return NULL;
-    }
+      ctf_dict_t *fp;
+      const char *str;
 
-  *nidx = len / sizeof (uint32_t);
-  for (i = 0; i < *nidx; i++)
-    sorted[i] = i;
+      ent = &arc->ctfi_symtypetab[i];
+      fp = ctf_dict_open_cached (arc, ent->sta_archive_member,
+				 &err);
 
-  /* Avoid resorting if already sorted.  */
-  for (i = 0; i < *nidx; i++)
-    {
-      const char *str = ctf_strptr (fp, idx[i]);
-
-      if (last && strcmp (last, str) > 0)
+      if (!fp)
 	{
-	  needs_sort = 1;
-	  break; /* Needs sorting.  */
+	  ctf_err (err_locus (NULL), err,
+		   _("when sorting archive symtypetabs, entry %zi references archive member %u"),
+		   i, ent->sta_archive_member);
+	  return err;
 	}
-      last = str;
+
+      if ((str = ctf_type_name_raw (fp, ent->sta_type)) == NULL)
+	{
+	  ctf_err (err_locus (NULL), ctf_errno (fp),
+		   _("when sorting archive symtypetabs, error getting name of type %zi in member %zi, referenced by entry %u"),
+		   ent->sta_type, i, ent->sta_archive_member);
+	  err = ctf_errno (fp);
+	  ctf_dict_close (fp);
+	  return err;
+	}
+
+      /* Name population.  str will live as long as the archive.  */
+      ent->sta_name = str;
+
+      if (last && (last->sta_archive_member > ent->sta_archive_member
+		   || (strcmp (last->sta_name, str) > 0)))
+	needs_sort = 1;
+      last = ent;
     }
 
   if (needs_sort)
     {
-      ctf_symidx_sort_arg_cb_t arg = { fp, idx };
-      ctf_dprintf ("Index section unsorted: sorting.\n");
-      ctf_qsort_r (sorted, *nidx, sizeof (uint32_t), sort_symidx_by_name, &arg);
+      ctf_dprintf ("Symtypetab unsorted: sorting.\n");
+      qsort (arc->ctfi_symtypetab, arc->ctfi_symtypetab_len,
+	     sizeof (ctf_symtypetab_all_named_ent_t),
+	     qsort_symtypetab);
     }
 
-  return sorted;
+  arc->ctfi_flags |= CTFA_F_SYMTYPES_POPULATED;
+  return 0;
 }
 
 /* Given a symbol index, return the name of that symbol from the table
    provided by ctf_link_shuffle_syms, or failing that from the secondary
-   string table, or the null string.  */
+   string table, or the null string.
+
+   Returns the null string on error, not NULL.  */
+
 static const char *
-ctf_lookup_symbol_info (ctf_dict_t *fp, unsigned long symidx)
+ctf_arc_lookup_symbol_info (ctf_archive_t *arc, unsigned long symidx,
+			    ctf_error_t *errp)
 {
-  const ctf_sect_t *sp = &fp->ctf_ext_symtab;
+  const ctf_sect_t *sp = &arc->ctfi_symsect;
+  ctf_dict_t *fp;
   ctf_link_sym_t sym;
   ctf_error_t err;
+
+  /* The shuffled dynsymidx, if set, is always on the first dict in an
+     archive (but is rarely set on archives at all).  Having no index 0 is
+     in theory fine, if strange: we can still look up names in the ELF
+     symbol table itself.  There simply cannot be a dynsymidx.  However, for
+     now, we mandate at least one dict, because it makes it easier to
+     support ELF strtab lookup later.  */
+
+  fp = ctf_dict_open_cached (arc, 0, errp);
+
+  if (fp == NULL)
+    return NULL;				/* errno is set for us.  */
 
   if (fp->ctf_dynsymidx)
     {
       err = EINVAL;
-      if (symidx > fp->ctf_dynsymmax)
-	goto try_parent;
+      if (symidx <= fp->ctf_dynsymmax)
+	{
+	  ctf_link_sym_t *symp = fp->ctf_dynsymidx[symidx];
 
-      ctf_link_sym_t *symp = fp->ctf_dynsymidx[symidx];
-
-      if (!symp)
-	goto try_parent;
-
-      return symp->st_name;
+	  if (symp)
+	    return symp->st_name;
+	}
     }
 
-  err = ECTF_NOSYMTAB;
-  if (sp->cts_data == NULL)
-    goto try_parent;
+  err = ECTF_NOTYPEDAT;
 
-  if (symidx >= (sp->cts_size / sp->cts_entsize))
-    goto try_parent;
+  if ((size_t) symidx >= arc->ctfi_symtypetab_len)
+    goto err;
 
   switch (sp->cts_entsize)
     {
@@ -778,361 +798,354 @@ ctf_lookup_symbol_info (ctf_dict_t *fp, unsigned long symidx)
       }
       break;
     default:
-      ctf_set_errno (fp, ECTF_SYMTAB);
-      return _CTF_NULLSTR;
+      ctf_err (err_locus (fp), 0, _("when looking up symbols, symtab entries of unexpected size: %zi"),
+	       sp->cts_entsize);
+      err = ECTF_NOSYMTAB;
+      goto err;
     }
 
   assert (!sym.st_nameidx_set);
 
   return sym.st_name;
 
- try_parent:
-  if (fp->ctf_parent)
-    {
-      const char *ret;
-      ret = ctf_lookup_symbol_info (fp->ctf_parent, symidx);
-      if (ret[0] == '\0')
-	ctf_set_errno (fp, ctf_errno (fp->ctf_parent));
-      return ret;
-    }
-  else
-    {
-      ctf_set_errno (fp, err);
-      return _CTF_NULLSTR;
-    }
+ err:
+  *errp = err;
+  ctf_dict_close (fp);
+  return "";
 }
 
-ctf_id_t
-ctf_symbol_next_static (ctf_dict_t *fp, ctf_next_t **it, const char **name);
+/* Iterate over all symbols with types.  The name, type, and errp arguments
+   are not optional.  The return order is arbitrary, though is likely to be
+   in symbol index or name order within each dict.  Adding symbols while
+   iteration is underway may also lead to other symbols being skipped.
 
-/* Iterate over all symbols with types.  The name argument is not optional.
-   The return order is arbitrary, though is likely to be in symbol index or
-   name order.  Changing the value of 'functions' in the middle of iteration
-   has unpredictable effects (probably skipping symbols, etc) and is not
-   recommended.  Adding symbols while iteration is underway may also lead to
-   other symbols being skipped.  */
+   If symbols were already present in the dict when opened and replacements
+   were subsequently added via ctf_add_sym, both will be returned, the
+   newly-added ones first.
 
-ctf_id_t
-ctf_symbol_next (ctf_dict_t *fp, ctf_next_t **it, const char **name)
+   As usual with ctf_arc_*() functions, the dict refcnt is bumped with every
+   symbol returned: the caller must ctf_close it.
+
+   Takes the internal symtypetab (ctfi_symtypetab, or ctf_symtypetab_all)
+   to iterate over, and allow filtering down dynamic symbol lookups to one
+   dict.  */
+
+static ctf_dict_t *
+ctf_arc_symbol_tab_next (ctf_archive_t *arc, ctf_dict_t *one_dict,
+			 ctf_symtypetab_all_named_ent_t *tab,
+			 size_t tab_len, ctf_next_t **it, const char **name,
+			 ctf_id_t *type, ctf_error_t *errp)
 {
-  ctf_id_t sym = CTF_ERR;
   ctf_next_t *i = *it;
-  ctf_error_t err;
+  ctf_dict_t *fp;
 
   if (!i)
     {
       if ((i = ctf_next_create ()) == NULL)
-	return ctf_set_typed_errno (fp, ENOMEM);
+	{
+	  *errp = ENOMEM;
+	  return NULL;
+	}
 
-      i->cu.ctn_fp = fp;
-      i->ctn_iter_fun = (void (*) (void)) ctf_symbol_next;
+      i->cu.ctn_arc = arc;
+      i->ctn_iter_fun = (void (*) (void)) ctf_arc_symbol_next;
+      i->u.ctn_fp = one_dict;
       i->ctn_n = 0;
+      i->ctn_next = NULL;
+      i->ctn_next_inner = NULL;
       *it = i;
     }
 
-  if ((void (*) (void)) ctf_symbol_next != i->ctn_iter_fun)
+  if ((void (*) (void)) ctf_arc_symbol_next != i->ctn_iter_fun)
     {
-      err = ECTF_NEXT_WRONGFUN;
+      *errp = ECTF_NEXT_WRONGFUN;
       goto end;
     }
 
-  if (fp != i->cu.ctn_fp)
+  /* The only caller of this function with a non-NULL one_dict arg will
+     never change it, and will error out itself if its caller does so.  */
+
+  if (arc != i->cu.ctn_arc || (one_dict != NULL && one_dict != i->u.ctn_fp))
     {
-      err = ECTF_NEXT_WRONGFP;
+      *errp = ECTF_NEXT_WRONGFP;
       goto end;
     }
 
-  /* Check the dynamic set of names first, to allow previously-written names
-     to be replaced with dynamic ones (there is still no way to remove them,
-     though).
+  /* This iterator is two-phase.  In the first phase, ctn_next works over
+     dicts while ctn_next_inner works over the members of the ctf_dynsymidx
+     within each dict. In the second phase, handled by
+     ctf_arc_symbol_next_static, ctn_n tracks the index within the
+     ctfi_symtypetab.  */
 
-     We intentionally use raw access, not ctf_lookup_by_symbol, to avoid
-     incurring additional sorting cost for unsorted symtypetabs coming from the
-     compiler, to allow ctf_symbol_next to work in the absence of a symtab, and
-     finally because it's easier to work out what the name of each symbol is if
-     we do that.  */
+  /* First phase, detected by seeing whether the second phase has started
+     yet.  */
 
-  void *dyn_name = NULL, *dyn_value = NULL;
-
-  if (i->ctn_n < ctf_dynhash_elements (fp->ctf_symtypehash))
+  if (i->ctn_n == 0)
     {
-      err = ctf_dynhash_next (fp->ctf_symtypehash, &i->ctn_next,
-			      &dyn_name, &dyn_value);
+      /* Check the dynamic set of names first, to allow previously-written
+	 names to be replaced with dynamic ones (there is still no way to
+	 remove them, though).
 
-      /* This covers errors and also end-of-iteration.  */
-      if (err != 0)
-	goto end;
+	 We intentionally use raw access, not ctf_lookup_by_symbol, to avoid
+	 incurring additional sorting cost for unsorted symtypetabs coming
+	 from the compiler, to allow ctf_symbol_next to work in the absence
+	 of a symtab, and finally because it's easier to work out what the
+	 name of each symbol is if we do that.  */
 
-      *name = dyn_name;
-      sym = (ctf_id_t) (uintptr_t) dyn_value;
-      i->ctn_n++;
+      do
+	{
+	  if (i->ctn_next)
+	    {
+	      void *dyn_name = NULL, *dyn_value = NULL;
+	      ctf_error_t err;
 
-      return sym;
+	      err = ctf_dynhash_next (i->u.ctn_fp->ctf_symtypehash,
+				      &i->ctn_next_inner, &dyn_name, &dyn_value);
+
+	      if (err == 0)
+		{
+		  *name = dyn_name;
+		  *type = (ctf_id_t) (uintptr_t) dyn_value;
+		  i->u.ctn_fp->ctf_refcnt++;
+		  return i->u.ctn_fp;
+		}
+
+	      if (err != ECTF_NEXT_END)
+		{
+		  *errp = err;
+		  goto end;
+		}
+	    }
+
+	  /* That's it, if we're filtering to only one dict.  */
+
+	  if (one_dict)
+	    break;
+
+	  /* Next dict.  */
+
+	  ctf_dict_close (i->u.ctn_fp);
+	  i->u.ctn_fp = ctf_archive_next (i->cu.ctn_arc, &i->ctn_next, NULL, 0, errp);
+
+	  if (*errp != 0 && *errp != ECTF_NEXT_END)
+	    goto end;
+
+	} while (errp == 0);
     }
 
-  return ctf_symbol_next_static (fp, it, name);
+  /* Second phase: static types.  There might be no static table at all, if
+     all types are dynamic (e.g. if this is a dict that has not yet been
+     written out as an archive.)  */
 
- end:
-  ctf_next_destroy (i);
-  *it = NULL;
-  return (ctf_set_typed_errno (fp, err));
-}
-
-/* ctf_symbol_next, but only for static symbols.  Mostly an internal
-   implementation detail of ctf_symbol_next, but also used to simplify
-   serialization.  */
-ctf_id_t
-ctf_symbol_next_static (ctf_dict_t *fp, ctf_next_t **it, const char **name)
-{
-  ctf_id_t sym = CTF_ERR;
-  ctf_next_t *i = *it;
-  size_t dyn_els = 0;
-  ctf_error_t err;
-
-  uint32_t *tab = (uint32_t *) (fp->ctf_buf + fp->ctf_header->cth_func_off);
-  size_t len = fp->ctf_header->cth_funcidx_len / sizeof (uint32_t);
-
-  if (!fp->ctf_symtypeidx_names)
-    return (ctf_set_typed_errno (fp, ECTF_NEXT_END));
-
-  if (fp->ctf_symtypehash)
-    dyn_els = ctf_dynhash_elements (fp->ctf_symtypehash);
-
-  /* Only relevant for direct internal-to-library calls, not via
-     ctf_symbol_next (but important then).  */
-
-  if (!i)
+  if (!tab)
     {
-      if ((i = ctf_next_create ()) == NULL)
-	return ctf_set_typed_errno (fp, ENOMEM);
-
-      i->cu.ctn_fp = fp;
-      i->ctn_iter_fun = (void (*) (void)) ctf_symbol_next;
-      i->ctn_n = dyn_els;
-      *it = i;
-    }
-
-  if ((void (*) (void)) ctf_symbol_next != i->ctn_iter_fun)
-    {
-      err = ECTF_NEXT_WRONGFUN;
-      goto end;
-    }
-
-  if (fp != i->cu.ctn_fp)
-    {
-      err = ECTF_NEXT_WRONGFP;
-      goto end;
+      *errp = ECTF_NEXT_END;
+      return NULL;
     }
 
   do
     {
-      if (i->ctn_n - dyn_els >= len)
+      if (i->ctn_n >= tab_len)
 	{
-	  err = ECTF_NEXT_END;
+	  *errp = ECTF_NEXT_END;
 	  goto end;
 	}
 
-      *name = ctf_lookup_symbol_info (fp, i->ctn_n);
-      if (*name[0] == 0)
-	continue;
+      /* If we're returning results from only one dict, skip until we find
+	 it.  */
 
-      sym = tab[i->ctn_n - dyn_els];
+      if (one_dict && (((size_t) tab[i->ctn_n].sta_archive_member)
+		       != one_dict->ctf_archive_index))
+	{
+	  i->ctn_n++;
+	  continue;
+	}
+
+      /* The names may not yet be cached: cache them as we go.  */
+
+      fp = ctf_dict_open_cached ((ctf_archive_t *) i->cu.ctn_arc,
+				 tab[i->ctn_n].sta_archive_member, errp);
+      if (!fp)
+	goto end;					/* *errp is set for us.  */
+
+
+      if ((tab[i->ctn_n].sta_name = ctf_type_name_raw (fp, tab[i->ctn_n].sta_type)) == NULL)
+	{
+	  *errp = ctf_errno (fp);
+	  goto end;
+	}
+
+      *name = tab[i->ctn_n].sta_name;
+      *type = tab[i->ctn_n].sta_type;
       i->ctn_n++;
-    }
-  while (sym == -1u || sym == 0);
 
-  return sym;
+      if (*type != CTF_ERR)
+	return fp;
+    } while (0);
 
  end:
   ctf_next_destroy (i);
   *it = NULL;
-  return (ctf_set_typed_errno (fp, err));
+  return NULL;
+}
+
+/* Public entry point: ctf_arc_symbol_tab_next on the total set of symbols.  */
+ctf_dict_t *
+ctf_arc_symbol_next (ctf_archive_t *arc, ctf_next_t **it, const char **name,
+		     ctf_id_t *type, ctf_error_t *errp)
+{
+  return ctf_arc_symbol_tab_next (arc, NULL, arc->ctfi_symtypetab,
+				  arc->ctfi_symtypetab_len, it, name, type,
+				  errp);
+}
+
+/* Traverse all symbols in a dict, one by one, and return the type of each
+   and (if NAME is non-NULL) optionally its name.  Internally,
+   ctf_arc_symbol_tab_next but restricted to only one dict.  */
+
+ctf_id_t
+ctf_symbol_next (ctf_dict_t *fp, ctf_next_t **it, const char **name)
+{
+  ctf_archive_t *arc;
+  ctf_error_t err;
+  ctf_symtypetab_all_named_ent_t *tab;
+  size_t tab_len;
+  ctf_dict_t *tmp;
+  ctf_id_t type;
+
+  if (fp == NULL || (*it && (*it)->u.ctn_fp != fp))
+    {
+      ctf_next_destroy (*it);
+      *it = NULL;
+      return ctf_set_typed_errno (fp, ECTF_NEXT_WRONGFP);
+    }
+
+  if ((arc = ctf_dict_arc (fp, 0)) == NULL)
+    {
+      ctf_next_destroy (*it);
+      return -1;				/* errno is set for us.  */
+    }
+
+  if (fp->ctf_archive_index == 0)
+    {
+      tab = arc->ctfi_symtypetab;
+      tab_len = arc->ctfi_symtypetab_len;
+    }
+  else
+    {
+      tab = arc->ctfi_symtypetab_all;
+      tab_len = arc->ctfi_symtypetab_all_len;
+    }
+
+  tmp = ctf_arc_symbol_tab_next (arc, fp, tab, tab_len, it, name,
+				 &type, &err);
+
+  ctf_dict_close (tmp);
+  ctf_arc_close (arc);
+
+  if (err != 0)
+    {
+      ctf_set_errno (fp, err);
+      return -1;
+    }
+  return type;
 }
 
 /* A bsearch function for symtypetab symbol names.  */
 
 static int
-ctf_lookup_idx_name (const void *key_, const void *idx_)
+ctf_lookup_idx_name (const void *key, const void *ent_)
 {
-  const ctf_lookup_idx_key_t *key = key_;
-  const uint32_t *idx = idx_;
+  const char *name = (const char *) key;
+  const ctf_symtypetab_all_named_ent_t *ent = ent_;
 
-  return (strcmp (key->clik_name, ctf_strptr (key->clik_fp, key->clik_names[*idx])));
-}
-
-/* Given a symbol name or (failing that) number, look up that symbol in the
-   function or object index table (which must exist).  Return 0 if not found
-   there (or pad).  */
-
-static ctf_id_t
-ctf_try_sym_lookup (ctf_dict_t *fp, unsigned long symidx, const char *symname)
-{
-  struct ctf_header *hp = fp->ctf_header;
-  uint32_t *symtypetab = (uint32_t *) (fp->ctf_buf + hp->cth_func_off);
-
-  if (symname == NULL)
-    symname = ctf_lookup_symbol_info (fp, symidx);
-
-  /* Dynamic dict with no static portion: just return.  */
-  if (!hp)
-    {
-      ctf_dprintf ("%s not found in idx: dict is dynamic\n", symname);
-      return 0;
-    }
-
-  ctf_dprintf ("Looking up type of object with symtab idx %lx or name %s in "
-	       "indexed symtypetab\n", symidx, symname);
-
-  if (symname[0] == '\0')
-    return CTF_ERR;					/* errno is set for us.  */
-
-  if (!fp->ctf_symtypeidx_sxlate)
-    {
-      if ((fp->ctf_symtypeidx_sxlate
-	   = ctf_symidx_sort (fp, (uint32_t *)
-			      (fp->ctf_buf + hp->cth_funcidx_off),
-			      &fp->ctf_nsymtypeidx, hp->cth_funcidx_len))
-	  == NULL)
-	{
-	  ctf_err (err_locus (fp), 0, _("cannot sort symtypetab"));
-	  return CTF_ERR;				/* errno is set for us.  */
-	}
-    }
-
-  ctf_lookup_idx_key_t key = { fp, symname, fp->ctf_symtypeidx_names };
-  uint32_t *idx;
-
-  idx = bsearch (&key, fp->ctf_symtypeidx_sxlate, fp->ctf_nsymtypeidx,
-		 sizeof (uint32_t), ctf_lookup_idx_name);
-
-  if (!idx)
-    {
-      ctf_dprintf ("%s not found in idx\n", symname);
-      return 0;
-    }
-
-  /* Should be impossible, but be paranoid.  */
-  if ((idx - fp->ctf_symtypeidx_sxlate) > (ptrdiff_t) fp->ctf_nsymtypeidx)
-    return (ctf_set_typed_errno (fp, ECTF_CORRUPT));
-
-  ctf_dprintf ("Symbol %lx (%s) is of type %x\n", symidx, symname,
-	       symtypetab[*idx]);
-  return symtypetab[*idx];
-}
-
-/* Given a symbol name or (if NULL) symbol index, return the type of the
-   function or data object described by the corresponding entry in the symbol
-   table.  We can only return symbols in read-only dicts and in dicts for which
-   ctf_link_shuffle_syms has been called to assign symbol indexes to symbol
-   names.
-
-   If try_parent is false, do not check the parent dict too.  */
-
-ctf_id_t
-ctf_lookup_by_sym_or_name (ctf_dict_t *fp, unsigned long symidx,
-			   const char *symname, int try_parent)
-{
-  const ctf_sect_t *sp = &fp->ctf_ext_symtab;
-  ctf_id_t type = 0;
-  ctf_error_t err = 0;
-
-  /* Shuffled dynsymidx present?  Use that.  For now, the dynsymidx and
-     shuffled-symbol lookup only support dynamically-added symbols, because
-     this interface is meant for use by linkers, and linkers are only going
-     to report symbols against newly-created, freshly-ctf_link'ed dicts: so
-     there will be no static component in any case.  */
-  if (fp->ctf_dynsymidx)
-    {
-      const ctf_link_sym_t *sym;
-
-      if (symname)
-	ctf_dprintf ("Looking up type of object with symname %s in "
-		     "writable dict symtypetab\n", symname);
-      else
-	ctf_dprintf ("Looking up type of object with symtab idx %lx in "
-		     "writable dict symtypetab\n", symidx);
-
-      /* No name? Need to look it up.  */
-      if (!symname)
-	{
-	  err = EINVAL;
-	  if (symidx > fp->ctf_dynsymmax)
-	    goto try_parent;
-
-	  sym = fp->ctf_dynsymidx[symidx];
-	  err = ECTF_NOTYPEDAT;
-	  if (!sym || (sym->st_type != STT_OBJECT && sym->st_type != STT_FUNC))
-	    goto try_parent;
-
-	  if (!ctf_assert (fp, !sym->st_nameidx_set))
-	    return CTF_ERR;
-	  symname = sym->st_name;
-     }
-
-      if (fp->ctf_symtypehash == NULL
-	  || (type = (ctf_id_t) (uintptr_t)
-	      ctf_dynhash_lookup (fp->ctf_symtypehash, symname)) == 0)
-	goto try_parent;
-
-      return type;
-    }
-
-  /* Dict not shuffled: look for a dynamic sym.  */
-  if (symname && fp->ctf_symtypehash != NULL
-      && ((type = (ctf_id_t) (uintptr_t)
-	   ctf_dynhash_lookup (fp->ctf_symtypehash, symname)) != 0))
-    return type;
-
-  err = ECTF_NOSYMTAB;
-  if (sp->cts_data == NULL && symname == NULL &&
-      !fp->ctf_symtypeidx_names)
-    goto try_parent;
-
-  /* This covers both out-of-range lookups by index and a dynamic dict which
-     hasn't been shuffled yet.  */
-  err = EINVAL;
-  if (symname == NULL)
-    goto try_parent;
-
-  /* Try an indexed lookup.  We can only do indexed lookups if we have a string
-     table.  */
-
-  if ((type = ctf_try_sym_lookup (fp, symidx, symname)) == CTF_ERR)
-    return CTF_ERR;				/* errno is set for us.  */
-  if (type != 0)
-    return type;
-
-  /* No symbol found?  Not present, try the parent.  */
-  err = ECTF_NOTYPEDAT;
-
- try_parent:
-  if (!try_parent)
-    return ctf_set_errno (fp, err);
-
-  if (fp->ctf_parent)
-    {
-      ctf_id_t ret = ctf_lookup_by_sym_or_name (fp->ctf_parent, symidx,
-						symname, try_parent);
-      if (ret == CTF_ERR)
-	ctf_set_errno (fp, ctf_errno (fp->ctf_parent));
-      return ret;
-    }
-  else
-    return (ctf_set_typed_errno (fp, err));
-}
-
-/* Given a symbol table index, return the type of the function or data object
-   described by the corresponding entry in the symbol table.  */
-ctf_id_t
-ctf_lookup_by_symbol (ctf_dict_t *fp, unsigned long symidx)
-{
-  return ctf_lookup_by_sym_or_name (fp, symidx, NULL, 1);
+  return (strcmp (name, ent->sta_name));
 }
 
 /* Given a symbol name, return the type of the function or data object described
    by the corresponding entry in the symbol table.  */
-ctf_id_t
-ctf_lookup_by_symbol_name (ctf_dict_t *fp, const char *symname)
+
+ctf_dict_t *
+ctf_arc_lookup_symbol_name (ctf_archive_t *arc, const char *name,
+			    ctf_id_t *type, ctf_error_t *errp)
 {
-  return ctf_lookup_by_sym_or_name (fp, 0, symname, 1);
+  ctf_dict_t *fp;
+
+  if (!name || name[0] == '\0')
+    {
+      *errp = ECTF_NOTYPEDAT;
+      return NULL;
+    }
+
+  ctf_dprintf ("Looking up type of symbol with name %s in symtypetab\n", name);
+
+  /* Check for a dynamic sym first.  If there are no dicts in this archive,
+     there's no need to do that.  */
+
+  fp = ctf_dict_open_cached (arc, 0, errp);
+
+  if (fp == NULL && *errp != ECTF_ARNNAME)
+    return NULL;				/* errp is set for us. */
+  else if (fp != NULL
+	   && (fp->ctf_symtypehash != NULL
+	       && ((*type = (ctf_id_t) (uintptr_t)
+		    ctf_dynhash_lookup (fp->ctf_symtypehash, name)) != 0)))
+    return fp;
+
+  ctf_dict_close (fp);
+
+  if (!(arc->ctfi_flags & CTFA_F_SYMTYPES_POPULATED))
+    {
+      if ((*errp = ctf_symidx_populate_sort (arc) < 0))
+	{
+	  ctf_err (err_locus (NULL), 0, _("cannot sort symtypetabs"));
+	  return NULL;
+	}
+    }
+
+  ctf_symtypetab_all_named_ent_t *idx;
+
+  idx = bsearch (name, arc->ctfi_symtypetab, arc->ctfi_symtypetab_len,
+		 sizeof (ctf_symtypetab_all_named_ent_t), ctf_lookup_idx_name);
+
+  if (!idx)
+    {
+      *errp = ECTF_NOTYPEDAT;
+      ctf_dprintf ("%s not found in idx\n", name);
+      return NULL;
+    }
+
+  /* Should be impossible, but be paranoid.  */
+  if ((idx - arc->ctfi_symtypetab) > (ptrdiff_t) arc->ctfi_symtypetab_len)
+    {
+      *errp = ECTF_CORRUPT;
+      return NULL;
+    }
+
+  fp = ctf_dict_open_cached (arc, idx->sta_archive_member, errp);
+  if (fp == NULL)
+    return NULL;				/* errp is set for us. */
+
+  ctf_dprintf ("Symbol %s is of type %lx in archive member %x\n", name, idx->sta_type,
+	       idx->sta_archive_member);
+  *type = idx->sta_type;
+  return fp;
 }
+
+/* Given a symbol table index, return the type of the function or data object
+   described by the corresponding entry in the symbol table.  */
+ctf_dict_t *
+ctf_arc_lookup_symbol (ctf_archive_t *arc, unsigned long symidx, ctf_id_t *type,
+		       ctf_error_t *errp)
+{
+  const char *name;
+
+  *errp = 0;
+  name = ctf_arc_lookup_symbol_info (arc, symidx, errp);
+
+  if (*errp != 0)
+    return NULL;				/* errno is set for us.  */
+
+  return ctf_arc_lookup_symbol_name (arc, name, type, errp);
+}
+

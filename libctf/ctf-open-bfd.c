@@ -28,6 +28,7 @@
 #include <unistd.h>
 #include <elf.h>
 #include <bfd.h>
+#include "ctf-api.h"
 #include "ctf-util-swap.h"
 #include "ctf-util-endian.h"
 
@@ -44,6 +45,40 @@ ctf_bfdclose (struct ctf_archive_internal *arci)
 	       bfd_errmsg (bfd_get_error ()));
 }
 
+#ifdef HAVE_BFD_ELF
+/* Read a section from an ELF file into a ctf_sect_t.
+
+   Returns -1 on error, 0 if no section, and some positive value if a section
+   was read in.  */
+static ctf_ret_t
+ctf_maybe_read_section (struct bfd *abfd, ctf_sect_t *sect, const char *name,
+			ctf_error_t *errp)
+{
+  asection *asect;
+  bfd_byte *contents;
+
+  if ((asect = bfd_get_section_by_name (abfd, name)) == NULL)
+    return 0;
+
+  if (!bfd_malloc_and_get_section (abfd, asect, &contents))
+    {
+      ctf_err (err_locus (NULL), 0, _("cannot allocate memory for section %s"),
+	       name);
+      if (errp)
+	*errp = ENOMEM;
+      return -1;
+    }
+
+  sect->cts_name = bfd_section_name (asect);
+  sect->cts_entsize = 1;
+  sect->cts_size = bfd_section_size (asect);
+  sect->cts_data = (char *) contents;
+
+  return 0;
+}
+
+#endif
+
 /* Open a CTF file given the specified BFD, and other sections which may
    override it (the CTF section may contain a CTF archive or a file).  */
 
@@ -56,11 +91,14 @@ ctf_bfdopen (struct bfd *abfd _libctf_unused_, ctf_open_sect_t *sects, ctf_error
   ctf_sect_t *ctfsectp = NULL;
   ctf_sect_t *symsectp = NULL;
   ctf_sect_t *strsectp = NULL;
+  ctf_sect_t *symtypetabsectp = NULL;
+  ctf_sect_t *symtypetaballsectp = NULL;
   const char *bfderrstr = NULL;
-  char *ctf_alloc = NULL;
-  char *strtab_alloc = NULL;
   int symsect_endianness = -1;
   int free_ctfsect = 0;
+  int free_strtab = 0;
+  int free_symtypetabsect = 0;
+  int free_symtypetaballsect = 0;
 
   libctf_init_debug();
 
@@ -73,6 +111,8 @@ ctf_bfdopen (struct bfd *abfd _libctf_unused_, ctf_open_sect_t *sects, ctf_error
 	case CTF_ELF_SECT: ctfsectp = sect; break;
 	case CTF_ELF_SYMSECT: symsectp = sect; break;
 	case CTF_ELF_STRSECT: strsectp = sect; break;
+	case CTF_ELF_SYMTYPETABSECT: symtypetabsectp = sect; break;
+	case CTF_ELF_SYMTYPETABALLSECT: symtypetaballsectp = sect; break;
 	default:
 	  /* Unknown sections are fine, and ignored.  */
 	  ;
@@ -81,7 +121,7 @@ ctf_bfdopen (struct bfd *abfd _libctf_unused_, ctf_open_sect_t *sects, ctf_error
     } while (sect);
 
 #ifdef HAVE_BFD_ELF
-  ctf_sect_t symsect, strsect;
+  ctf_sect_t symtypetabsect, symtypetaballsect, symsect, strsect;
   Elf_Internal_Shdr *symhdr;
   size_t symcount;
   Elf_Internal_Sym *isymbuf;
@@ -94,32 +134,54 @@ ctf_bfdopen (struct bfd *abfd _libctf_unused_, ctf_open_sect_t *sects, ctf_error
 
   if (!ctfsectp)
     {
-      asection *ctf_asect;
-      bfd_byte *contents;
-      
-      if (((ctf_asect = bfd_get_section_by_name (abfd, _CTF_SECTION)) == NULL)
-	  && ((ctf_asect = bfd_get_section_by_name (abfd, ".BTF")) == NULL))
+      ctf_error_t ret;
+
+      if ((ret = ctf_maybe_read_section (abfd, &ctfsect,
+					 _CTF_SECTION, errp)) < 0)
+	goto err;				/* errp is set for us.  */
+
+      if (ret == 0 &&
+	  (ret = ctf_maybe_read_section (abfd, &ctfsect, ".BTF", errp)) < 0)
+	goto err;
+
+      if (ret == 0)
 	return (ctf_set_open_errno (errp, ECTF_NOCTFDATA));
 
-      if (!bfd_malloc_and_get_section (abfd, ctf_asect, &contents))
-	{
-	  bfderrstr = N_("cannot malloc CTF section");
-	  goto err;
-	}
-
-      ctf_alloc = (char *) contents;
       ctfsect.cts_section = CTF_ELF_SECT;
-      ctfsect.cts_name = bfd_section_name (ctf_asect);
-      ctfsect.cts_entsize = 1;
-      ctfsect.cts_size = bfd_section_size (ctf_asect);
-      ctfsect.cts_data = contents;
-      ctfsectp = &ctfsect;
       free_ctfsect = 1;
     }
 
+  if (!symtypetabsectp)
+    {
+      switch (ctf_maybe_read_section (abfd, &symtypetabsect,
+				      _CTF_SYMTYPETAB_SECTION, errp))
+	{
+	case -1: goto err;			/* errp is set for us.  */
+	case 0: break;
+	default:
+	  symtypetabsect.cts_section = CTF_ELF_SYMTYPETABSECT;
+	  symtypetabsectp = &symtypetabsect;
+	  free_symtypetabsect = 1;
+	}
+    }
+
+  if (!symtypetaballsectp)
+    {
+      switch (ctf_maybe_read_section (abfd, &symtypetaballsect,
+				      _CTF_SYMTYPETABALL_SECTION, errp))
+	{
+	case -1: goto err;			/* errp is set for us.  */
+	case 0: break;
+	default:
+	  symtypetaballsect.cts_section = CTF_ELF_SYMTYPETABALLSECT;
+	  symtypetaballsectp = &symtypetaballsect;
+	  free_symtypetaballsect = 1;
+	}
+    }
+
   /* v3 dicts may cite the symtab or the dynsymtab, without using sh_link to
-     indicate which: pick the right one.  v4 dicts always use the dynsymtab (for
-     now).  */
+     indicate which: pick the right one.  v4 dicts use always use the dynsymtab (for
+     now). XXX use sh_link.  */
 
   errno = 0;
   preamble = ctf_arc_bufpreamble_v1 (ctfsectp);
@@ -191,7 +253,7 @@ ctf_bfdopen (struct bfd *abfd _libctf_unused_, ctf_open_sect_t *sects, ctf_error
 	  if (bfd_malloc_and_get_section (abfd, str_asect, &str_bcontents))
 	    {
 	      strtab = (const char *) str_bcontents;
-	      strtab_alloc = (char *) str_bcontents;
+	      free_strtab = 1;
 	      strsize = str_asect->size;
 	    }
 	}
@@ -224,14 +286,13 @@ ctf_bfdopen (struct bfd *abfd _libctf_unused_, ctf_open_sect_t *sects, ctf_error
   symsect_endianness = bfd_little_endian (abfd);
 #endif
 
-  arci = ctf_arc_bufopen (ctf_open_sect (ctf_open_sect (ctf_open_sect (NULL,
-			  ctfsectp), symsectp), strsectp), errp);
+  arci = ctf_arc_bufopen (ctf_open_sect (ctf_open_sect (ctf_open_sect (ctf_open_sect (ctf_open_sect (NULL,
+			  ctfsectp), symtypetabsectp), symtypetaballsectp), symsectp), strsectp), errp);
   if (arci)
     {
       /* Request freeing of the symsect and possibly the strsect.  */
       arci->ctfi_free_symsect = 1;
-      if (strtab_alloc)
-	arci->ctfi_free_strsect = 1;
+      arci->ctfi_free_strsect = free_strtab;
 
       /* Get the endianness right.  */
       if (symsect_endianness > -1)
@@ -241,15 +302,23 @@ ctf_bfdopen (struct bfd *abfd _libctf_unused_, ctf_open_sect_t *sects, ctf_error
       if (free_ctfsect)
 	arci->ctfi_data = (void *) ctfsect.cts_data;
 
-      /* XXX get the data model right.  */
+      arci->ctfi_free_symtypetabsect = free_symtypetabsect;
+      arci->ctfi_free_symtypetaballsect = free_symtypetaballsect;
+
       return arci;
     }
 #ifdef HAVE_BFD_ELF
  err_free_ctf:
-  free (ctf_alloc);
+  if (free_ctfsect)
+    free ((char *) ctfsect.cts_data);
+  if (free_symtypetabsect)
+    free ((char *) symtypetabsect.cts_data);
+  if (free_symtypetaballsect)
+    free ((char *) symtypetaballsect.cts_data);
  err_free_sym:
   free (symtab);
-  free (strtab_alloc);
+  if (free_strtab)
+    free ((char *) strtab);
 #endif
 err: _libctf_unused_;
   if (bfderrstr)

@@ -22,6 +22,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <elf.h>
+#include "ctf-api.h"
 #include "ctf-util-swap.h"
 #include "ctf.h"
 #include <bfd.h>
@@ -40,7 +41,8 @@ static const ctf_dmodel_t _libctf_models[] = {
 };
 
 const char _CTF_SECTION[] = ".ctf";
-const char _CTF_NULLSTR[] = "";
+const char _CTF_SYMTYPETAB_SECTION[] = ".ctf.symtypetab";
+const char _CTF_SYMTYPETABALL_SECTION[] = ".ctf.symtypetab.all";
 
 /* Version-sensitive accessors.  */
 
@@ -1278,29 +1280,8 @@ ctf_flip_header (void *cthp, int is_btf, int pure_btf, int ctf_version)
   swap_thing (cth->cth_cu_name);
   swap_thing (cth->cth_parent_strlen);
   swap_thing (cth->cth_parent_ntypes);
-  swap_thing (cth->cth_objt_off);
-  swap_thing (cth->cth_objt_len);
-  swap_thing (cth->cth_func_off);
-  swap_thing (cth->cth_func_len);
-  swap_thing (cth->cth_objtidx_off);
-  swap_thing (cth->cth_objtidx_len);
-  swap_thing (cth->cth_funcidx_off);
-  swap_thing (cth->cth_funcidx_len);
 
   return 0;
-}
-
-/* Flip the endianness of the data-object or function sections or their indexes,
-   all arrays of uint32_t.  */
-
-static void
-flip_objts (void *start, size_t len)
-{
-  uint32_t *obj = start;
-  ssize_t i;
-
-  for (i = len / sizeof (uint32_t); i > 0; obj++, i--)
-      swap_thing (*obj);
 }
 
 /* Flip the endianness of the kind layout section.  */
@@ -1557,18 +1538,10 @@ flip_types (ctf_dict_t *fp, void *start, size_t len, int to_foreign)
    If TO_FOREIGN is set, flip to foreign-endianness; if not, flip away.  */
 
 ctf_error_t
-ctf_flip (ctf_dict_t *fp, ctf_header_t *cth, unsigned char *buf,
-	  int is_btf, int to_foreign)
+ctf_flip (ctf_dict_t *fp, ctf_header_t *cth, unsigned char *buf, int to_foreign)
 {
   ctf_dprintf ("Flipping endianness\n");
 
-  if (!is_btf)
-    {
-      flip_objts (buf + cth->cth_objt_off, cth->cth_objt_len);
-      flip_objts (buf + cth->cth_func_off, cth->cth_func_len);
-      flip_objts (buf + cth->cth_objtidx_off, cth->cth_objtidx_len);
-      flip_objts (buf + cth->cth_funcidx_off, cth->cth_funcidx_len);
-    }
   flip_layout (buf + cth->btf.bth_layout_off, cth->btf.bth_layout_len);
   return flip_types (fp, buf + cth->btf.bth_type_off, cth->btf.bth_type_len,
 		     to_foreign);
@@ -1592,7 +1565,7 @@ void ctf_set_ctl_hashes (ctf_dict_t *fp)
   fp->ctf_lookups[3].ctl_prefix = "datasec";
   fp->ctf_lookups[3].ctl_len = strlen (fp->ctf_lookups[3].ctl_prefix);
   fp->ctf_lookups[3].ctl_hash = fp->ctf_datasecs;
-  fp->ctf_lookups[4].ctl_prefix = _CTF_NULLSTR;
+  fp->ctf_lookups[4].ctl_prefix = "";
   fp->ctf_lookups[4].ctl_len = strlen (fp->ctf_lookups[4].ctl_prefix);
   fp->ctf_lookups[4].ctl_hash = fp->ctf_names;
   fp->ctf_lookups[5].ctl_prefix = NULL;
@@ -1627,6 +1600,20 @@ ctf_open_sect_t *ctf_open_sect (ctf_open_sect_t *open_sect, ctf_sect_t *sect)
     }
   else
     return (ctf_open_sect_t *) sect;
+}
+
+/* Copy a ctf_sect_t, dupping its name but not its contents.  */
+static ctf_error_t
+ctf_copy_sect (ctf_sect_t *dest, ctf_sect_t *src)
+{
+  if (src == NULL)
+    return 0;
+
+  memcpy (dest, src, sizeof (ctf_sect_t));
+  if (src->cts_name != NULL)
+    if ((dest->cts_name = strdup (src->cts_name)) == NULL)
+      return ENOMEM;
+  return 0;
 }
 
 /* Decode the specified CTF or BTF buffer and optional symbol table, and create
@@ -1678,6 +1665,7 @@ ctf_bufopen_len (ctf_open_sect_t *sects, ssize_t *len, ctf_dict_t *parent,
   size_t ctf_adjustment = 0;
   ctf_sect_t *sect = (ctf_sect_t *) sects;
   ctf_sect_t *ctfsect = NULL, *strsect = NULL, *symsect = NULL;
+  ctf_sect_t *symtypetabsect = NULL, *symtypetaballsect = NULL;
 
   /* These match the CTF_VERSION definitions up to IS_BTF.  */
   enum
@@ -1712,6 +1700,8 @@ ctf_bufopen_len (ctf_open_sect_t *sects, ssize_t *len, ctf_dict_t *parent,
 	case CTF_ELF_SECT: ctfsect = sect; break;
 	case CTF_ELF_SYMSECT: symsect = sect; break;
 	case CTF_ELF_STRSECT: strsect = sect; break;
+	case CTF_ELF_SYMTYPETABSECT: symtypetabsect = sect; break;
+	case CTF_ELF_SYMTYPETABALLSECT: symtypetaballsect = sect; break;
 	default:
 	  /* Unknown sections are fine, and ignored.  */
 	  ;
@@ -1722,27 +1712,56 @@ ctf_bufopen_len (ctf_open_sect_t *sects, ssize_t *len, ctf_dict_t *parent,
   if (ctfsect == NULL)
     return (ctf_set_open_errno (errp, ECTF_NOCTFDATA));
 
-  ctf_dprintf ("ctf_bufopen %zi+%zi+%zi bytes: validating\n",
+  ctf_dprintf ("ctf_bufopen %zi+%zi+%zi+%zi+%zi bytes: validating\n",
 	       ctfsect ? ctfsect->cts_size : 0,
 	       symsect ? symsect->cts_size : 0,
-	       strsect ? strsect->cts_size : 0);
+	       strsect ? strsect->cts_size : 0,
+	       symtypetabsect ? symtypetabsect->cts_size : 0,
+	       symtypetaballsect ? symtypetaballsect->cts_size : 0);
 
   /* Prepare for possible error.  */
   if (len)
     *len = -1;
 
-  if ((ctfsect == NULL) || ((symsect != NULL) && (strsect == NULL)))
-    return (ctf_set_open_errno (errp, EINVAL));
+  if (ctfsect == NULL)
+    {
+      ctf_err (err_locus (NULL), ECTF_SECTBAD, _("CTF section missing"));
+      return (ctf_set_open_errno (errp, ECTF_SECTBAD));
+    }
+
+    if ((symsect != NULL) && (strsect == NULL))
+    {
+      ctf_err (err_locus (NULL), ECTF_SECTBAD,
+	       _("CTF symtab provided, but not strtab"));
+      return (ctf_set_open_errno (errp, ECTF_SECTBAD));
+    }
+
+    if ((symtypetabsect != NULL || symtypetaballsect != NULL)
+      && symsect == NULL)
+    {
+      ctf_err (err_locus (NULL), ECTF_SECTBAD,
+	       _("CTF symtypetab provided, but not symtab"));
+      return (ctf_set_open_errno (errp, ECTF_SECTBAD));
+    }
 
   if (symsect != NULL && symsect->cts_entsize != sizeof (Elf32_Sym) &&
       symsect->cts_entsize != sizeof (Elf64_Sym))
-    return (ctf_set_open_errno (errp, ECTF_SYMTAB));
+    {
+      ctf_err (err_locus (NULL), ECTF_SECTBAD,
+	       _("Symtab entry size of %zi not allowed"), symsect->cts_entsize);
+      return (ctf_set_open_errno (errp, ECTF_SECTBAD));
+    }
 
-  if (symsect != NULL && symsect->cts_data == NULL)
-    return (ctf_set_open_errno (errp, ECTF_SYMBAD));
-
-  if (strsect != NULL && strsect->cts_data == NULL)
-    return (ctf_set_open_errno (errp, ECTF_STRBAD));
+  if ((symsect != NULL && symsect->cts_data == NULL)
+      || (strsect != NULL && strsect->cts_data == NULL)
+      || (symtypetabsect != NULL && symtypetabsect->cts_data == NULL)
+      || (symtypetaballsect != NULL && symtypetaballsect->cts_data == NULL))
+    {
+      ctf_err (err_locus (NULL), ECTF_SECTBAD,
+	       _("empty data for section %s"),
+	       symsect->cts_name ? symsect->cts_name : _("(unknown)"));
+      return (ctf_set_open_errno (errp, ECTF_SECTBAD));
+    }
 
   if (ctfsect->cts_data == NULL
       || ctfsect->cts_size < sizeof (ctf_btf_preamble_t))
@@ -2099,20 +2118,12 @@ ctf_bufopen_len (ctf_open_sect_t *sects, ssize_t *len, ctf_dict_t *parent,
      ctf_header_t as valid (with all remaining offsets zero).  */
 
   if (_libctf_unlikely_
-      (hp->cth_objt_off + hp->cth_objt_len > hp->cth_func_off
-       || hp->cth_func_off + hp->cth_func_len > hp->cth_objtidx_off
-       || hp->cth_objtidx_off + hp->cth_objtidx_len > hp->cth_funcidx_off
-       || hp->cth_funcidx_off + hp->cth_funcidx_len > hp->btf.bth_type_off
-       || hp->btf.bth_type_off + hp->btf.bth_type_len > hp->btf.bth_str_off
+      (hp->btf.bth_type_off + hp->btf.bth_type_len > hp->btf.bth_str_off
        || (hp->btf.bth_type_off + hp->btf.bth_type_len > hp->btf.bth_layout_off
 	   && hp->btf.bth_layout_off != 0)
        || hp->btf.bth_type_off + hp->btf.bth_type_len > hp->btf.bth_str_off
        || (hp->btf.bth_layout_off + hp->btf.bth_layout_len > hp->btf.bth_str_off
 	   && hp->btf.bth_layout_off != 0)
-       || (hp->cth_objt_off < ctf_adjustment && hp->cth_objt_len != 0)
-       || (hp->cth_func_off < ctf_adjustment && hp->cth_func_len != 0)
-       || (hp->cth_objtidx_off < ctf_adjustment && hp->cth_objtidx_len != 0)
-       || (hp->cth_funcidx_off < ctf_adjustment && hp->cth_funcidx_len != 0)
        || (hp->btf.bth_type_off < ctf_adjustment && hp->btf.bth_type_len != 0)
        || (hp->btf.bth_layout_off < ctf_adjustment && hp->btf.bth_layout_len != 0)
        || (hp->btf.bth_str_off < ctf_adjustment && hp->btf.bth_str_len != 0)))
@@ -2123,47 +2134,18 @@ ctf_bufopen_len (ctf_open_sect_t *sects, ssize_t *len, ctf_dict_t *parent,
       goto validation_fail;
     }
 
-  /* Check for alignment.  Note that even after this check, the *dict as a
-     whole* may be arbitrarily aligned (commonplace in members of archives
+  /* Check for sizing and alignment.  Note that even after this check, the *dict
+     as a whole* may be arbitrarily aligned (commonplace in members of archives
      beyond the first): we fix that up below.  */
 
   if (_libctf_unlikely_
-      ((hp->cth_objt_off & 2)
-       || (hp->cth_func_off & 2) || (hp->cth_objtidx_off & 2)
-       || (hp->cth_funcidx_off & 2) || (hp->btf.bth_type_off & 3)
-       || (hp->btf.bth_layout_off & 3)
+      ((symtypetabsect && (symtypetabsect->cts_size % sizeof (uint32_t)))
+       || (symtypetaballsect && (symtypetaballsect->cts_size % sizeof (ctf_symtypetab_all_ent_t)))
+       || (hp->btf.bth_type_off & 3) || (hp->btf.bth_layout_off & 3)
        || (hp->btf.bth_layout_len % sizeof (ctf_btf_layout_t)) != 0))
     {
       ctf_err (err_locus (NULL), ECTF_CORRUPT,
 	       _("CTF sections not properly aligned or sized"));
-      ctf_set_open_errno (errp, ECTF_CORRUPT);
-      goto validation_fail;
-    }
-
-  /* This invariant may be lifted in v5, but for now it is true.  */
-
-  if (_libctf_unlikely_ ((hp->cth_objtidx_len != 0) &&
-			 (hp->cth_objtidx_len != hp->cth_objt_len)))
-    {
-      ctf_err (err_locus (NULL), ECTF_CORRUPT,
-	       _("object index section is neither empty nor the "
-		 "same length as the object section: %u versus %u "
-		 "bytes"), hp->cth_objt_len, hp->cth_objtidx_len);
-      ctf_set_open_errno (errp, ECTF_CORRUPT);
-      goto validation_fail;
-    }
-
-  /* v3 only needs this invariant if CTF_F_NEWFUNCINFO is set: if it's not, the
-     section is ignored anyway.  Always true for v4.  */
-  if (_libctf_unlikely_ ((hp->cth_funcidx_len != 0) &&
-			 (hp->cth_funcidx_len != hp->cth_func_len) &&
-			 ((header_v3 && hp->cth_flags & CTF_F_NEWFUNCINFO)
-			  || !header_v3)))
-    {
-      ctf_err (err_locus (NULL), ECTF_CORRUPT,
-	       _("function index section is neither empty nor the "
-		 "same length as the function section: %u versus %u "
-		 "bytes"), hp->cth_func_len, hp->cth_funcidx_len);
       ctf_set_open_errno (errp, ECTF_CORRUPT);
       goto validation_fail;
     }
@@ -2185,11 +2167,8 @@ ctf_bufopen_len (ctf_open_sect_t *sects, ssize_t *len, ctf_dict_t *parent,
      shared with BTF (see ctf_adjustment).  */
   fp->ctf_size = hp->btf.bth_str_off + hp->btf.bth_str_len;
 
-  if (_libctf_unlikely_ (hp->cth_objt_off > fp->ctf_size
-			 || hp->cth_func_off > fp->ctf_size
-			 || hp->cth_objtidx_off > fp->ctf_size
-			 || hp->cth_funcidx_off > fp->ctf_size
-			 || hp->btf.bth_type_off > fp->ctf_size))
+  if (_libctf_unlikely_ (hp->btf.bth_type_off > fp->ctf_size
+			 || hp->btf.bth_str_off > fp->ctf_size))
     {
       ctf_err (err_locus (NULL), ECTF_CORRUPT,
 	       _("header offset or length exceeds CTF size"));
@@ -2331,39 +2310,25 @@ ctf_bufopen_len (ctf_open_sect_t *sects, ssize_t *len, ctf_dict_t *parent,
       goto bad;
     }
 
-  memcpy (&fp->ctf_data, ctfsect, sizeof (ctf_sect_t));
+  /* Copy the sections into stable storage (names only), if set.  */
 
-  if (symsect != NULL)
-    memcpy (&fp->ctf_ext_symtab, symsect, sizeof (ctf_sect_t));
+  if ((err = ctf_copy_sect (&fp->ctf_data, ctfsect)) != 0)
+    goto bad;
 
-  if (strsect != NULL)
-    memcpy (&fp->ctf_ext_strtab, strsect, sizeof (ctf_sect_t));
+  if ((err = ctf_copy_sect (&fp->ctf_ext_strtab, strsect)) != 0)
+    goto bad;
 
-  if (fp->ctf_data.cts_name != NULL)
-    if ((fp->ctf_data.cts_name = strdup (fp->ctf_data.cts_name)) == NULL)
-      {
-	err = ENOMEM;
-	goto bad;
-      }
-  if (fp->ctf_ext_symtab.cts_name != NULL)
-    if ((fp->ctf_ext_symtab.cts_name = strdup (fp->ctf_ext_symtab.cts_name)) == NULL)
-      {
-	err = ENOMEM;
-	goto bad;
-      }
-  if (fp->ctf_ext_strtab.cts_name != NULL)
-    if ((fp->ctf_ext_strtab.cts_name = strdup (fp->ctf_ext_strtab.cts_name)) == NULL)
-      {
-	err = ENOMEM;
-	goto bad;
-      }
+  if ((err = ctf_copy_sect (&fp->ctf_ext_symsect, symsect)) != 0)
+    goto bad;
 
-  if (fp->ctf_data.cts_name == NULL)
-    fp->ctf_data.cts_name = _CTF_NULLSTR;
-  if (fp->ctf_ext_symtab.cts_name == NULL)
-    fp->ctf_ext_symtab.cts_name = _CTF_NULLSTR;
-  if (fp->ctf_ext_strtab.cts_name == NULL)
-    fp->ctf_ext_strtab.cts_name = _CTF_NULLSTR;
+  if ((err = ctf_copy_sect (&fp->ctf_ext_symtypetabsect,
+			    symtypetabsect)) != 0)
+    goto bad;
+  if ((err = ctf_copy_sect (&fp->ctf_ext_symtypetaballsect,
+			    symtypetaballsect)) != 0)
+    goto bad;
+
+  /* Set up the external string table.  */
 
   if (strsect != NULL)
     {
@@ -2387,7 +2352,7 @@ ctf_bufopen_len (ctf_open_sect_t *sects, ssize_t *len, ctf_dict_t *parent,
     }
 
   if (foreign_endian &&
-      (err = ctf_flip (fp, hp, fp->ctf_buf, format == IS_BTF, 0)) != 0)
+      (err = ctf_flip (fp, hp, fp->ctf_buf, 0)) != 0)
     {
       /* We can be certain that ctf_flip() will have endian-flipped everything
 	 other than the types table when we return.  In particular the header
@@ -2409,13 +2374,14 @@ ctf_bufopen_len (ctf_open_sect_t *sects, ssize_t *len, ctf_dict_t *parent,
 				format == IS_BTF)) != 0)
     goto bad;
 
-  /*  Initially, we assume the symtab is native-endian: if it isn't, the
+  /* Initially, we assume the symtab is native-endian: if it isn't, the
      caller will inform us later by calling ctf_symsect_endianness.  */
 #ifdef WORDS_BIGENDIAN
   fp->ctf_symsect_little_endian = 0;
 #else
   fp->ctf_symsect_little_endian = 1;
 #endif
+  fp->ctf_foreign_endian = foreign_endian;
 
   ctf_set_ctl_hashes (fp);
 
@@ -2559,7 +2525,7 @@ ctf_dict_close (ctf_dict_t *fp)
   ctf_dynhash_destroy (fp->ctf_decl_tag_map);
 
   ctf_dynhash_destroy (fp->ctf_symtypehash);
-  free (fp->ctf_symtypeidx_sxlate);
+  free (fp->ctf_symbol_next_cache);
   free (fp->ctf_dynsymidx);
   ctf_dynhash_destroy (fp->ctf_dynsyms);
   for (did = ctf_list_next (&fp->ctf_in_flight_dynsyms); did != NULL; did = nid)
@@ -2586,14 +2552,11 @@ ctf_dict_close (ctf_dict_t *fp)
   ctf_str_free_atoms (fp);
   free (fp->ctf_tmp_typeslice);
 
-  if (fp->ctf_data.cts_name != _CTF_NULLSTR)
-    free ((char *) fp->ctf_data.cts_name);
-
-  if (fp->ctf_ext_symtab.cts_name != _CTF_NULLSTR)
-    free ((char *) fp->ctf_ext_symtab.cts_name);
-
-  if (fp->ctf_ext_strtab.cts_name != _CTF_NULLSTR)
-    free ((char *) fp->ctf_ext_strtab.cts_name);
+  free ((char *) fp->ctf_data.cts_name);
+  free ((char *) fp->ctf_ext_symsect.cts_name);
+  free ((char *) fp->ctf_ext_strtab.cts_name);
+  free ((char *) fp->ctf_ext_symtypetabsect.cts_name);
+  free ((char *) fp->ctf_ext_symtypetaballsect.cts_name);
 
   free (fp->ctf_dynbase);
 
@@ -2651,8 +2614,9 @@ ctf_archive_t *
 ctf_dict_arc (ctf_dict_t *fp, int flags)
 {
   struct ctf_archive_internal *arci;
-  ctf_sect_t symsect, strsect;
+  ctf_sect_t symsect, strsect, symtypetabsect, symtypetaballsect;
   ctf_sect_t *symsectp = NULL, *strsectp = NULL;
+  ctf_sect_t *symtypetabsectp = NULL, *symtypetaballsectp = NULL;
   ctf_error_t err;
 
   if (fp->ctf_archive)
@@ -2667,18 +2631,31 @@ ctf_dict_arc (ctf_dict_t *fp, int flags)
 
   /* Take a copy of the ctf_sect_t's out of the way to keep the list chaining
      done by ctf_open_sect from persisting or crossing threads unpleasantly.  */
-  if (fp->ctf_ext_symtab.cts_name != NULL)
+  if (fp->ctf_ext_symsect.cts_name != NULL)
     {
-      memcpy (&symsect, &fp->ctf_ext_symtab, sizeof (struct ctf_sect));
+      memcpy (&symsect, &fp->ctf_ext_symsect, sizeof (struct ctf_sect));
       symsectp = &symsect;
     }
-  if (fp->ctf_ext_symtab.cts_name != NULL)
+  if (fp->ctf_ext_strtab.cts_name != NULL)
     {
-      memcpy (&strsect, &fp->ctf_ext_symtab, sizeof (struct ctf_sect));
+      memcpy (&strsect, &fp->ctf_ext_strtab, sizeof (struct ctf_sect));
       strsectp = &strsect;
     }
 
-  if ((arci = ctf_new_archive_wrapper (fp, ctf_open_sect (ctf_open_sect (NULL, symsectp), strsectp),
+  if (fp->ctf_ext_symtypetabsect.cts_name != NULL)
+    {
+      memcpy (&symtypetabsect, &fp->ctf_ext_symtypetabsect, sizeof (struct ctf_sect));
+      symtypetabsectp = &symtypetabsect;
+    }
+
+  if (fp->ctf_ext_symtypetaballsect.cts_name != NULL)
+    {
+      memcpy (&symtypetaballsect, &fp->ctf_ext_symtypetaballsect, sizeof (struct ctf_sect));
+      symtypetaballsectp = &symtypetaballsect;
+    }
+
+  if ((arci = ctf_new_archive_wrapper (fp, ctf_open_sect (ctf_open_sect (ctf_open_sect (ctf_open_sect (NULL,
+				       symtypetabsectp), symtypetaballsectp), symsectp), strsectp),
 				       &err)) == NULL)
     {
       ctf_set_errno (fp, err);
@@ -2706,9 +2683,20 @@ ctf_elf_sect (const ctf_dict_t *fp, ctf_elfsect_names_t sect)
     case CTF_ELF_SECT:
       return fp->ctf_data;
     case CTF_ELF_SYMSECT:
-      return fp->ctf_ext_symtab;
+      return fp->ctf_ext_symsect;
     case CTF_ELF_STRSECT:
       return fp->ctf_ext_strtab;
+    /* Use the copy on the archive, if we can.  */
+    case CTF_ELF_SYMTYPETABSECT:
+      if (fp->ctf_archive)
+	return fp->ctf_archive->ctfi_symtypetabsect;
+      else
+	return fp->ctf_ext_symtypetabsect;
+    case CTF_ELF_SYMTYPETABALLSECT:
+      if (fp->ctf_archive)
+	return fp->ctf_archive->ctfi_symtypetaballsect;
+      else
+	return fp->ctf_ext_symtypetaballsect;
     default:
       error.cts_section = sect;
       return error;
@@ -2746,15 +2734,25 @@ ctf_sect_size (ctf_dict_t *fp, ctf_sect_names_t sect)
 	      return -1;			/* errno is set for us.  */
 	    }
 	}
+      break;
     case CTF_SECT_OBJT:
-      return fp->ctf_header->cth_objtidx_len + fp->ctf_header->cth_objt_len;
+      if (fp->ctf_v3_header)
+	return fp->ctf_v3_header->cth_funcidxoff - fp->ctf_v3_header->cth_objtidxoff;
+      else
+	return 0;
+      break;
     case CTF_SECT_FUNC:
-      return fp->ctf_header->cth_funcidx_len + fp->ctf_header->cth_func_len;
+      if (fp->ctf_v3_header)
+	return fp->ctf_v3_header->cth_varoff - fp->ctf_v3_header->cth_funcidxoff;
+      else
+	return 0;
+      break;
     case CTF_SECT_VAR:
       if (fp->ctf_v3_header)
 	return fp->ctf_v3_header->cth_typeoff - fp->ctf_v3_header->cth_varoff;
       else
 	return 0;
+      break;
     case CTF_SECT_TYPE:
       return fp->ctf_header->btf.bth_type_len;
     case CTF_SECT_STR:

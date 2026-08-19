@@ -3965,33 +3965,12 @@ ldlang_open_ctf (void)
 
   if (only_one_input)
     {
-      ctf_dict_t *fp;
-
       if (ctf_arc_flag (only_one_input, CTF_ARC_FLAGS_LIBCTF_CREATED))
 	{
-	  ctf_next_t *it = NULL;
 	  int symtypetabs_found = 0;
 
-	  while ((fp = ctf_archive_next (only_one_input, &it, NULL,
-					 0, &err)) != NULL)
-	    {
-	      if (ctf_dict_flag (fp, CTF_DICT_HAS_SYMBOL_TYPES))
-		{
-		  symtypetabs_found = 1;
-		  ctf_next_destroy (it);
-		  err = ECTF_NEXT_END;
-		  break;
-		}
-	      ctf_dict_close (fp);
-	    }
-	  if (err != ECTF_NEXT_END)
-	    {
-	      einfo (_("CTF error: cannot open BTF/CTF sections; "
-		       "all types will be discarded: `%s'\n"),
-		     ctf_errmsg (err));
-	      ld_stop_phase (PHASE_CTF);
-	      return;
-	    }
+	  if (ctf_arc_flag (only_one_input, CTF_ARC_HAS_SYMBOL_TYPES))
+	    symtypetabs_found = 1;
 
 	  if (!symtypetabs_found)
 	    ctf_copy_unchanged = 1;
@@ -4003,6 +3982,7 @@ ldlang_open_ctf (void)
 
 	  if (try_pure_btf && ctf_archive_count (only_one_input) == 1)
 	    {
+	      ctf_dict_t *fp;
 	      ctf_next_t *it = NULL;
 
 	      while ((fp = ctf_archive_next (only_one_input, &it, NULL,
@@ -4301,7 +4281,7 @@ lang_write_ctf (int late)
      CTF in the end.  Errors are handled below, if this section is actually
      output.  */
   if (!err)
-    contents = ctf_link_write (ctf_output, &output_size, &really_btf);
+    contents = ctf_link_write (ctf_output, &output_size, NULL, NULL, &really_btf);
 
   /* Emit CTF or BTF, whichever was used and is needed.  We decide which to
      emit to based on the decision taken by section removal, above, not

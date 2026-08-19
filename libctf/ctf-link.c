@@ -19,7 +19,9 @@
 
 #include <ctf-impl.h>
 #include <string.h>
+#include "ctf-api.h"
 #include "ctf-util-endian.h"
+#include "hashtab.h"
 
 /* CTF linking consists of adding CTF archives full of content to be merged into
    this one to the current file (which must be writable) by calling
@@ -875,51 +877,84 @@ check_sym (ctf_dict_t *fp, const char *name, ctf_id_t type)
   return -1;
 }
 
-/* Do a deduplicating link of the symtypetab to one input dict.  */
+/* Deduplicate one symbol named NAME into the OUTPUT dict, if its type has
+   been mapped there by the deduplicator.  Return -1 on error, 0 if no
+   mapping existed, 1 if the type was successfully dedupped.  */
+
+static int
+ctf_link_dedup_one_sym (ctf_dict_t *fp, ctf_dict_t *output, ctf_dict_t *input,
+			ctf_id_t type, const char *name)
+{
+  ctf_id_t dst_type;
+  int sym;
+
+  if ((dst_type = ctf_dedup_type_mapping (output, input, type)) == CTF_ERR)
+    return -1;					/* errno is set for us.  */
+
+  if (dst_type == 0)
+    return 0;
+
+  if (!ctf_assert (fp, ctf_type_isparent (output, dst_type)))
+    return -1;					/* errno is set for us.  */
+
+  sym = check_sym (output, name, dst_type);
+
+  /* Already present.  */
+  if (sym == 0)
+    return 1;
+
+  /* Not present: add it.  */
+  if (sym > 0)
+    {
+      if (ctf_add_sym (output, name, dst_type) < 0)
+	return -1;				/* errno is set for us.  */
+      return 1;
+    }
+
+  /* Conflicting type: right type must be in the child.  If this *is* the
+     child, error.  Perhaps this should be an assertion failure.  */
+
+  if (fp != output)
+    return ctf_err (link_type_err_locus (fp, input, -1, type), ECTF_DUPLICATE,
+		    _("symbol %s found conflicting even when trying in per-CU dict."),
+		    name);
+  return 0;
+}
+
+/* Do a deduplicating link of the symtypetab to the input dict's archive.
+
+   Symbols in CTFv4 are not per-dict entities, but rather per-archive: but
+   dynamically added symbols are still per-dict, because they are added
+   before an archive even exists.  ctf_arc_symbol_next handles this for us.  */
 
 static ctf_ret_t
-ctf_link_deduplicating_one_symtypetab (ctf_dict_t *fp, ctf_dict_t *input,
+ctf_link_deduplicating_one_symtypetab (ctf_dict_t *fp, ctf_archive_t *input_arc,
 				       int cu_mapped)
 {
   ctf_next_t *it = NULL;
   const char *name;
   ctf_id_t type;
+  ctf_dict_t *input;
+  ctf_error_t err;
 
-  while ((type = ctf_symbol_next (input, &it, &name)) != CTF_ERR)
+  while ((input = ctf_arc_symbol_next (input_arc, &it, &name, &type,
+				       &err)) != NULL)
     {
-      ctf_id_t dst_type;
-      ctf_dict_t *per_cu_out_fp;
-      int sym;
-
       /* Look in the parent first.  */
 
-      if ((dst_type = ctf_dedup_type_mapping (fp, input, type)) == CTF_ERR)
-	goto err;				/* errno is set for us.  */
-
-      if (dst_type != 0)
+      switch (ctf_link_dedup_one_sym (fp, fp, input, type, name))
 	{
-	  if (!ctf_assert (fp, ctf_type_isparent (fp, dst_type)))
-	    goto err;				/* errno is set for us.  */
-
-	  sym = check_sym (fp, name, dst_type);
-
-	  /* Already present: next symbol.  */
-	  if (sym == 0)
-	    continue;
-	  /* Not present: add it.  */
-	  else if (sym > 0)
-	    {
-	      if (ctf_add_sym (fp, name, dst_type) < 0)
-		goto err; 			/* errno is set for us.  */
-	      continue;
-	    }
+	case -1: goto err;	     /* errno is set for us.  */
+	case 1: continue;	     /* Added, or already present.  */
+	case 0: break;		     /* Type not present: try per-child.  */
 	}
 
-      /* Can't add to the parent due to a name clash (most unlikely), or because
-	 it references a type only present in the child.  Try adding to the
-	 child, creating if need be.  If we can't do that, skip it.  Don't add
-	 to a child if we're doing a CU-mapped link, since that has only one
-	 output.  */
+      /* Can't add to the parent due to a name clash (most unlikely), or
+	 because it references a type only present in the child, or because
+	 the type isn't there at all (because it was elided by the
+	 deduplicator).  Try adding to the child, creating if need be.  If
+	 we can't do that, skip it.  Don't add to a child if we're doing a
+	 CU-mapped link, since that has only one output.  */
       if (cu_mapped)
 	{
 	  ctf_dprintf ("Symbol %s in input file %s depends on a type %lx "
@@ -928,42 +963,14 @@ ctf_link_deduplicating_one_symtypetab (ctf_dict_t *fp, ctf_dict_t *input,
 	  continue;
 	}
 
-      if ((per_cu_out_fp = ctf_create_per_cu (fp, input, NULL)) == NULL)
-	goto err;				/* errno is set for us.  */
-
-      /* If the type was not found, check for it in the child too.  */
-      if (dst_type == 0)
+      if (input->ctf_link_in_out)
 	{
-	  if ((dst_type = ctf_dedup_type_mapping (per_cu_out_fp,
-						  input, type)) == CTF_ERR)
-	    goto err;				/* errno is set for us.  */
-
-	  if (dst_type == 0)
+	  switch (ctf_link_dedup_one_sym (fp, input->ctf_link_in_out,
+					  input, type, name))
 	    {
-	      ctf_warn (link_type_err_locus (fp, input, -1, type), 1, 0,
-			_("type for symbol %s not found: skipped"), name);
-	      continue;
+	    case -1: goto err;			/* errno is set for us.  */
+	    default: continue;			/* Added, or tried to.  */
 	    }
-	}
-
-      sym = check_sym (per_cu_out_fp, name, dst_type);
-
-      /* Already present: next symbol.  */
-      if (sym == 0)
-	continue;
-      /* Not present: add it.  */
-      else if (sym > 0)
-	{
-	  if (ctf_add_sym (per_cu_out_fp, name, dst_type) < 0)
-	    goto err;				/* errno is set for us.  */
-	}
-      else
-	{
-	  /* Perhaps this should be an assertion failure.  */
-	  ctf_next_destroy (it);
-	  return ctf_err (link_type_err_locus (fp, input, -1, type), ECTF_DUPLICATE,
-			  _("symbol %s found conflicting even when trying in per-CU dict."),
-			  name);
 	}
     }
   if (ctf_errno (input) != ECTF_NEXT_END)
@@ -979,19 +986,42 @@ ctf_link_deduplicating_one_symtypetab (ctf_dict_t *fp, ctf_dict_t *input,
   return -1;					/* errno is set for us.  */
 }
 
-/* Do a deduplicating link of the function info and data objects
-   in the inputs.  */
+/* Do a deduplicating link of the symtypetabs in the inputs.  */
 static ctf_ret_t
 ctf_link_deduplicating_syms (ctf_dict_t *fp, ctf_dict_t **inputs,
 			     size_t ninputs, int cu_mapped)
 {
+  ctf_dynset_t *already_done;
   size_t i;
+
+  if ((already_done = ctf_dynset_create (htab_hash_pointer,
+					 htab_eq_pointer, NULL)) == NULL)
+    return ctf_set_errno (fp, errno);
 
   for (i = 0; i < ninputs; i++)
     {
-      if (ctf_link_deduplicating_one_symtypetab (fp, inputs[i],
-						 cu_mapped) < 0)
-	return -1;				/* errno is set for us.  */
+      ctf_archive_t *arc;
+
+      /* Avoid calling with any given archive more than once, even if many
+	 dicts share an archive.  */
+
+      if ((arc = ctf_dict_arc (inputs[i], 0)) == NULL)
+	{
+	  ctf_dynset_destroy (already_done);
+	  return ctf_set_errno (fp, ctf_errno (inputs[i]));
+	}
+
+      if (!ctf_dynset_exists (already_done, arc, NULL))
+	{
+	  if (ctf_link_deduplicating_one_symtypetab (fp, arc, cu_mapped) < 0
+	      || (ctf_dynset_insert (already_done, arc) < 0))
+	    {
+	      ctf_dynset_destroy (already_done);
+	      ctf_arc_close (arc);
+	      return ctf_set_errno (fp, errno);
+	    }
+	}
+      ctf_arc_close (arc);
     }
 
   return 0;
@@ -1345,9 +1375,6 @@ ctf_link_deduplicating (ctf_dict_t *fp)
       goto err;
     }
 
-  /* UPTODO: variable section omission, possible integration of symtypetabs (?) et
-     al */
-
   if (ctf_link_deduplicating_syms (fp, inputs, ninputs, 0) < 0)
     {
       ctf_err (err_locus (fp), 0, _("deduplicating link symbol emission failed for "
@@ -1586,11 +1613,6 @@ ctf_link_add_strtab (ctf_dict_t *fp, ctf_link_strtab_string_f *add_string,
   if (fp->ctf_stypes > 0)
     return ctf_set_errno (fp, ECTF_RDONLY);
 
-  /* If emitting BTF, there is no external string table.   */
-
-  if (ctf_serialize_output_dict_is_btf (fp))
-    return 0;
-
   while ((str = add_string (&offset, arg)) != NULL)
     {
       ctf_link_out_string_cb_arg_t iter_arg = { str, offset, 0 };
@@ -1618,7 +1640,7 @@ ctf_link_add_strtab (ctf_dict_t *fp, ctf_link_strtab_string_f *add_string,
    (which must be some symtab that is not usually stripped, and which
    is in agreement with ctf_bfdopen_ctfsect).  May be called either before or
    after ctf_link_add_strtab.  As with that function, must be called on a dict which
-   has not yet been serialized.  */
+   has not yet been ctf_linked or serialized.  */
 ctf_ret_t
 ctf_link_add_linker_symbol (ctf_dict_t *fp, ctf_link_sym_t *sym)
 {
@@ -1639,14 +1661,6 @@ ctf_link_add_linker_symbol (ctf_dict_t *fp, ctf_link_sym_t *sym)
   if (ctf_symtab_skippable (sym))
     return 0;
 
-  if (sym->st_type != STT_OBJECT && sym->st_type != STT_FUNC)
-    return 0;
-
-  /* If emitting BTF, there is no symtypetab so linker symbols are ignored.  */
-
-  if (ctf_serialize_output_dict_is_btf (fp))
-    return 0;
-
   /* Add the symbol to the in-flight list.  */
 
   if ((cid = malloc (sizeof (ctf_in_flight_dynsym_t))) == NULL)
@@ -1664,10 +1678,16 @@ ctf_link_add_linker_symbol (ctf_dict_t *fp, ctf_link_sym_t *sym)
   return -ENOMEM;
 }
 
-/* Impose an ordering on symbols.  The ordering takes effect immediately, but
-   since the ordering info does not include type IDs, lookups may return nothing
-   until such IDs are added by calls to ctf_add_*_sym.  Must be called after
-   ctf_link_add_strtab and ctf_link_add_linker_symbol.  */
+/* Impose an ordering on symbols and generally do things that can only be done
+   once everything is known about the symbol and string tables.
+
+   (In this release, the ordering does not affect serialization, but it still
+   affects ctf_arc_lookup_symbol: so as soon as this function is called,
+   ctf_arc_lookup_symbol works just as well as it does on already-linked objects
+   that have been ctf_opened.)
+
+   Must be called after ctf_link_add_strtab and ctf_link_add_linker_symbol.  */
+
 ctf_ret_t
 ctf_link_shuffle_syms (ctf_dict_t *fp)
 {
@@ -1678,11 +1698,6 @@ ctf_link_shuffle_syms (ctf_dict_t *fp)
 
   if (fp->ctf_stypes > 0)
     return ctf_set_errno (fp, ECTF_RDONLY);
-
-  /* If emitting BTF, there is no symtypetab to shuffle.  */
-
-  if (ctf_serialize_output_dict_is_btf (fp))
-    return 0;
 
   if (!fp->ctf_dynsyms)
     {
@@ -1749,6 +1764,7 @@ ctf_link_shuffle_syms (ctf_dict_t *fp)
   /* If no symbols are reported, unwind what we have done and return.  This
      makes it a bit easier for the serializer to tell that no symbols have been
      reported and that it should look elsewhere for reported symbols.  */
+
   if (!ctf_dynhash_elements (fp->ctf_dynsyms))
     {
       ctf_dprintf ("No symbols: not a final link.\n");
@@ -1827,7 +1843,7 @@ ctf_elf32_to_link_sym (ctf_dict_t *fp, ctf_link_sym_t *dst, const Elf32_Sym *src
   if (tmp.st_name < fp->ctf_str[CTF_STRTAB_1].cts_len)
     dst->st_name = (const char *) fp->ctf_str[CTF_STRTAB_1].cts_strs + tmp.st_name;
   else
-    dst->st_name = _CTF_NULLSTR;
+    dst->st_name = "";
   dst->st_nameidx_set = 0;
   dst->st_symidx = symidx;
   dst->st_shndx = tmp.st_shndx;
@@ -1867,7 +1883,7 @@ ctf_elf64_to_link_sym (ctf_dict_t *fp, ctf_link_sym_t *dst, const Elf64_Sym *src
   if (tmp.st_name < fp->ctf_str[CTF_STRTAB_1].cts_len)
     dst->st_name = (const char *) fp->ctf_str[CTF_STRTAB_1].cts_strs + tmp.st_name;
   else
-    dst->st_name = _CTF_NULLSTR;
+    dst->st_name = "";
   dst->st_nameidx_set = 0;
   dst->st_symidx = symidx;
   dst->st_shndx = tmp.st_shndx;
@@ -1971,10 +1987,14 @@ ctf_accumulate_archives (void *key, void *value, void *arg_)
 /* Write out a CTF archive (if there are per-CU CTF files) or a CTF file
    (otherwise) into a new dynamically-allocated string, and return it.
 
+   The optional CTF_SECTS array returns additional serialized sections that
+   should be written out (.ctf.symtypetab et al).
+
    The optional arg IS_BTF is set to 1 if the written output is valid BTF
-   (no archives, no CTF-specific types).  */
+   (no CTF-specific types; archives and even symtypetabs are permitted).  */
 unsigned char *
-ctf_link_write (ctf_dict_t *fp, size_t *size, int *is_btf)
+ctf_link_write (ctf_dict_t *fp, size_t *size, ctf_sect_t **ctf_sects,
+		size_t *ctf_sect_cnt, int *is_btf)
 {
   ctf_name_list_accum_cb_arg_t arg;
   char *transformed_name = NULL;
@@ -2063,7 +2083,8 @@ ctf_link_write (ctf_dict_t *fp, size_t *size, int *is_btf)
       goto err_no;
     }
 
-  if ((err = ctf_arc_write_fd (fileno (f), arg.files, arg.i, flags)) != 0)
+  if ((err = ctf_arc_write_fd (fileno (f), arg.files, arg.i, ctf_sects,
+			       ctf_sect_cnt, flags)) != 0)
     {
       errloc = NULL;				/* errno is set for us.  */
       goto err_set;

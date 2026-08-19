@@ -2221,19 +2221,36 @@ ctf_remove_datasec (ctf_dict_t *fp, ctf_id_t type, const char *name,
 	     _("iteration error rolling back addition of variable %s"), name);
 }
 
-/* Add a type for a symbol regardless of whether or not it is already
-   present (already existing symbols are silently overwritten).
+/* Add a type for a symbol to this dict.  Not written out unless the dict is
+   written to an archive, since symbols have no representation at the CTF
+   dict level. */
 
-   Internal use only.  */
 ctf_ret_t
-ctf_add_sym_forced (ctf_dict_t *fp, const char *name, ctf_id_t id)
+ctf_add_sym (ctf_dict_t *fp, const char *name, ctf_id_t id)
 {
+  ctf_dict_t *foo = NULL;
+  ctf_id_t bar;
+  ctf_error_t err;
   ctf_dict_t *tmp = fp;
   char *dupname;
 
+  if (ctf_dynhash_lookup_kv (fp->ctf_symtypehash, name, NULL, NULL)
+      || (fp->ctf_archive
+	  && (foo = ctf_arc_lookup_symbol_name (fp->ctf_archive, name,
+						&bar, &err)) != NULL))
+    {
+      ctf_dict_close (foo);
+      return (ctf_set_errno (fp, ECTF_DUPLICATE));
+    }
+
+  if (err != ECTF_NOTYPEDAT)
+    return (ctf_set_errno (fp, err));
+
+  fp->ctf_serialize.cs_initialized = 0;
+
   if (ctf_lookup_by_id (&tmp, id, NULL) == NULL)
     return -1;				/* errno is set for us.  */
-  
+
   if ((dupname = strdup (name)) == NULL)
     return (ctf_set_errno (fp, ENOMEM));
 
@@ -2244,17 +2261,6 @@ ctf_add_sym_forced (ctf_dict_t *fp, const char *name, ctf_id_t id)
       return (ctf_set_errno (fp, ENOMEM));
     }
   return 0;
-}
-
-ctf_ret_t
-ctf_add_sym (ctf_dict_t *fp, const char *name, ctf_id_t id)
-{
-  if (ctf_lookup_by_sym_or_name (fp, 0, name, 0) != CTF_ERR)
-    return (ctf_set_errno (fp, ECTF_DUPLICATE));
-
-  fp->ctf_serialize.cs_initialized = 0;
-
-  return ctf_add_sym_forced (fp, name, id);
 }
 
 /* Sort function used by ctf_datasec_sort.  */
