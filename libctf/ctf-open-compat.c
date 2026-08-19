@@ -319,6 +319,46 @@ upgrade_types_v1 (ctf_dict_t *fp, ctf_header_t *cth)
 static int
 upgrade_types (ctf_dict_t *fp, ctf_header_t *cth)
 {
+  /* XXX move this suitably */
+  /* This invariant may be lifted in v5, but for now it is true.  */
+
+  if (_libctf_unlikely_ ((hp->cth_objtidx_len != 0) &&
+			 (hp->cth_objtidx_len != hp->cth_objt_len)))
+    {
+      ctf_err (err_locus (NULL), ECTF_CORRUPT,
+	       _("object index section is neither empty nor the "
+		 "same length as the object section: %u versus %u "
+		 "bytes"), hp->cth_objt_len, hp->cth_objtidx_len);
+      ctf_set_open_errno (errp, ECTF_CORRUPT);
+      goto validation_fail;
+    }
+
+  /* v3 only needs this invariant if CTF_F_NEWFUNCINFO is set: if it's not, the
+     section is ignored anyway.  Always true for v4.  */
+  if (_libctf_unlikely_ ((hp->cth_funcidx_len != 0) &&
+			 (hp->cth_funcidx_len != hp->cth_func_len) &&
+			 ((header_v3 && hp->cth_flags & CTF_F_NEWFUNCINFO)
+			  || !header_v3)))
+    {
+      ctf_err (err_locus (NULL), ECTF_CORRUPT,
+	       _("function index section is neither empty nor the "
+		 "same length as the function section: %u versus %u "
+		 "bytes"), hp->cth_func_len, hp->cth_funcidx_len);
+      ctf_set_open_errno (errp, ECTF_CORRUPT);
+      goto validation_fail;
+    }
+
+  if (_libctf_unlikely_ (hp->cth_objt_off > fp->ctf_size
+			 || hp->cth_func_off > fp->ctf_size
+			 || hp->cth_objtidx_off > fp->ctf_size
+			 || hp->cth_funcidx_off > fp->ctf_size))
+    {
+      ctf_err (err_locus (NULL), ECTF_CORRUPT,
+	       _("header offset or length exceeds CTF size"));
+      err = ECTF_CORRUPT;
+      goto bad;
+    }
+
   switch (cth->cth_version)
     {
       /* v1 requires a full pass and reformatting.  */
@@ -534,6 +574,49 @@ flip_vars_v3 (void *start, size_t len)
       swap_thing (var->ctv_name);
       swap_thing (var->ctv_type);
     }
+}
+
+/* Flip the endianness of the data-object or function sections or their indexes,
+   all arrays of uint32_t.  */
+
+static void
+flip_objts_v3 (void *start, size_t len)
+{
+  uint32_t *obj = start;
+  ssize_t i;
+
+  for (i = len / sizeof (uint32_t); i > 0; obj++, i--)
+      swap_thing (*obj);
+}
+
+/* Determine if a symbol is "skippable" and should never appear in the
+   symtypetab sections.  This includes some Solaris-specific strangeness which
+   we cannot drop from v3 because doing so would change the layout of existing
+   tables.  */
+
+int
+ctf_symtab_v3_skippable (ctf_link_sym_t *sym)
+{
+  /* Never skip symbols whose name is not yet known.  */
+  if (sym->st_nameidx_set)
+    return 0;
+
+  /* Always skip non-function, non-object symbols.  */
+  if (sym->st_type != STT_FUNC && sym->st_type != STT_OBJECT)
+    return 1;
+
+  return (sym->st_name == NULL || sym->st_name[0] == 0
+          || sym->st_shndx == SHN_UNDEF
+          || strcmp (sym->st_name, "_START_") == 0
+          || strcmp (sym->st_name, "_END_") == 0
+          || strcmp (sym->st_name, "_DYNAMIC") == 0
+          || strcmp (sym->st_name, "_GLOBAL_OFFSET_TABLE_") == 0
+          || strcmp (sym->st_name, "_PROCEDURE_LINKAGE_TABLE_") == 0
+          || strcmp (sym->st_name, "_edata") == 0
+          || strcmp (sym->st_name, "_end") == 0
+          || strcmp (sym->st_name, "_etext") == 0
+          || (sym->st_type == STT_OBJECT && sym->st_shndx == SHN_ABS
+              && sym->st_value == 0));
 }
 
 /* Initialize the symtab translation table as appropriate for its indexing

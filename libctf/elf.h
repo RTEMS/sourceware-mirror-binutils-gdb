@@ -34,8 +34,6 @@ typedef uint64_t Elf64_Xword;
 typedef uint16_t Elf32_Section;
 typedef uint16_t Elf64_Section;
 
-#define SHN_EXTABS	0xFFF1		/* Associated symbol is absolute */
-
 /* Symbol table entry.  */
 
 typedef struct
