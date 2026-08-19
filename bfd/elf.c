@@ -3078,6 +3078,8 @@ static const struct bfd_elf_special_section special_sections_c[] =
 {
   { STRING_COMMA_LEN (".comment"), 0, SHT_PROGBITS, 0 },
   { STRING_COMMA_LEN (".ctf"),	0, SHT_PROGBITS,    0 },
+  { STRING_COMMA_LEN (".ctf.symtypetab"),	0, SHT_PROGBITS,    0 },
+  { STRING_COMMA_LEN (".ctf.symtypetab.all"),	0, SHT_PROGBITS,    0 },
   { NULL,			0, 0, 0,	    0 }
 };
 
