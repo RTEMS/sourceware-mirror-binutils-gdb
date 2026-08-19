@@ -191,7 +191,12 @@ ctf_create_internal (ctf_dict_t *parent, ctf_import_flags_t import_flags,
 {
   static ctf_header_t hdr =
     {
-      .btf.bth_preamble = { CTF_BTF_MAGIC, CTF_BTF_VERSION, 0 },
+      .btf.bth_preamble =
+      {
+	CTF_BTF_MAGIC,
+	CTF_BTF_VERSION,
+	0
+      },
       .btf.bth_hdr_len = sizeof (ctf_btf_header_t),
     };
 
