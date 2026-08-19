@@ -96,31 +96,24 @@ extern "C"
    object.  CTF does not record any strings that are already in the symbol
    table, and the CTF string table does not contain any duplicated strings.
 
-   Data object and function records (collectively, "symtypetabs") are stored in
-   separate ELF sections named the same order as they appear in the corresponding symbol table, except that
-   symbols marked SHN_UNDEF are not stored and symbols that have no type data
-   are padded out with zeroes.  For each entry in these tables, the type ID (a
-   small integer) is recorded.  (Functions get CTF_K_FUNCTION types, just like
-   data objects that are function pointers.)
-
-   For situations in which the order of the symbols in the symtab is not known,
-   or most symbols have no type in this dict and most entries would be
-   zero-pads, a pair of optional indexes follow the data object and function
-   info sections: each of these is an array of strtab indexes, mapped 1:1 to the
-   corresponding data object / function info section, giving each entry in those
-   sections a name so that the linker can correlate them with final symtab
-   entries and reorder them accordingly (dropping the indexes in the process).
-
-   If the CTF data has been merged with another parent CTF object, some outgoing
-   edges may refer to type nodes that exist in another CTF object.  The debugger
-   and libctf library are responsible for connecting the appropriate objects
+   If the CTF data is the result of a ctf_link pass, the CTF dict may be part of
+   an archive of many CTF dicts, identified by index and optionally by name (the
+   parent is conventionally named "" (the null string), children with the names
+   of the translation unit from which their types derive). Type IDs run
+   sequentially from parent to each child (so children have overlapping IDs).
+   The debugger and libctf library are responsible for connecting archives
    together so that the full set of types can be explored and manipulated.
 
    This connection is done at open/create time by passing the parent dict in to
    ctf_create and the low-level ctf_bufopen function.  The ctf_archive machinery
-   (and thus ctf_open et al) automatically imports parent a members into child
+   (and thus ctf_open et al) automatically imports parent members into child
    dicts if available in the same archive, to match the relationship set up by
-   the linker: you don't need to do it yourself.  */
+   the linker: you don't need to do it yourself.
+
+   Symbol type table records (collectively, "symtypetabs") are stored in
+   two distinct ELF sections, one a simple optionally-sorted-by-name array of
+   ctf_id_t's of CTF_K_VARs in the parent CTF dict, the other an array of (dict
+   index, ctf_id_t) pairs.  */
 
 #define CTF_MAX_TYPE	0xfffffffe	/* Max type identifier value.  */
 #define CTF_MAX_PTYPE	0x7fffffff	/* Max parent type identifier value.  */
@@ -236,14 +229,6 @@ typedef struct ctf_header
   uint32_t cth_cu_name;		/* Ref to CU name (may be 0).  */
   uint32_t cth_parent_strlen;	/* cth_strlen of parent (may be 0).  */
   uint32_t cth_parent_ntypes;	/* Number of types in parent (may be 0).  */
-  uint32_t cth_objt_off;	/* Offset of object section.  */
-  uint32_t cth_objt_len;	/* Length of object section.  */
-  uint32_t cth_func_off;	/* Offset of function section.  */
-  uint32_t cth_func_len;	/* Length of function section.  */
-  uint32_t cth_objtidx_off;	/* Offset of object index section.  */
-  uint32_t cth_objtidx_len;	/* Length of object index section.  */
-  uint32_t cth_funcidx_off;	/* Offset of function index section.  */
-  uint32_t cth_funcidx_len;	/* Length of function index section.  */
 } ctf_header_t;
 
 /* The ctp_magic_version field is a magic number (high 48 bits) and a version
@@ -871,6 +856,14 @@ typedef struct ctf_enum64
   uint32_t cte_val_high;	/* High word of value.  (May actually be
 				   unsigned.)  */
 } ctf_enum64_t;
+
+/* The .ctf.symtypetab.all section is an array of these.  */
+
+typedef struct ctf_symtypetab_all_ent
+{
+  uint32_t sta_archive_member;	/* Archive member index.  */
+  uint32_t sta_type;		/* Type ID of CTF_K_VAR.  */
+} ctf_symtypetab_all_ent_t;
 
 /* The (obsolescent) ctf_archive is a collection of ctf_dict_t's stored
    together. The format is suitable for mmap()ing: this control structure merely

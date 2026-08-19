@@ -21,6 +21,7 @@
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
+#include "ctf-api.h"
 #include "hashtab.h"
 
 /* (In the below, relevant functions are named in square brackets.)  */
@@ -1504,10 +1505,11 @@ ctf_dedup_count_name (ctf_dict_t *fp, const char *name, void *id);
 /* Populate a number of useful mappings not directly used by the hashing
    machinery: the output mapping, the cd_name_counts mapping from name -> hash
    -> count of hashval deduplication state for a given hashed type; the
-   cd_output_first_gid mapping; and the cd_nonroot_consistency mapping.  */
+   cd_output_first_gid mapping; the cd_nonroot_consistency mapping; and the
+   cd_symtypetab_hashes mapping.  */
 
 static ctf_ret_t
-ctf_dedup_populate_mappings (ctf_dict_t *fp, ctf_dict_t *input _libctf_unused_,
+ctf_dedup_populate_mappings (ctf_dict_t *fp, ctf_dict_t *input,
 			     ctf_dict_t **inputs _libctf_unused_,
 			     int input_num _libctf_unused_,
 			     ctf_id_t type _libctf_unused_, int isroot,
@@ -1518,6 +1520,7 @@ ctf_dedup_populate_mappings (ctf_dict_t *fp, ctf_dict_t *input _libctf_unused_,
   ctf_dynset_t *type_ids;
   void *root_visible;
   ctf_kind_t kind;
+  const char *name;
 
   ctf_dprintf ("Hash %s, %s, into output mapping for %i/%lx @ %s\n",
 	       hval, decorated_name ? decorated_name : "(unnamed)",
@@ -1652,6 +1655,34 @@ ctf_dedup_populate_mappings (ctf_dict_t *fp, ctf_dict_t *input _libctf_unused_,
 		return ctf_set_errno (fp, errno);
 	    }
 	}
+    }
+
+  /* If this is a variable, take note if any symbols refer to it.
+     Only done if linker reporting has not taken place: if it has, this is
+     not used and the set of linker-reported symbols is preferred instead.
+     See ctf_dedup_emit_type.  */
+
+  if (kind == CTF_K_VAR &&
+      !fp->ctf_dynsyms
+      && ((name = ctf_type_name_raw (input, type)) != NULL))
+    {
+      ctf_archive_t *arc;
+      ctf_dict_t *symdict;
+      ctf_error_t err;
+      ctf_id_t symtype;
+
+      arc = ctf_dict_arc (input, 0);
+      if (!arc)
+	return ctf_set_errno (fp, ctf_errno (input));
+
+      symdict = ctf_arc_lookup_symbol_name (arc, name, &symtype, &err);
+
+      ctf_arc_close (arc);
+      ctf_dict_close (symdict);
+
+      if (symdict == input && symtype == type
+	  && (ctf_dynset_cinsert (d->cd_symtypetab_hashes, hval) < 0))
+	return ctf_set_errno (fp, errno);
     }
 
   /* Track the consistency of the non-root flag for this type.
@@ -2294,6 +2325,15 @@ ctf_dedup_init (ctf_dict_t *fp)
 			    htab_eq_string, NULL)) == NULL)
     goto oom;
 
+  /* This is only used if the linker symbol-reporting machinery has not been
+     used: the linker's knowledge is better and is used instead if
+     available.  */
+  if (!fp->ctf_dynsyms)
+    if ((d->cd_symtypetab_hashes
+	 = ctf_dynset_create (htab_hash_string,
+			      htab_eq_string, NULL)) == NULL)
+      goto oom;
+
   return 0;
 
  oom:
@@ -2331,6 +2371,7 @@ ctf_dedup_fini (ctf_dict_t *fp, ctf_dict_t **outputs, uint32_t noutputs)
   ctf_dynhash_destroy (d->cd_emission_struct_members);
   ctf_dynhash_destroy (d->cd_emission_struct_decl_tags);
   ctf_dynset_destroy (d->cd_conflicting_types);
+  ctf_dynset_destroy (d->cd_symtypetab_hashes);
 
   /* Free the per-output state.  */
   if (outputs)
@@ -3888,6 +3929,38 @@ ctf_dedup_emit_type (const char *hval, ctf_dict_t *output, ctf_dict_t **inputs,
 	   the replacing variable instead.  */
 
 	if (ctf_dynhash_lookup (d->cd_replacing_hashes, hval))
+	  {
+	    new_type = 0;
+	    break;
+	  }
+
+	/* Filter out variables the linker has not reported as symbols (or,
+	   if the linker reporting machinery is not in use, variables with
+	   no corresponding existing symtypetab entry) iff the appropriate
+	   linker flag is unset on the output.  That is to say, if we are
+	   filtering out unreported symbols *and* the --ctf-variables linker
+	   option is not passed: if it is, then since these unreported
+	   symbols correspond to static variables and functions, we want to
+	   keep them.  */
+
+	if (!(d->cd_link_flags & CTF_LINK_NO_FILTER_REPORTED_SYMS)
+	    && d->cd_link_flags & CTF_LINK_OMIT_VARIABLES_SECTION)
+	  {
+	    if (output->ctf_dynsyms)
+	      {
+		if (!ctf_dynhash_lookup (output->ctf_dynsyms, name))
+		  {
+		    new_type = 0;
+		    break;
+		  }
+	      }
+	  }
+	/* If the linker has not reported symbols, and we are omitting the
+	   variables section, drop everything that doesn't correspond to
+	   a symbol in the symtypetabs.  */
+	else if ((d->cd_link_flags & CTF_LINK_OMIT_VARIABLES_SECTION)
+		 && d->cd_symtypetab_hashes
+		 && !ctf_dynset_exists (d->cd_symtypetab_hashes, hval, NULL))
 	  {
 	    new_type = 0;
 	    break;

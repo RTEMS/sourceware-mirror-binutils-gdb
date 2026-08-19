@@ -140,6 +140,7 @@ LIBCTF_2.0 {
 
 	ctf_arc_write;
 	ctf_arc_write_fd;
+	ctf_free_write_sects;
 	ctf_arc_bufopen;
 	ctf_arc_close;
 	ctf_archive_count;
@@ -147,7 +148,6 @@ LIBCTF_2.0 {
 	ctf_archive_raw_next;
 	ctf_arc_flag;
 	ctf_dict_arc;
-	ctf_arc_flush_caches;
 	ctf_arc_set_parent;
 
 	ctf_dump;

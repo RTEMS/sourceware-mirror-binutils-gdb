@@ -23,6 +23,8 @@
 #include <unistd.h>
 
 #include <elf.h>
+#include "ctf-api.h"
+#include "ctf.h"
 #include "elf-bfd.h"
 
 #include <ctf-util-ref.h>
@@ -39,35 +41,12 @@
 
 /* Symtypetab sections.  */
 
-/* Symtypetab emission flags.  */
-
-#define CTF_SYMTYPETAB_NO_FILTERING 0x1
-
-/* Properties of symtypetab emission, shared by symtypetab section
-   sizing and symtypetab emission itself.  */
-
-typedef struct emit_symtypetab_state
-{
-  /* True if linker-reported symbols are being filtered out.  symfp is set if
-     this is true: otherwise, indexing is forced and the symflags indicate as
-     much. */
-  int filter_syms;
-
-  /* True if symbols are being sorted.  */
-  int sort_syms;
-
-  /* Flags for symtypetab emission.  */
-  int symflags;
-
-  /* The dict to which the linker has reported symbols.  */
-  ctf_dict_t *symfp;
-} emit_symtypetab_state_t;
-
 /* Emit a ref to a type in this dict.  As with string refs, this ref can be
    updated later on to change the type ID recorded in this location.  The ref
    may not be emitted if the value is already known and cannot change.
 
-   All refs must point within the ctf_serialize.cs_buf.  */
+   All refs must point within the ctf_serialize.cs_buf or the
+   ctf_serialize.cs_symtypetab_buf.  */
 
 static ctf_ret_t
 ctf_type_add_ref (ctf_dict_t *fp, uint32_t *ref)
@@ -83,9 +62,14 @@ ctf_type_add_ref (ctf_dict_t *fp, uint32_t *ref)
   if (!ctf_assert (fp, dtd))
     return 0;
 
-  if (!ctf_assert (fp, fp->ctf_serialize.cs_buf != NULL
-		   && (unsigned char *) ref > fp->ctf_serialize.cs_buf
-		   && (unsigned char *) ref < fp->ctf_serialize.cs_buf + fp->ctf_serialize.cs_buf_size))
+  if (!ctf_assert (fp, (fp->ctf_serialize.cs_buf != NULL
+			&& (unsigned char *) ref > fp->ctf_serialize.cs_buf
+			&& (unsigned char *) ref < fp->ctf_serialize.cs_buf
+			+ fp->ctf_serialize.cs_buf_size)
+		   || (fp->ctf_serialize.cs_symtypetab_buf != NULL
+		       && (unsigned char *) ref > fp->ctf_serialize.cs_symtypetab_buf
+		       && (unsigned char *) ref < fp->ctf_serialize.cs_symtypetab_buf
+		       + fp->ctf_serialize.cs_symtypetab_buf_size)))
     return -1;
 
   /* Simple case: final ID different from what is recorded, but already known.
@@ -127,316 +111,245 @@ ctf_symtab_skippable (ctf_link_sym_t *sym)
   if (sym->st_type != STT_FUNC && sym->st_type != STT_OBJECT)
     return 1;
 
+  /* Skip symbols with no name and undefined symbols.  */
+
   return (sym->st_name == NULL || sym->st_name[0] == 0
-	  || sym->st_shndx == SHN_UNDEF
-	  || (sym->st_type == STT_OBJECT && sym->st_shndx == SHN_EXTABS
-	      && sym->st_value == 0));
+	  || sym->st_shndx == SHN_UNDEF);
 }
 
-/* Emit the symtypetab into DP in a particular order defined by an array of
-   ctf_link_sym_t or symbol names passed in.  The index has NIDX elements in
-   it and is SIZE bytes in length.  Some index elements are expected to be
-   skipped: see ctf_link_shuffle_syms.  The linker-reported set of symbols
-   (if any) is found in SYMFP.
-
-   Note down type ID refs as we go.  */
-
-static ctf_ret_t
-emit_symtypetab (ctf_dict_t *fp, ctf_dict_t *symfp, uint32_t *dp,
-		 ctf_link_sym_t **idx, const char **nameidx, uint32_t nidx,
-		 int size, int flags)
+/* Contents of the temporary symhash constructed within
+   ctf_serialize_emit_symtypetabs.  */
+typedef struct ctf_all_symtypes
 {
-  uint32_t i;
-  uint32_t *dpp = dp;
+  ctf_dict_t *fp;
+  ctf_id_t type;
+} ctf_all_symtypes_t;
 
-  ctf_dprintf ("Emitting table of size %i, %u symtypetab entries, "
-	       "flags %i\n", size, nidx, flags);
+/* Sort function to sort symtypetab entries into order.  */
 
-  /* Empty table? Nothing to do.  */
-  if (size == 0)
-    return 0;
+static int
+symhash_sort (const ctf_next_hkv_t *one, const ctf_next_hkv_t *two,
+	      void *unused _libctf_unused_)
+{
+  ctf_all_symtypes_t *v1 = (ctf_all_symtypes_t *) one->hkv_value;
+  ctf_all_symtypes_t *v2 = (ctf_all_symtypes_t *) two->hkv_value;
 
-  for (i = 0; i < nidx; i++)
-    {
-      const char *sym_name;
-      void *type;
+  if (v1->fp->ctf_new_archive_index < v2->fp->ctf_new_archive_index)
+    return -1;
+  else if (v1->fp->ctf_new_archive_index > v2->fp->ctf_new_archive_index)
+    return 1;
 
-      /* If we have a linker-reported set of symbols, we may be given that set
-	 to work from, or a set of symbol names.  In both cases we want to look
-	 at the corresponding linker-reported symbol (if any).  */
-      if (!(flags & CTF_SYMTYPETAB_NO_FILTERING))
-	{
-	  ctf_link_sym_t *this_link_sym;
-
-	  if (idx)
-	    this_link_sym = idx[i];
-	  else
-	    this_link_sym = ctf_dynhash_lookup (symfp->ctf_dynsyms, nameidx[i]);
-
-	  /* Unreported symbol number.  No pad, no nothing.  */
-	  if (!this_link_sym)
-	    continue;
-
-	  /* Symbol skippable?  This symbol is not in this table.  */
-
-	  if (ctf_symtab_skippable (this_link_sym))
-	    continue;
-
-	  sym_name = this_link_sym->st_name;
-	}
-      else
-	sym_name = nameidx[i];
-
-      /* Symbol in index but no type set? Silently skip.  */
-      if ((type = ctf_dynhash_lookup (fp->ctf_symtypehash, sym_name)) == NULL)
-	continue;
-
-      if (!ctf_assert (fp, (((char *) dpp) - (char *) dp) < size))
-	return -1;				/* errno is set for us.  */
-
-      *dpp = (ctf_id_t) (uintptr_t) type;
-      if (ctf_type_add_ref (fp, dpp++) < 0)
-	return -1;				/* errno is set for us.  */
-    }
-
-  return 0;
+  return strcmp ((const char *) one->hkv_key, (const char *) two->hkv_key);
 }
 
-/* Emit an objt or func symtypetab index into DP in a paticular order defined by
-   an array of symbol names passed in.  Stop at NIDX.  The linker-reported set
-   of symbols (if any) is found in SYMFP. */
-static ctf_ret_t
-emit_symtypetab_index (ctf_dict_t *fp, ctf_dict_t *symfp, uint32_t *dp,
-		       const char **idx, uint32_t nidx, int size, int flags)
+/* Emit symtypetabs for the given archive and put them in the passed in
+   ctf_sect_t arguments.  The SYMTYPETABSECT contains a simplified form
+   consisting of pure type IDs; the SYMTYPETABALLSECT contains an array of
+   ctf_symtypetab_all_ent_t's.  Both arrays is sorted into name order (or,
+   for SYMTYPETABALLSECT, member-index-then-name order) if it seems likely
+   to be worth doing, but this is not guaranteed: the consumer must be
+   prepared for unsorted tables.
+
+   The input archive ARC typically corresponds to linker outputs, but may be
+   arbitrary dicts: thus it may already have serialized symbols on it that
+   need rescuing and putting into the new archive in the right order.  */
+
+ctf_ret_t
+ctf_serialize_emit_symtypetabs (ctf_archive_t *arc, ctf_sect_t *symtypetabsect,
+				ctf_sect_t *symtypetaballsect, ctf_error_t *errp)
 {
-  uint32_t i;
-  uint32_t *dpp = dp;
+  uint32_t *symtypetab = NULL;
+  uint32_t *symtypetabp;
+  ctf_symtypetab_all_ent_t *symtypetaball = NULL;
+  ctf_symtypetab_all_ent_t *symtypetaballp;
 
-  ctf_dprintf ("Emitting index of size %i, %u entries reported by linker, "
-	       "flags %i\n", size, nidx, flags);
-
-  /* Empty table? Nothing to do.  */
-  if (size == 0)
-    return 0;
-
-  for (i = 0; i < nidx; i++)
-    {
-      const char *sym_name;
-      void *type;
-
-      if (!(flags & CTF_SYMTYPETAB_NO_FILTERING))
-	{
-	  ctf_link_sym_t *this_link_sym;
-
-	  this_link_sym = ctf_dynhash_lookup (symfp->ctf_dynsyms, idx[i]);
-
-	  /* This is an index: unreported symbols should never appear in it.  */
-	  if (!ctf_assert (fp, this_link_sym != NULL))
-	    return -1;				/* errno is set for us.  */
-
-	  /* Symbol askippable?  This symbol is not in this table.  */
-
-	  if (ctf_symtab_skippable (this_link_sym))
-	    continue;
-
-	  sym_name = this_link_sym->st_name;
-	}
-      else
-	sym_name = idx[i];
-
-      /* Symbol in index and reported by linker, but no type set? Silently
-	 skip.  */
-      if ((type = ctf_dynhash_lookup (fp->ctf_symtypehash, sym_name)) == NULL)
-	continue;
-
-      ctf_str_add_ref (fp, sym_name, dpp++);
-
-      if (!ctf_assert (fp, (((char *) dpp) - (char *) dp) <= size))
-	return -1;				/* errno is set for us.  */
-    }
-
-  return 0;
-}
-
-/* Figure out the sizes of the symtypetab sections (and their indexes).
-
-   This is a sizing function, called before the output buffer is
-   constructed.  Do not add any refs in this function!  */
-
-static ctf_ret_t
-ctf_symtypetab_sect_sizes (ctf_dict_t *fp, emit_symtypetab_state_t *s,
-			   size_t *tabsize, size_t *idxsize)
-{
-  size_t nsyms = 0;
-  ctf_next_t *i = NULL;
+  ctf_dict_t *symfp, *fp;
+  ctf_next_t *it = NULL;
   ctf_error_t err;
+  ctf_hash_sort_f symhash_sorter;
+  ctf_dynhash_t *symhash = NULL;
+  const char *name;
+  void *k, *v;
+  ctf_id_t type;
+  ptrdiff_t nsymtypetab = 0, nsymtypetaball = 0;
 
-  /* In case of error, we have no symtypetab.  */
+  /* In case of error, we have no symtypetabs.  */
 
-  *tabsize = 0;
-  *idxsize = 0;
+  symtypetabsect->cts_size = 0;
+  symtypetaballsect->cts_size = 0;
 
-  /* If doing a writeout as part of linking, and the link flags request it,
-     filter out all unreported symbols from the symtypetab sections.  (If we are
-     not linking, the symbols are sorted; if we are linking, don't bother
-     sorting if we are not filtering out reported symbols: this is almost
-     certainly an ld -r and only the linker is likely to consume these
-     symtypetabs again.  The linker doesn't care what order the symtypetab
-     entries are in, since it only iterates over symbols and does not use the
-     ctf_lookup_by_symbol* API.)  */
+  /* The linker always reports symbols against the first dict in the
+     archive.  */
 
-  s->sort_syms = 1;
-  if (fp->ctf_flags & LCTF_LINKING)
-    {
-      s->filter_syms = !(fp->ctf_link_flags & CTF_LINK_NO_FILTER_REPORTED_SYMS);
-      if (!s->filter_syms)
-	s->sort_syms = 0;
-    }
-
-  /* Find the dict to which the linker has reported symbols, if any.  */
-
-  if (s->filter_syms)
-    {
-      if (!fp->ctf_dynsyms && fp->ctf_parent && fp->ctf_parent->ctf_dynsyms)
-	s->symfp = fp->ctf_parent;
-      else
-	s->symfp = fp;
-    }
-
-  /* Prevent later stages from filtering out unreported symbols if the
-     linker is not reporting.  Also disables sorting.  */
-  if (!s->filter_syms)
-    s->symflags = CTF_SYMTYPETAB_NO_FILTERING;
-
-  if (!ctf_assert (fp, (s->filter_syms && s->symfp)
-		   || (!s->filter_syms && !s->symfp
-		       && ((s->symflags & CTF_SYMTYPETAB_NO_FILTERING) != 0))))
+  if ((symfp = ctf_dict_open_cached (arc, 0, errp)) == NULL)
     return -1;					/* errno is set for us.  */
 
-  /* Work out the size of the symtypetab section, taking reported symbols
-     into account.  */
+  /* Suppress sorting if linking but not filtering out unreported symbols
+     (which has already been done for us by the deduplicator).  This case is
+     almost certainly an ld -r, and only the linker is likely to consume
+     these symtypetabs again.  The linker doesn't care what order the
+     symtypetab entries are in, since it only iterates over symbols and does
+     not use the ctf_arc_lookup_by_symbol* API.)  */
 
-  if (!s->symfp->ctf_dynsyms)
-    nsyms = 0;
-  else if (s->symflags & CTF_SYMTYPETAB_NO_FILTERING)
-    nsyms = ctf_dynhash_elements (fp->ctf_symtypehash);
-  else			       /* Need to filter out unreported symbols.  */
+  symhash_sorter = symhash_sort;
+  if (symfp->ctf_flags & LCTF_LINKING
+      && symfp->ctf_link_flags & CTF_LINK_NO_FILTER_REPORTED_SYMS)
+    symhash_sorter = NULL;
+
+  /* Work over all the symtypes, assemble them into a temporary hash, and
+     figure out which goes into which symtypetab.  Only add to this hash if
+     not already present: this ensures that newly-added dynamic types take
+     precedence over older static ones if two have the same name.  */
+
+  if ((symhash = ctf_dynhash_create (ctf_hash_string, ctf_hash_eq_string,
+				     NULL, free)) == NULL)
     {
-      const void *name;
-      while ((err = ctf_dynhash_cnext (fp->ctf_symtypehash, &i, &name, NULL)) == 0)
-	{
-	  /* Linker did not report this symbol.  */
-	  if (ctf_dynhash_lookup (fp->ctf_dynsyms, (const char *) name) == NULL)
-	    continue;
-
-	  nsyms++;
-	}
-      if (err != ECTF_NEXT_END)
-	{
-	  return ctf_err (err_locus (fp), err, _("iterating over CTF symtypetab during "
-						 "serialization"));
-	}
+      *errp = errno;
+      goto err;
     }
 
-  *tabsize = nsyms * sizeof (uint32_t);
-  *idxsize = *tabsize;
-
-  ctf_dprintf ("Symtypetab: %i objects, tab size %i, index size %i\n",
-	       (int) nsyms, (int) *tabsize, (int) *idxsize);
-
-  return 0;
-}
-
-/* Emit the symtypetab sections.  */
-
-static ctf_ret_t
-ctf_emit_symtypetab_sects (ctf_dict_t *fp, emit_symtypetab_state_t *s,
-			   unsigned char **tptr, size_t symtypetab_size,
-			   size_t symtypeidx_size)
-{
-  unsigned char *t = *tptr;
-  size_t nsymtypes = 0;
-  const char **sym_name_order = NULL;
-  ctf_error_t err;
-
-  /* Sort the linker's symbols into name order if need be.  */
-
-  if (symtypeidx_size != 0)
+  while ((fp = ctf_arc_symbol_next (arc, &it, &name, &type, errp)) == 0)
     {
-      ctf_next_t *i = NULL;
-      void *symname;
-      const char **walk;
+      ctf_all_symtypes_t *symtype;
 
-      if (s->filter_syms)
-	{
-	  if (s->symfp->ctf_dynsyms)
-	    nsymtypes = ctf_dynhash_elements (s->symfp->ctf_dynsyms);
-	  else
-	    nsymtypes = 0;
-	}
-      else
-	nsymtypes = ctf_dynhash_elements (fp->ctf_symtypehash);
+      if (ctf_dynhash_lookup (symhash, name))
+	continue;
 
-      if ((sym_name_order = calloc (nsymtypes, sizeof (const char *))) == NULL)
+      if ((symtype = malloc (sizeof (ctf_all_symtypes_t))) == NULL)
 	goto oom;
 
-      walk = sym_name_order;
+      symtype->fp = fp;
+      symtype->type = type;
 
-      if (s->filter_syms)
+      if (ctf_dynhash_insert (symhash, (void *) name, symtype) < 0)
 	{
-	  if (s->symfp->ctf_dynsyms)
-	    {
-	      while ((err = ctf_dynhash_next_sorted (s->symfp->ctf_dynsyms, &i,
-						     &symname, NULL,
-						     ctf_dynhash_sort_by_name,
-						     NULL)) == 0)
-		*walk++ = (const char *) symname;
-	      if (err != ECTF_NEXT_END)
-		goto symerr;
-	    }
+	  *errp = ENOMEM;
+	  goto err;
+	}
+
+      if (fp == symfp)
+	{
+	  symtypetabsect->cts_size += sizeof (uint32_t);
+	  nsymtypetab++;
 	}
       else
 	{
-	  ctf_hash_sort_f sort_fun = NULL;
-
-	  if (s->sort_syms)
-	    sort_fun = ctf_dynhash_sort_by_name;
-
-	  while ((err = ctf_dynhash_next_sorted (fp->ctf_symtypehash, &i, &symname,
-						 NULL, sort_fun, NULL)) == 0)
-	    *walk++ = (const char *) symname;
-	  if (err != ECTF_NEXT_END)
-	    goto symerr;
+	  symtypetaballsect->cts_size += sizeof (ctf_symtypetab_all_ent_t);
+	  nsymtypetaball++;
 	}
     }
+  if (*errp != ECTF_NEXT_END)
+    {
+      ctf_err (err_locus (NULL), *errp, _("iterating over CTF symtypetab during "
+					  "serialization"));
+      goto err;
+    }
 
-  /* Emit the symtypetab section and its index.  Emission is done in index
-     (name) order.  */
+  ctf_dprintf ("Symtypetab: %zi objects, table size %i\n",
+	       nsymtypetab, (int)symtypetabsect->cts_size);
 
-  ctf_dprintf ("Emitting symtypetab\n");
-  if (emit_symtypetab (fp, s->symfp, (uint32_t *) t, NULL, sym_name_order,
-		       nsymtypes, symtypeidx_size, s->symflags) < 0)
-    goto err;				/* errno is set for us.  */
+  ctf_dprintf ("Child dict symtypetab: %zi objects, table size %i\n",
+	       nsymtypetaball, (int) symtypetabsect->cts_size);
 
-  t += symtypetab_size;
+  if (nsymtypetab > 0
+      && ((symtypetab = calloc (sizeof (*symtypetab), nsymtypetab)) == NULL))
+    goto oom;
 
-  if (emit_symtypetab_index (fp, s->symfp, (uint32_t *) t, sym_name_order,
-			     nsymtypes, symtypeidx_size , s->symflags) < 0)
-    goto err;
+  if (nsymtypetaball > 0
+      && ((symtypetaball = calloc (sizeof (*symtypetaball), nsymtypetaball)) == NULL))
+    goto oom;
 
-  t += symtypeidx_size;
-  free (sym_name_order);
-  *tptr = t;
+  symtypetabp = symtypetab;
+  symtypetaballp = symtypetaball;
+
+  /* The symtypetab buffer contains refs to the parent dict only, so we can
+     set it up here.  The symtypetaball buffers need to be set up whenever a
+     type is added to any of them.  */
+  if (symtypetab)
+    {
+      symfp->ctf_serialize.cs_symtypetab_buf = (unsigned char *) symtypetab;
+      symfp->ctf_serialize.cs_symtypetab_buf_size = nsymtypetab * sizeof (*symtypetab);
+    }
+
+  /* Work over the symbols, in possibly-sorted order, and emit them into
+     their destination sections.  */
+
+  while ((err = ctf_dynhash_next_sorted (symhash, &it, &k, &v,
+					 symhash_sorter, NULL)) == 0)
+    {
+      ctf_all_symtypes_t *symtype = (ctf_all_symtypes_t *) v;
+
+      /* Put in the right table.  */
+      if (symtype->fp == symfp)
+	{
+	  if (!ctf_assert (symtype->fp, (symtypetabp - symtypetab) < nsymtypetab))
+	    {
+	      *errp = ctf_errno (symtype->fp);
+	      goto err;				/* errno is set for us.  */
+	    }
+
+	  /* Straight array of type IDs.  */
+	  *symtypetabp = symtype->type;
+
+	  if (ctf_type_add_ref (symtype->fp, symtypetabp) < 0)
+	    {
+	      *errp = ctf_errno (symtype->fp);
+	      goto err;				/* errno is set for us.  */
+	    }
+
+          symtypetabp++;
+	}
+      else
+	{
+	  /* Array of (index, ID) pairs.  */
+
+	  if (!ctf_assert (symtype->fp, (symtypetaballp - symtypetaball)
+			   < nsymtypetaball))
+	    {
+	      *errp = ctf_errno (symtype->fp);
+	      goto err;				/* errno is set for us.  */
+	    }
+
+	  symtypetaballp->sta_archive_member = symtype->fp->ctf_new_archive_index;
+	  symtypetaballp->sta_type = symtype->type;
+
+	  symtype->fp->ctf_serialize.cs_symtypetab_buf = (unsigned char *) symtypetaball;
+	  symtype->fp->ctf_serialize.cs_symtypetab_buf_size = nsymtypetaball * sizeof (*symtypetaball);
+
+	  if (ctf_type_add_ref (symtype->fp, &symtypetaballp->sta_type) < 0)
+	    {
+	      *errp = ctf_errno (symtype->fp);
+	      goto err;				/* errno is set for us.  */
+	    }
+
+	  symtypetaballp++;
+	}
+    }
+  if (*errp != ECTF_NEXT_END)
+    {
+      ctf_err (err_locus (NULL), *errp, _("iterating over CTF symtypetab during "
+					  "serialization"));
+      goto err;
+    }
+
+  symtypetabsect->cts_data = (unsigned char *) symtypetab;
+  symtypetaballsect->cts_data = (unsigned char *) symtypetaball;
 
   return 0;
 
  oom:
-  ctf_set_errno (fp, EAGAIN);
-  goto err;
-symerr:
-  ctf_err (err_locus (fp), err, NULL);
+  *errp = ENOMEM;
+
  err:
-  free (sym_name_order);
+  free (symtypetab);
+  free (symtypetaball);
+  symfp->ctf_serialize.cs_symtypetab_buf = NULL;
+
+  ctf_next_destroy (it);
+  ctf_dynhash_destroy (symhash);
+  ctf_dict_close (symfp);
+  symtypetabsect->cts_size = 0;
+  symtypetaballsect->cts_size = 0;
   return -1;
 }
 
@@ -1104,12 +1017,8 @@ ctf_preserialize (ctf_dict_t *fp)
   int force_ctf = 0;
 
   unsigned char *t;
-  size_t buf_size, type_size, symtypetab_size;
-  size_t symtypeidx_size;
+  size_t buf_size, type_size;
   unsigned char *buf = NULL;
-
-  emit_symtypetab_state_t symstate;
-  memset (&symstate, 0, sizeof (emit_symtypetab_state_t));
 
   ctf_dprintf ("Preserializing dict for %s\n", ctf_dict_cuname (fp));
 
@@ -1177,35 +1086,6 @@ ctf_preserialize (ctf_dict_t *fp)
   hdr.btf.bth_hdr_len = sizeof (ctf_btf_header_t);
   hdr.cth_preamble.ctp_magic_version = (CTFv4_MAGIC << 16) | CTF_VERSION;
 
-  /* Propagate all symbols in the symtypetabs into the dynamic state, so that we
-     can put them back in the right order during sizing.  Symbols already in the
-     dynamic state, likely due to repeated serialization, are left
-     unchanged.  */
-
-  ctf_next_t *it = NULL;
-  const char *sym_name;
-  ctf_id_t sym;
-
-  while ((sym = ctf_symbol_next_static (fp, &it, &sym_name)) != CTF_ERR)
-    if ((ctf_add_sym_forced (fp, sym_name, sym)) < 0)
-      if (ctf_errno (fp) != ECTF_DUPLICATE)
-	{
-	  ctf_next_destroy (it);
-	  return -1;				/* errno is set for us.  */
-	}
-
-  if (ctf_errno (fp) != ECTF_NEXT_END)
-    return -1;					/* errno is set for us.  */
-
-  /* Figure out how big the symtypetab is now.  */
-
-  if (ctf_symtypetab_sect_sizes (fp, &symstate, &symtypetab_size,
-				 &symtypeidx_size) < 0)
-    return -1;					/* errno is set for us.  */
-
-  if (symtypetab_size != 0 || symtypeidx_size != 0)
-    force_ctf = 1;
-
   if (ctf_serialize_output_format (fp, force_ctf) < 0)
     return -1;					/* errno is set for us.  */
 
@@ -1242,15 +1122,7 @@ ctf_preserialize (ctf_dict_t *fp)
 #endif
     }
 
-  hdr.cth_objt_off = 0;
-  hdr.cth_objt_len = 0;
-  hdr.cth_func_off = hdr.cth_objt_off + 0;
-  hdr.cth_func_len = symtypetab_size;
-  hdr.cth_objtidx_off = hdr.cth_func_off + symtypetab_size;
-  hdr.cth_objtidx_len = 0;
-  hdr.cth_funcidx_off = hdr.cth_objtidx_off + 0;
-  hdr.cth_funcidx_len = symtypeidx_size;
-  hdr.btf.bth_type_off = hdr.cth_funcidx_off + symtypeidx_size + ctf_adjustment;
+  hdr.btf.bth_type_off = 0 + ctf_adjustment;
   hdr.btf.bth_type_len = type_size;
   hdr.btf.bth_str_off = hdr.btf.bth_type_off + type_size;
   hdr.btf.bth_str_len = 0;
@@ -1270,7 +1142,7 @@ ctf_preserialize (ctf_dict_t *fp)
   fp->ctf_serialize.cs_buf_size = buf_size;
 
   memcpy (buf, &hdr, hdr_len);
-  t = (unsigned char *) buf + hdr_len + hdr.cth_func_off;
+  t = (unsigned char *) buf + hdr_len + hdr.btf.bth_type_off;
 
   if (!fp->ctf_serialize.cs_is_btf)
     {
@@ -1278,13 +1150,7 @@ ctf_preserialize (ctf_dict_t *fp)
 
       if (fp->ctf_cu_name != NULL)
 	ctf_str_add_ref (fp, fp->ctf_cu_name, &hdrp->cth_cu_name);
-
-      if (ctf_emit_symtypetab_sects (fp, &symstate, &t, symtypetab_size,
-				     symtypeidx_size) < 0)
-	goto err;
     }
-  assert (t == (unsigned char *) buf + sizeof (ctf_btf_header_t)
-	  + hdr.btf.bth_type_off);
 
   /* Copy in existing static types, then emit new dynamic types.  */
 
@@ -1462,7 +1328,7 @@ ctf_write_mem (ctf_dict_t *fp, size_t *size)
 
   if (ctf_flip_header (hp, 1, fp->ctf_serialize.cs_is_btf, 0) < 0)
     goto err;				/* errno is set for us.  */
-  if (ctf_flip (fp, hp, bp, fp->ctf_serialize.cs_is_btf, 1) < 0)
+  if (ctf_flip (fp, hp, bp, 1) < 0)
     goto err;				/* errno is set for us.  */
 
   return buf;

@@ -259,6 +259,14 @@ typedef struct ctf_in_flight_dynsym
   ctf_link_sym_t cid_sym;	/* The linker-known symbol.  */
 } ctf_in_flight_dynsym_t;
 
+/* Symtypetab entries, in-memory.  */
+typedef struct ctf_symtypetab_all_named_ent
+{
+  uint32_t sta_archive_member;	/* Archive member index.  */
+  const char *sta_name;		/* Symbol name.  */
+  ctf_id_t sta_type;		/* Type ID of CTF_K_VAR.  */
+} ctf_symtypetab_all_named_ent_t;
+
 /* The structure used as the key in a ctf_link_type_mapping.  The value is a
    type index, not a type ID.  */
 
@@ -397,6 +405,10 @@ typedef struct ctf_dedup
      time, in the dictionary where emission is taking place. */
   ctf_dynhash_t *cd_output_emission_conflicted_forwards;
 
+  /* When the linker symbol reporting machinery is not in use, records type
+     hash values for symbols seen in input symtypetabs.  */
+  ctf_dynset_t *cd_symtypetab_hashes;
+
   /* Points to the output counterpart of this input dictionary, at emission
      time.  */
   ctf_dict_t *cd_output;
@@ -414,6 +426,12 @@ typedef struct ctf_serialize
   size_t cs_buf_size;		/* Length of that buffer.  */
   int cs_is_btf;
   ctf_btf_mode_t cs_btf_mode;	/* Global mode when last initialized.  */
+
+  /* Assertion-checking for ctf_type_add_ref.  May be dangling outside
+     ctf_serialize_emit_symtypetabs.  */
+
+  unsigned char *cs_symtypetab_buf;
+  size_t cs_symtypetab_buf_size; /* Length of that buffer.  */
 } ctf_serialize_t;
 
 /* The ctf_dict is the structure used to represent a CTF dictionary to library
@@ -434,9 +452,7 @@ struct ctf_dict
 				       opened.  */
   int ctf_initializing;		    /* 1 inside ctf_bufopen*.  */
   ctf_sect_t ctf_data;		    /* CTF data from object file.  */
-  ctf_sect_t ctf_ext_symtab;	    /* Symbol table from object file.  */
   ctf_sect_t ctf_ext_strtab;	    /* String table from object file.  */
-  int ctf_symsect_little_endian;    /* Endianness of the ctf_ext_symtab.  */
   ctf_dynhash_t *ctf_prov_strtab;   /* Maps provisional-strtab offsets
 				       to names.  */
   ctf_dynhash_t *ctf_syn_ext_strtab; /* Maps ext-strtab offsets to names.  */
@@ -461,7 +477,7 @@ struct ctf_dict
   size_t ctf_str_prov_len;	  /* Length of all unwritten provisional strings.  */
   unsigned char *ctf_base;	  /* CTF file pointer.  */
   unsigned char *ctf_dynbase;	  /* Freeable CTF file pointer. */
-  unsigned char *ctf_buf;	  /* Uncompressed CTF data buffer, including
+  unsigned char *ctf_buf;         /* Uncompressed CTF data buffer, including
 				     CTFv4 header portion.  */
   size_t ctf_size;		  /* Size of CTF header + uncompressed data.  */
   size_t ctf_nlayout;		  /* Number of kinds in layout section.  */
@@ -477,18 +493,20 @@ struct ctf_dict
   ctf_type_t *ctf_void_type;	  /* void type, if dynamically constructed. (More
 				     space allocated, due to vlen.)  */
   ctf_dynset_t *ctf_conflicting_enums;	/* Tracks enum constants that conflict.  */
-  uint32_t *ctf_symtypeidx_names; /* Name of each symbol in symtypetab (if indexed).  */
-  uint32_t *ctf_symtypeidx_alloc; /* Dynamically-allocated ctf_symidx_names.  */
-  size_t ctf_nsymtypeidx;	  /* Number of indexed type entries.  */
-  uint32_t *ctf_symtypeidx_sxlate;/* Offsets into syminfo for a given symtypeidx.  */
-  ctf_dynhash_t *ctf_symtypehash; /* Dynamic: name -> type ID.  */
+  ctf_dynhash_t *ctf_symtypehash; /* Dynamic: symbol name -> type ID.  */
+  ctf_symtypetab_all_named_ent_t **ctf_symbol_next_cache; /* Points at static types for this dict.  */
+  size_t ctf_symbol_next_ncache;   /* Number of entries in the cache. */
 
-  /* The next three are linker-derived state found in ctf_link targets only.  */
+  /* The next four are linker-derived state found in ctf_link targets (parent
+     dicts) only.  */
 
   ctf_dynhash_t *ctf_dynsyms;	  /* Symbol info from ctf_link_shuffle_syms.  */
   ctf_link_sym_t **ctf_dynsymidx;  /* Indexes ctf_dynsyms by symidx.  */
   uint32_t ctf_dynsymmax;	  /* Maximum ctf_dynsym index.  */
   ctf_list_t ctf_in_flight_dynsyms; /* Dynsyms during accumulation.  */
+
+  /* Core type ID stuff.  */
+
   uint32_t ctf_typemax;		  /* Maximum valid type index.  */
   uint32_t ctf_idmax;		  /* Maximum valid non-provisional type ID.  */
   uint32_t ctf_stypes;		  /* Number of static (non-dynamic) types.  */
@@ -512,6 +530,9 @@ struct ctf_dict
   ctf_list_t ctf_dtdefs;	  /* List of dynamic type definitions.  */
   unsigned long ctf_snapshots;	  /* ctf_snapshot() call count.  */
   ctf_archive_t *ctf_archive;	  /* Archive this ctf_dict_t came from.  */
+  size_t ctf_archive_index;	  /* Index of this dict within its archive.  */
+  size_t ctf_new_archive_index;	  /* Index of this dict within a newly-built
+				     archive.  */
   ctf_list_t ctf_errs_warnings;	  /* CTF errors and warnings.  */
   ctf_dict_t *ctf_link_parent;	  /* Parent dict for against-types mode.  */
   ctf_dynhash_t *ctf_link_inputs; /* Inputs to this link.  */
@@ -561,17 +582,20 @@ struct ctf_dict
 
   ctf_dedup_t ctf_dedup;	  /* Deduplicator state.  */
 
+  /* Things needed purely for creating archives out of single dicts.  */
+
+  ctf_sect_t ctf_ext_symsect;	    /* Symbol table from object file.  */
+  ctf_sect_t ctf_ext_symtypetabsect; /* Symtypetab from object file.  */
+  ctf_sect_t ctf_ext_symtypetaballsect; /* All-dict symtypetab therefrom.  */
+  int ctf_symsect_little_endian;   /* -1 for unknown / do not set.  */
+  int ctf_foreign_endian;	   /* 0 if native-endian for this host.  */
+
   char *ctf_tmp_typeslice;	  /* Storage for slicing up type names.  */
   size_t ctf_tmp_typeslicelen;	  /* Size of the typeslice.  */
   void *ctf_specific;		  /* Data for ctf_dict_specific*().  */
 };
 
-/* An abstraction over both a ctf_dict_t, a collection of linked ctf_dict_t's
-   (an innate-format archive) and an (obsolescent) ctf_archive_v1.
-
-   If ctfi_hdr is non-NULL, this is a v1 archive.  If ctfi_unmap_size is nonzero
-   and this is an archive, the file needs unmapping; otherwise, it needs
-   free()ing.  */
+/* How to close this archive.  */
 
 enum arc_on_close_operation
   {
@@ -581,6 +605,18 @@ enum arc_on_close_operation
     FREE_ARCHIVE_UNMAP_ON_CLOSE,   /* Archive was mmappped by ctf-archive.c.  */
     FREE_ARCHIVE_ON_DICT_CLOSE	   /* True if instantiated by ctf_dict_arc.  */
   };
+
+/* Flags applying to an archive.  */
+
+#define CTFA_F_SYMTYPES_POPULATED 0x1 /* Symtypetabs have been populated and
+					 sorted.  */
+
+/* An abstraction over both a ctf_dict_t, a collection of linked ctf_dict_t's
+   (an innate-format archive) and an (obsolescent) ctf_archive_v1.
+
+   If ctfi_hdr is non-NULL, this is a v1 archive.  If ctfi_unmap_size is nonzero
+   and this is an archive, the file needs unmapping; otherwise, it needs
+   free()ing.  */
 
 struct ctf_archive_internal
 {
@@ -600,11 +636,29 @@ struct ctf_archive_internal
   int ctfi_has_strtab;		    /* 1 if this archive has a strtab.  */
   ctf_dict_t *ctfi_parent;	    /* Parent dict.  */
   ctf_dynhash_t *ctfi_dicts;	    /* Dicts we have opened and cached.  */
-  ctf_dict_t **ctfi_symdicts;	    /* Array of index -> ctf_dict_t *.  */
-  ctf_dynhash_t *ctfi_symnamedicts; /* Hash of name -> ctf_dict_t *.  */
+  int ctfi_flags;		    /* Flags applying to an archive.  */
+
+  /* Symtypetab stuff.  We track all symtypetabs together, and also only
+     those that come from .ctf.symtypetab.all (for quicker iteration over
+     symbols in particular dicts that aren't the shared dict).  */
+
+  ctf_symtypetab_all_named_ent_t *ctfi_symtypetab;  /* CTF symtypetabs, in .all format.  */
+  size_t ctfi_symtypetab_len;	    /* Number of types in ctfi_symtypetab.  */
+
+  ctf_symtypetab_all_named_ent_t *ctfi_symtypetab_all;  /* CTF symtypetab.all.  */
+  size_t ctfi_symtypetab_all_len;   /* Number of types in ctfi_symtypetab.all.  */
+
+  /* ELF section management.  See corresponding fields in the ctf_dict_t.  */
+
+  ctf_sect_t ctfi_symtypetabsect;
+  ctf_sect_t ctfi_symtypetaballsect;
   ctf_sect_t ctfi_symsect;
+
   int ctfi_symsect_little_endian;   /* -1 for unknown / do not set.  */
   ctf_sect_t ctfi_strsect;
+
+  int ctfi_free_symtypetabsect;
+  int ctfi_free_symtypetaballsect;
   int ctfi_free_symsect;
   int ctfi_free_strsect;
   void *ctfi_data;
@@ -634,6 +688,7 @@ struct ctf_next
   ssize_t ctn_increment;
   const ctf_type_t *ctn_tp;
   size_t ctn_n;
+  size_t ctn_n_inner;
 
   /* Some iterators contain other iterators, in addition to their other
      state.  We allow for inner and outer iterators, for two-layer nested loops
@@ -655,6 +710,7 @@ struct ctf_next
     ctf_next_hkv_t *ctn_sorted_hkv;
     void **ctn_hash_slot;
     void *ctn_p;
+    ctf_dict_t *ctn_fp;
   } u;
 
   /* This union is of various sorts of entity we can iterate over: currently
@@ -710,16 +766,10 @@ extern const ctf_type_t *ctf_lookup_by_id (ctf_dict_t **, ctf_id_t,
 					   const ctf_type_t **suffix);
 extern const ctf_type_t *ctf_find_prefix (ctf_dict_t *, const ctf_type_t *,
 					  ctf_kind_t kind);
-extern ctf_id_t ctf_lookup_by_sym_or_name (ctf_dict_t *, unsigned long symidx,
-					   const char *symname, int try_parent);
 extern int ctf_refresh_pptrtab (ctf_dict_t *);
 extern ctf_id_t ctf_lookup_by_rawname (ctf_dict_t *, ctf_kind_t, const char *);
-extern ctf_id_t ctf_lookup_by_symbol (ctf_dict_t *, unsigned long);
-extern ctf_id_t ctf_lookup_by_symbol_name (ctf_dict_t *, const char *);
 
 extern void ctf_set_ctl_hashes (ctf_dict_t *);
-extern ctf_id_t ctf_symbol_next_static (ctf_dict_t *, ctf_next_t **,
-					const char **);
 
 extern int ctf_symtab_skippable (ctf_link_sym_t *sym);
 
@@ -818,7 +868,6 @@ extern ctf_dtdef_t *ctf_dynamic_type (const ctf_dict_t *, ctf_id_t);
 
 extern ctf_id_t ctf_add_encoded (ctf_dict_t *, const char *,
 				 const ctf_encoding_t *, ctf_kind_t kind);
-extern ctf_ret_t ctf_add_sym_forced (ctf_dict_t *, const char *, ctf_id_t);
 
 extern int ctf_insert_type_decl_tag (ctf_dict_t *, ctf_id_t, const char *);
 extern int ctf_insert_decl_tag_rmap (ctf_dict_t *fp, ctf_id_t tag_type,
@@ -859,6 +908,11 @@ extern const ctf_strs_writable_t *ctf_str_write_strtab (ctf_dict_t *);
 
 extern ctf_ret_t ctf_serialize_output_format (ctf_dict_t *fp, int force_ctf);
 extern ctf_ret_t ctf_serialize_output_dict_is_btf (ctf_dict_t *fp);
+extern ctf_ret_t ctf_serialize_emit_symtypetabs (ctf_archive_t *arc,
+						 ctf_sect_t *symtypetabsect,
+						 ctf_sect_t *symtypetaballsect,
+						 ctf_error_t *errp);
+
 extern ctf_ret_t ctf_preserialize (ctf_dict_t *fp);
 extern void ctf_depreserialize (ctf_dict_t *fp);
 
@@ -869,8 +923,11 @@ ctf_new_archive_internal (unsigned char *buf, ctf_dict_t *fp, int v1,
 struct ctf_archive_internal *ctf_new_archive_wrapper (ctf_dict_t *fp,
 						      ctf_open_sect_t *sects,
 						      ctf_error_t *errp);
-extern struct ctf_archive_internal *
-ctf_arc_open_internal (int fd, const char *filename, ctf_error_t *errp);
+extern struct ctf_archive_internal *ctf_arc_open_internal (int fd,
+							   const char *filename,
+							   ctf_error_t *errp);
+extern ctf_dict_t *ctf_dict_open_cached (struct ctf_archive_internal *,
+					 size_t index, ctf_error_t *errp);
 extern const ctf_preamble_t *ctf_arc_bufpreamble_v1 (const ctf_sect_t *);
 extern void ctf_arc_close_free (struct ctf_archive_internal *arci);
 
@@ -887,7 +944,7 @@ extern void *ctf_set_open_errno (ctf_error_t *, ctf_error_t);
 extern ssize_t ctf_buflen (ctf_open_sect_t *sects, ctf_error_t *errp);
 extern ctf_ret_t ctf_flip_header (void *, int, int, int);
 extern ctf_error_t ctf_flip (ctf_dict_t *, ctf_header_t *, unsigned char *,
-			     int is_btf, int to_foreign);
+			     int to_foreign);
 extern ctf_dict_t *ctf_bufopen_len (ctf_open_sect_t *sects,
 				    ssize_t *len, ctf_dict_t *parent,
 				    ctf_archive_t *ctf_archive,
@@ -965,7 +1022,8 @@ ssize_t get_ctt_size_v2_unconverted (const ctf_dict_t *, const ctf_type_t *,
 /* Variables, all underscore-prepended. */
 
 extern const char _CTF_SECTION[];	/* name of CTF ELF section */
-extern const char _CTF_NULLSTR[];	/* empty string */
+extern const char _CTF_SYMTYPETAB_SECTION[];	/* name of CTF ELF symtypetab section */
+extern const char _CTF_SYMTYPETABALL_SECTION[];	/* name of CTF ELF symtypetab.all section */
 extern ctf_btf_mode_t _libctf_btf_mode; /* BTF writeout mode.  */
 
 #include "ctf-util-inlines.h"

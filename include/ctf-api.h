@@ -78,7 +78,8 @@ typedef int ctf_error_t;
 
 struct bfd;
 
-/* Symbolic names for CTF sections.  */
+/* Symbolic names for CTF sections.  (Some only apply to older CTF
+   versions.)  */
 
 typedef enum ctf_sect_names
   {
@@ -98,6 +99,8 @@ typedef enum ctf_elfsect_names
     CTF_ELF_SECT,				/* The .ctf section.  */
     CTF_ELF_SYMSECT,				/* The associated symtab.  */
     CTF_ELF_STRSECT,				/* The ELF string table.  */
+    CTF_ELF_SYMTYPETABSECT,			/* .ctf.symtypetab section.  */
+    CTF_ELF_SYMTYPETABALLSECT,			/* .ctf.symtypetab.all section.  */
   } ctf_elfsect_names_t;
 
 /* If the debugger needs to provide the CTF library with a set of raw buffers
@@ -292,9 +295,7 @@ typedef int ctf_func_type_flags_t;
   _CTF_ITEM (ECTF_BFDERR, "BFD error")				\
   _CTF_ITEM (ECTF_CTFVERS, "BTF/CTF dict version is too new for libctf") \
   _CTF_ITEM (ECTF_BFD_AMBIGUOUS, "ambiguous BFD target")	\
-  _CTF_ITEM (ECTF_SYMTAB, "symbol table uses invalid entry size") \
-  _CTF_ITEM (ECTF_SYMBAD, "symbol table data buffer is not valid") \
-  _CTF_ITEM (ECTF_STRBAD, "string table data buffer is not valid") \
+  _CTF_ITEM (ECTF_SECTBAD, "ELF section data is not valid") \
   _CTF_ITEM (ECTF_CORRUPT, "file data structure corruption detected") \
   _CTF_ITEM (ECTF_NOCTFDATA, "no .ctf or .BTF section") \
   _CTF_ITEM (ECTF_NOCTFBUF, "buffer does not contain CTF data") \
@@ -321,7 +322,7 @@ typedef int ctf_func_type_flags_t;
   _CTF_ITEM (ECTF_DUPLICATE, "duplicate member, enumerator, datasec, or variable name") \
   _CTF_ITEM (ECTF_CONFLICT, "conflicting type is already defined") \
   _CTF_ITEM (ECTF_ARCREATE, "error creating CTF archive") \
-  _CTF_ITEM (ECTF_ARNNAME, "name not found in CTF archive") \
+  _CTF_ITEM (ECTF_ARNNAME, "member not found in CTF archive") \
   _CTF_ITEM (ECTF_SLICEOVERFLOW, "overflow of type bitness or offset in slice") \
   _CTF_ITEM (ECTF_DUMPSECTUNKNOWN, "unknown section number in dump") \
   _CTF_ITEM (ECTF_DUMPSECTCHANGED, "section changed in middle of dump") \
@@ -403,11 +404,7 @@ typedef enum ctf_dict_flags
   {
     /* If set, duplicate enumerators in a single dict fail with
        ECTF_DUPLICATE.  */
-    CTF_STRICT_NO_DUP_ENUMERATORS = 0x1,
-
-    /* If set, this dict has at least one symbol -> type mapping.  (This flag
-       merely reports a property of the dict and cannot be set.)  */
-    CTF_DICT_HAS_SYMBOL_TYPES = 0x2
+    CTF_STRICT_NO_DUP_ENUMERATORS = 0x1
   } ctf_dict_flags_t;
 
 typedef int ctf_visit_f (ctf_dict_t *, const char *name, ctf_id_t type,
@@ -528,7 +525,11 @@ extern void ctf_arc_close (ctf_archive_t *);
 
 typedef enum ctf_arc_flags
   {
-    CTF_ARC_FLAGS_LIBCTF_CREATED = 0x01
+    CTF_ARC_FLAGS_LIBCTF_CREATED = 0x01,
+
+    /* If set, this archive has at least one symbol -> type mapping.  (This flag
+       merely reports a property of the dict and cannot be set.)  */
+    CTF_ARC_HAS_SYMBOL_TYPES = 0x2
   } ctf_arc_flags_t;
 
 extern ctf_bool_t ctf_arc_flag (ctf_archive_t *, ctf_arc_flags_t flag);
@@ -588,14 +589,23 @@ extern ctf_dict_t *ctf_dict_open_by_index (ctf_archive_t *,
    Some obscure features may not work with archives opened this way: in
    particular, adding types to a parent you open this way before opening
    children with that dict as a parent will cause opening of the children to
-   fail: for normal parents in archives, this works fine.  */
+   fail: for normal parents in archives, this works fine.
+
+   In the unusual cases when this call is needed, opening dicts, looking up
+   symbols or indeed doing anything else after opening the archive other
+   than calling this function ca be expected to fail.  */
 
 extern ctf_ret_t ctf_arc_set_parent (ctf_archive_t *, ctf_dict_t *parent);
 
 /* Look up symbols' types in archives by index or name, returning the dict
-   and optionally type ID in which the type is found.  Lookup results are
-   cached so future lookups are faster.  Needs symbol tables and (for name
-   lookups) string tables to be known for this CTF archive.  */
+   and optionally type ID in which the type is found.  Needs symbol tables
+   and (for name lookups) string tables to be known for this CTF archive.
+   Symbols added via ctf_add_sym (below) in dicts not yet ctf_written out
+   are only found if the dict is not a child dict.  (This is unlikely ever
+   to be a problem, since child dicts with symbols are almost always the
+   result of linker runs and thus lookups are not carried out on them until
+   after they have been written out and read in again: if it is, the
+   restriction is liftable.)  */
 
 extern ctf_dict_t *ctf_arc_lookup_symbol (ctf_archive_t *,
 					  unsigned long symidx,
@@ -603,7 +613,20 @@ extern ctf_dict_t *ctf_arc_lookup_symbol (ctf_archive_t *,
 extern ctf_dict_t *ctf_arc_lookup_symbol_name (ctf_archive_t *,
 					       const char *name,
 					       ctf_id_t *, ctf_error_t *errp);
-extern void ctf_arc_flush_caches (ctf_archive_t *);
+
+/* Traverse all symbols in an archive, one by one, and return the containing
+   dict, name, and type of each (no arguments are optional).
+
+   If symbols were already present in the dict when opened and replacements
+   were subsequently added via ctf_add_sym, both will be returned, the
+   newly-added ones first.
+
+   As usual with ctf_arc_*() functions, the dict refcnt is bumped with every
+   symbol returned: the caller must ctf_dict_close it. */
+
+extern ctf_dict_t *ctf_arc_symbol_next (ctf_archive_t *, ctf_next_t **,
+					const char **name, ctf_id_t *,
+					ctf_error_t *errp);
 
 /* The next functions return or close real CTF files, not archives or ELF files
    containing CTF content.  They can be passed symbol and string table sections
@@ -738,7 +761,9 @@ extern const char **ctf_func_arg_names (ctf_dict_t *, ctf_id_t, size_t *nargs);
 extern ctf_linkages_t ctf_type_linkage (ctf_dict_t *, ctf_id_t);
 
 /* Traverse all symbols in a dict, one by one, and return the type of each
-   and (if NAME is non-NULL) optionally its name.  */
+   and (if NAME is non-NULL) optionally its name.  Technically duplicative
+   of ctf_arc_symbol_next, but when looking at symbols for particular
+   non-parent dicts, can be much faster.  */
 
 extern ctf_id_t ctf_symbol_next (ctf_dict_t *, ctf_next_t **, const char **name);
 
@@ -1034,10 +1059,10 @@ extern const char *ctf_archive_raw_next (const ctf_archive_t *,
 					 ctf_next_t **, const void **contents,
 					 size_t *len, ctf_error_t *errp);
 
-/* Dump the contents of a section in a CTF dict.  STATE is an
-   iterator which should be a pointer to a variable set to NULL.  The decorator
-   is called with each line in turn and can modify it or allocate and return a
-   new one.  ctf_dump accumulates all the results and returns a single giant
+/* Dump the contents of a section in a CTF dict.  STATE is an iterator which
+   should be a pointer to a variable set to NULL.  The decorator is called
+   with each line in turn and can modify it or allocate and return a new
+   one.  ctf_dump accumulates all the results and returns a single giant
    multiline string.  */
 
 extern char *ctf_dump (ctf_dict_t *, ctf_dump_state_t **state,
@@ -1243,18 +1268,32 @@ extern int ctf_write (ctf_dict_t *, int);
 extern unsigned char *ctf_write_mem (ctf_dict_t *, size_t *);
 
 /* Create a CTF archive named FILE from CTF_DICTS inputs (or write it to the
-   passed-in fd).  The member names are derived from the cunames of the
-   dicts.  CTF_DICTS must be at least 1.  */
+   passed-in fd).  The member names are derived from the cunames of the dicts.
+   CTF_DICTS must be at least 1.  CTF_SECTS, if non-null, is set to an array of
+   additional sections which should be written out (.ctf.symtypetab et al); its
+   count is returned in CTF_SECT_CNT.
+
+   The archives should usually all be children of the same parent, and the
+   parent passed in first.  Some features (like symtypetabs) will be
+   disabled if this is not the case.  Opening the dicts will be harder too
+   (you'll need to use ctf_arc_set_parent).  */
 
 typedef enum ctf_arc_write_flags
   {
     CTF_ARC_WRITE_NAMELESS = 1			/* No name table.  */
   } ctf_arc_write_flags_t;
 
-extern ctf_error_t ctf_arc_write (const char *file, ctf_dict_t **ctf_dicts, size_t,
-				  ctf_arc_write_flags_t);
+extern ctf_error_t ctf_arc_write (const char *file, ctf_dict_t **ctf_dicts,
+				  size_t ctf_dict_cnt, ctf_sect_t **ctf_sects,
+				  size_t *ctf_sect_cnt, ctf_arc_write_flags_t);
 extern ctf_error_t ctf_arc_write_fd (int, ctf_dict_t **, size_t,
+				     ctf_sect_t **, size_t *,
 				     ctf_arc_write_flags_t);
+
+/* Free a CTF_SECTS array returned by ctf_arc_write, ctf_link_write et al.  */
+
+extern void ctf_free_write_sects (ctf_sect_t **ctf_sects,
+				  size_t ctf_sect_cnt);
 
 /* Prohibit writeout of this type kind: attempts to write it out cause
    an ECTF_KIND_PROHIBITED error.  */
@@ -1311,7 +1350,7 @@ extern ctf_ret_t ctf_link_against (ctf_dict_t *fp, ctf_archive_t *against,
 				   ctf_link_flags_t flags);
 
 /* Symtab linker handling, called after ctf_link to set up the symbol type
-   information used by ctf_*_lookup_symbol.  Optional.  */
+   information used by ctf_arc_*_lookup_symbol.  Optional.  */
 
 /* Add strings to the link from the ELF string table, repeatedly calling
    ADD_STRING to add each string and its corresponding offset in turn.  */
@@ -1323,12 +1362,12 @@ extern ctf_ret_t ctf_link_add_strtab (ctf_dict_t *,
 /* Note that a given symbol will be public with a given set of properties.
    If the symbol has been added with that name via ctf_add_funcobjt_sym,
    this symbol type will end up in the symtypetabs and can be looked up via
-   ctf_*_lookup_symbol after the dict is read back in.  */
+   ctf_arc_*_lookup_symbol after the dict is read back in.  */
 
 extern ctf_ret_t ctf_link_add_linker_symbol (ctf_dict_t *, ctf_link_sym_t *);
 
-/* Impose an ordering on symbols, as defined by the strtab and symbol
-   added by earlier calls to the above two functions.  Optional.  */
+/* Impose an ordering on symbols, as defined by the strtab and symbol info added
+   by earlier calls to the above two functions.  Optional.  */
 
 extern ctf_ret_t ctf_link_shuffle_syms (ctf_dict_t *);
 
@@ -1347,10 +1386,20 @@ extern ctf_ret_t ctf_link_output_is_btf (ctf_dict_t *);
    Concatenate a parent onto the front of it if you want to open it with
    ctf_open*(), or open it with ctf_bufopen() and explicitly supply the parent.
 
+   If non-null, returns additional serialized sections that should be written
+   out (.ctf.symtypetab et al) in the CTF_SECTS array.
+
+   The optional CTF_SECTS array returns additional serialized sections that
+   should be written out (.ctf.symtypetab et al), of size CTF_SECT_CNT.  Free
+   this array by calling ctf_free_write_sects (above).
+
    If IS_BTF is set on return, the output is BTF-compatible and can be stored
    in a .BTF section.  */
 
-extern unsigned char *ctf_link_write (ctf_dict_t *, size_t *size, int *is_btf);
+extern unsigned char *ctf_link_write (ctf_dict_t *, size_t *size,
+				      ctf_sect_t **ctf_sects,
+				      size_t *ctf_sect_cnt,
+				      int *is_btf);
 
 /* Specialist linker functions.  These functions are not used by ld, but can be
    used by other programs making use of the linker machinery for other purposes

@@ -532,22 +532,6 @@ ctf_dump_header (ctf_dict_t *fp, ctf_dump_state_t *state)
 
       if (ctf_dump_header_sizefield (fp, state, "Parent types", hp->cth_parent_ntypes) < 0)
 	goto err;
-
-      if (ctf_dump_header_sectlenfield (fp, state, "Data object section",
-					hp->cth_objt_off, hp->cth_objt_len) < 0)
-	goto err;
-
-      if (ctf_dump_header_sectlenfield (fp, state, "Function info section",
-					hp->cth_func_off, hp->cth_func_len) < 0)
-	goto err;
-
-      if (ctf_dump_header_sectlenfield (fp, state, "Object index section",
-					hp->cth_objtidx_off, hp->cth_objtidx_len) < 0)
-	goto err;
-
-      if (ctf_dump_header_sectlenfield (fp, state, "Function index section",
-					hp->cth_funcidx_off, hp->cth_funcidx_len) < 0)
-	goto err;
     }
   else						/* Pure BTF.  */
     {
@@ -580,12 +564,30 @@ ctf_dump_symtypetabs (ctf_dict_t *fp, ctf_dump_state_t *state)
   ctf_next_t *i = NULL;
   char *str = NULL;
 
-  if (fp->ctf_ext_symtab.cts_data == NULL)
-    str = str_append (str, _("No symbol table.\n"));
+  /* In v4, symtypetabs are held at the archive level, but ctf_symbol_next
+     abstracts over that (at the cost of not printing parts of the
+     symtypetab for which no actual archive member exists: FIXME).  We
+     always dump only a subset: either CTF_K_FUNCTIONs, or everything else.
+     UPTODO: for v3, track whether each entry comes from the func or
+     objthash and dump accordingly.  */
 
   while ((id = ctf_symbol_next (fp, &i, &name)) != CTF_ERR)
     {
       char *typestr = NULL;
+      ctf_kind_t kind = ctf_type_kind (fp, id);
+
+      if ((int) kind == -1)
+	{
+	  ctf_warn (type_err_locus (fp, id), ctf_errno (fp),
+		    _("cannot get kind of this symbol"));
+	  continue;
+	}
+
+      if ((kind == CTF_K_FUNCTION &&
+	   state->cds_sect != CTF_SECT_FUNC)
+	  || (kind != CTF_K_FUNCTION &&
+	      state->cds_sect == CTF_SECT_FUNC))
+	continue;
 
       /* Emit the name, if we know it.  No trailing space: ctf_dump_format_type
 	 has a leading one.   */
@@ -1030,7 +1032,6 @@ ctf_dump (ctf_dict_t *fp, ctf_dump_state_t **statep, ctf_sect_names_t sect,
 	case CTF_SECT_HEADER:
 	  ctf_dump_header (fp, state);
 	  break;
-	/* UPTODO: fix this for ELF-section symtypetabs.  */
 	case CTF_SECT_OBJT:
 	case CTF_SECT_FUNC:
 	  if (ctf_dump_symtypetabs (fp, state) < 0)
