@@ -149,7 +149,6 @@ struct lang_nocrossrefs *nocrossref_list;
 struct asneeded_minfo **asneeded_list_tail;
 #ifdef ENABLE_LIBCTF
 static ctf_dict_t *ctf_output;
-static int try_pure_btf, is_pure_btf;
 #endif
 
 /* Functions that traverse the linker script and might evaluate
@@ -3781,7 +3780,7 @@ open_input_bfds (lang_statement_union_type *s,
 /* Emit CTF errors and warnings.  fp can be NULL to report errors/warnings
    that happened specifically at CTF open time.  */
 static void
-lang_ctf_errs_warnings (ctf_dict_t *fp)
+ldlang_ctf_errs_warnings (ctf_dict_t *fp)
 {
   ctf_next_t *i = NULL;
   char *text;
@@ -3799,7 +3798,7 @@ lang_ctf_errs_warnings (ctf_dict_t *fp)
     }
 
   if (fp != NULL)
-    lang_ctf_errs_warnings (NULL);
+    ldlang_ctf_errs_warnings (NULL);
 
   /* `err' returns errors from the error/warning iterator in particular.
      These never assert.  But if we have an fp, that could have recorded
@@ -3824,7 +3823,7 @@ ldlang_open_ctf (void)
   flagword old_flags;
   asection *unchanged_section = NULL;
   int ctf_copy_unchanged = 0;
-  lang_input_statement_type *btf_emission_file = NULL;
+  lang_input_statement_type *emission_file = NULL;
 
   if (link_info.ctf_disabled)
     return;
@@ -3853,7 +3852,7 @@ ldlang_open_ctf (void)
 	{
 	  if (err != ECTF_NOCTFDATA)
 	    {
-	      lang_ctf_errs_warnings (NULL);
+	      ldlang_ctf_errs_warnings (NULL);
 	      einfo (_("%P: warning: CTF section in %pB not loaded; "
 		       "its types will be discarded: %s\n"), file->the_bfd,
 		     ctf_errmsg (err));
@@ -3902,6 +3901,7 @@ ldlang_open_ctf (void)
 	{
 	  sect->flags &= ~SEC_EXCLUDE;
 	  picked_ctf = 1;
+	  emission_file = file;
 	}
     }
 
@@ -3918,8 +3918,6 @@ ldlang_open_ctf (void)
 
   if (!picked_ctf)
     {
-      try_pure_btf = 1;
-
       LANG_FOR_EACH_INPUT_STATEMENT (dictfile)
 	{
 	  asection *sect;
@@ -3935,7 +3933,7 @@ ldlang_open_ctf (void)
 	      if (!picked_btf)
 		{
 		  sect->flags &= ~SEC_EXCLUDE;
-		  btf_emission_file = dictfile;
+		  emission_file = dictfile;
 		  picked_btf = 1;
 		}
 	      else
@@ -3977,7 +3975,7 @@ ldlang_open_ctf (void)
 	  /* Archive not created by libctf.  Is it something pahole-
 	     augmented?  */
 
-	  if (try_pure_btf && ctf_archive_count (only_one_input) == 1)
+	  if (picked_btf && ctf_archive_count (only_one_input) == 1)
 	    {
 	      ctf_dict_t *fp;
 	      ctf_next_t *it = NULL;
@@ -4031,14 +4029,39 @@ ldlang_open_ctf (void)
       return;
     }
 
-  /* A pure BTF link may still require a CTF section if deduplication finds
-     ambiguously-defined types.  Create it (if not needed, it will be deleted
-     again).  */
+  /* Create sections if we have somewhere to create them.  */
 
-  if (btf_emission_file)
-    bfd_make_section_with_flags (btf_emission_file->the_bfd, ".ctf",
-				 (SEC_NEVER_LOAD | SEC_HAS_CONTENTS
-				  | SEC_LINKER_CREATED));
+  if (emission_file)
+    {
+      /* A pure BTF link may still require a CTF section if deduplication finds
+	 ambiguously-defined types.  Create it (if not needed, it will be
+	 deleted again).  */
+
+      bfd_make_section_with_flags (emission_file->the_bfd, ".ctf",
+				   (SEC_NEVER_LOAD | SEC_HAS_CONTENTS
+				    | SEC_LINKER_CREATED));
+
+      /* A pure CTF link may choose to lower the CTF to BTF if it is
+	 BTF-compatible.  */
+
+      bfd_make_section_with_flags (emission_file->the_bfd, ".BTF",
+				   (SEC_NEVER_LOAD | SEC_HAS_CONTENTS
+				    | SEC_LINKER_CREATED));
+
+      /* If we don't have a .ctf.symtypetab or .ctf.symtypetab.all section, make
+	 one: the input might have only one of them, though having only
+	 .ctf.symtypetab.all is extremely unlikely.  We might require either on
+	 the output: we can't tell until after deduplication has happened, right
+	 at writeout time.  */
+
+      bfd_make_section_with_flags (emission_file->the_bfd, ".ctf.symtypetab",
+				   (SEC_NEVER_LOAD | SEC_HAS_CONTENTS | SEC_EXCLUDE
+				    | SEC_LINKER_CREATED));
+
+      bfd_make_section_with_flags (emission_file->the_bfd, ".ctf.symtypetab.all",
+				   (SEC_NEVER_LOAD | SEC_HAS_CONTENTS | SEC_EXCLUDE
+				    | SEC_LINKER_CREATED));
+    }
 
   if ((ctf_output = ctf_create (NULL, &err)) != NULL)
     {
@@ -4055,11 +4078,40 @@ ldlang_open_ctf (void)
   ld_stop_phase (PHASE_CTF);
 }
 
+/* Remove all instances of a given section named NAME, possibly only if it is
+   already empty.  Return 1 if _bfd_fix_excluded_sec_syms needs to be
+   called.  */
+static int
+ldlang_write_ctf_remove_section (int late, asection *sect, int if_empty)
+{
+  int needs_exclude = 0;
+
+  do
+    {
+      if (if_empty && sect->size != 0)
+	continue;
+
+      if (sect->flags & SEC_EXCLUDE)
+	continue;
+
+      sect->size = 0;
+      sect->flags |= SEC_EXCLUDE;
+
+      if (!late)
+	continue;
+
+      bfd_section_list_remove (link_info.output_bfd, sect);
+      link_info.output_bfd->section_count--;
+      needs_exclude = 1;
+    } while ((sect = bfd_get_next_section_by_name (NULL, sect)) != NULL);
+  return needs_exclude;
+}
+
 /* Merge together CTF sections.  After this, only the symtab-dependent
    function and data object sections need adjustment.  */
 
 static void
-lang_merge_ctf (void)
+ldlang_merge_ctf (void)
 {
   asection *btf_sect, *ctf_sect;
   int flags = 0;
@@ -4123,24 +4175,18 @@ lang_merge_ctf (void)
 
   if (ctf_link (ctf_output, flags) < 0)
     {
-      lang_ctf_errs_warnings (ctf_output);
+      ldlang_ctf_errs_warnings (ctf_output);
       einfo (_("%P: warning: CTF linking failed; "
 	       "output will have no CTF section: %s\n"),
 	     ctf_errmsg (ctf_errno (ctf_output)));
 
       if (ctf_sect)
-	{
-	  ctf_sect->size = 0;
-	  ctf_sect->flags |= SEC_EXCLUDE;
-	}
+	ldlang_write_ctf_remove_section (0, ctf_sect, 0);
       if (btf_sect)
-	{
-	  btf_sect->size = 0;
-	  btf_sect->flags |= SEC_EXCLUDE;
-	}
+	ldlang_write_ctf_remove_section (0, btf_sect, 0);
     }
   /* Output any lingering errors that didn't come from ctf_link.  */
-  lang_ctf_errs_warnings (ctf_output);
+  ldlang_ctf_errs_warnings (ctf_output);
 
   ld_stop_phase (PHASE_CTF);
 }
@@ -4165,56 +4211,66 @@ void ldlang_ctf_new_dynsym (int symidx, struct elf_internal_sym *sym)
     ldemul_new_dynsym_for_ctf (ctf_output, symidx, sym);
 }
 
-/* Remove all unused BTF/CTF sections from the link.  Return 1 if
+/* Figure out if a link will emit pure BTF or CTF.  */
+static int
+ldlang_is_pure_btf (void)
+{
+  static int is_pure_btf = -1;
+
+  if (is_pure_btf >= 0)
+    return is_pure_btf;
+
+  is_pure_btf = ctf_link_output_is_btf (ctf_output);
+
+  return is_pure_btf;
+}
+
+/* Remove all unused BTF/CTF and symtypetab sections from the link.  Return 1 if
    _bfd_fix_excluded_sec_syms needs to be called.  */
 
 static int
-lang_write_ctf_remove_section (int late)
+ldlang_write_ctf_remove_ctf_section (int late)
 {
   asection *remove_sect;
   int needs_exclude = 0;
+  int is_pure_btf;
+
+  /* Symtypetabs are easy: this routine is only called once the symtypetabs have
+     been filled out, one way or another.  So we want to delete them iff they're
+     still empty.  It's not ideal that section names are hardwired here, but
+     it's simpler than dealing with the general list ctf_link_write can emit.  */
+
+  remove_sect = bfd_get_section_by_name (link_info.output_bfd, ".ctf.symtypetab");
+  if (remove_sect)
+    needs_exclude |= ldlang_write_ctf_remove_section (late, remove_sect, 1);
+
+  remove_sect = bfd_get_section_by_name (link_info.output_bfd, ".ctf.symtypetab.all");
+  if (remove_sect)
+    needs_exclude |= ldlang_write_ctf_remove_section (late, remove_sect, 1);
 
   if (!ctf_output)
-    return 0;
+    return needs_exclude;
 
   /* Figure out whether we're going to emit pure BTF or not.  */
-  if (try_pure_btf)
+  if ((is_pure_btf = ldlang_is_pure_btf()) < 0)
     {
-      if ((is_pure_btf = ctf_link_output_is_btf (ctf_output)) < 0)
-	{
-	  einfo (_("%P: cannot determine whether to emit BTF or CTF output: %s\n"),
-		   ctf_errmsg (ctf_errno (ctf_output)));
-	  is_pure_btf = -1;
-	  return 0;
-	}
+      einfo (_("%P: cannot determine whether to emit BTF or CTF output: %s\n"),
+	     ctf_errmsg (ctf_errno (ctf_output)));
+      return needs_exclude;
     }
 
-  /* Discard all instances of the section we're not outputting to.  */
+  /* Discard all instances of the section we're not outputting to, whether empty
+     or not (because we might translate .BTF to .ctf or vice versa, whereupon
+     the original needs removal).  */
   if (is_pure_btf)
     remove_sect = bfd_get_section_by_name (link_info.output_bfd, ".ctf");
   else
     remove_sect = bfd_get_section_by_name (link_info.output_bfd, ".BTF");
 
   if (!remove_sect)
-    return 0;
+    return needs_exclude;
 
-  do
-    {
-      if (remove_sect->flags & SEC_EXCLUDE)
-	continue;
-
-      remove_sect->size = 0;
-      remove_sect->flags |= SEC_EXCLUDE;
-
-      if (!late)
-	continue;
-
-      bfd_section_list_remove (link_info.output_bfd, remove_sect);
-      link_info.output_bfd->section_count--;
-      needs_exclude = 1;
-    } while ((remove_sect = bfd_get_next_section_by_name (NULL, remove_sect))
-	     != NULL);
-
+  needs_exclude |= ldlang_write_ctf_remove_section (late, remove_sect, 0);
   return needs_exclude;
 }
 
@@ -4223,19 +4279,22 @@ lang_write_ctf_remove_section (int late)
 int
 ldlang_ctf_remove_section (void)
 {
-  return lang_write_ctf_remove_section (1);
+  return ldlang_write_ctf_remove_ctf_section (1);
 }
 
 /* Write out the BTF or CTF section.  Called early, if the emulation isn't
    going to need to dedup against the strtab and symtab, then possibly
    called from the target linker code if the dedup has happened.  */
 static void
-lang_write_ctf (int late)
+ldlang_write_ctf (int late)
 {
-  size_t output_size;
+  size_t output_size = 0;
   asection *btf_sect, *ctf_sect;
+  ctf_sect_t *other_sects = NULL;
+  size_t other_sect_cnt = 0;
   asection *output_sect;
   unsigned char *contents = NULL;
+  int is_pure_btf;
   int err = 0;
 
   if (!ctf_output)
@@ -4266,19 +4325,18 @@ lang_write_ctf (int late)
 
   ldemul_new_dynsym_for_ctf (ctf_output, 0, NULL);
 
-  /* If we are being called early, ldlang_ctf_remove_section has not yet
-     been called: do it by hand.  After this point, it's always been called,
-     either from here or from btf_elf_final_link.  */
-  if (!late)
-    lang_write_ctf_remove_section (late);
-
-  if (is_pure_btf < 0)
-    err = 1;
+  if ((is_pure_btf = ldlang_is_pure_btf()) < 0)
+    {
+      einfo (_("%P: cannot determine whether to emit BTF or CTF output: %s\n"),
+	     ctf_errmsg (ctf_errno (ctf_output)));
+      err = 1;
+    }
 
   /* Finally serialize. Errors are handled below, if this section is actually
      output.  */
   if (!err)
-    contents = ctf_link_write (ctf_output, &output_size, NULL, NULL);
+    contents = ctf_link_write (ctf_output, &output_size, &other_sects,
+			       &other_sect_cnt);
 
   /* Emit CTF or BTF, whichever was used and is needed.  We decide which to
      emit to based on the decision taken by section removal, above, not
@@ -4287,7 +4345,7 @@ lang_write_ctf (int late)
   btf_sect = bfd_get_section_by_name (link_info.output_bfd, ".BTF");
   ctf_sect = bfd_get_section_by_name (link_info.output_bfd, ".ctf");
 
-  if (is_pure_btf)
+  if (really_btf)
     output_sect = btf_sect;
   else
     output_sect = ctf_sect;
@@ -4299,13 +4357,13 @@ lang_write_ctf (int late)
       output_sect->flags |= SEC_IN_MEMORY | SEC_KEEP;
       output_sect->flags &= ~SEC_EXCLUDE;
 
-      lang_ctf_errs_warnings (ctf_output);
+      ldlang_ctf_errs_warnings (ctf_output);
 
       if (!output_sect->contents)
 	{
 	  einfo (_("%P: warning: %s section emission failed; "
 		   "output will have no %s section: %s\n"),
-		 is_pure_btf ? "BTF" : "CTF", is_pure_btf ? ".BTF" : ".ctf",
+		 really_btf ? "BTF" : "CTF", really_btf ? ".BTF" : ".ctf",
 		 ctf_errmsg (ctf_errno (ctf_output)));
 	  err = 1;
 	}
@@ -4316,6 +4374,59 @@ lang_write_ctf (int late)
       if (err)
 	output_sect->size = 0;
     }
+
+  /* Now any ancillary sections (currently only the symtypetabs).  These aren't
+     going to be emitted for early-emulation targets, so we don't need to worry
+     about ldlang_write_ctf_remove_section having already deleted them.
+
+     The ownership here is a little tangled.  The section owns the cts_data if
+     the data is emitted into a section, but if it isn't, we still own it and
+     should free it.  The OTHER_SECTS array is always owned by us and needs
+     freeing.
+
+     ctf_free_write_sects might seem helpful, but it's meant for use on error
+     paths, and frees the sects array plus all the data, which is never what is
+     needed here.  */
+
+  if (other_sects)
+    {
+      size_t i = 0;
+      for (; i < other_sect_cnt; i++)
+	{
+	  asection *ancillary_out;
+
+	  /* We can't write out nameless sections.  */
+	  if (other_sects[i].cts_name == NULL)
+	    {
+	      free ((void *) other_sects[i].cts_data);
+	      continue;
+	    }
+
+	  ancillary_out = bfd_get_section_by_name (link_info.output_bfd,
+						   other_sects[i].cts_name);
+
+	  if (!ancillary_out)
+	    {
+	      einfo (_("%P: warning: %s section emission failed: output will have "
+		       "restricted CTF without ancillary sections"));
+	      free ((void *) other_sects[i].cts_data);
+	      continue;
+	    }
+
+	  ancillary_out->contents = (bfd_byte *) other_sects[i].cts_data;
+	  ancillary_out->size = other_sects[i].cts_size;
+	  ancillary_out->flags |= SEC_IN_MEMORY | SEC_KEEP;
+	  ancillary_out->flags &= ~SEC_EXCLUDE;
+	}
+
+      free (other_sects);
+    }
+
+  /* If we are being called early, ldlang_ctf_remove_section has not yet
+     been called: do it by hand.  After this point, it's always been called,
+     either from here or from btf_elf_final_link.  */
+  if (!late)
+    ldlang_write_ctf_remove_ctf_section (late);
 
   /* This also closes every CTF input file used in the link.  */
   ctf_dict_close (ctf_output);
@@ -4334,7 +4445,7 @@ ldlang_write_ctf_late (void)
 {
   /* Trigger a "late call", if the emulation needs one.  */
 
-  lang_write_ctf (1);
+  ldlang_write_ctf (1);
 }
 #else
 static void
@@ -4361,15 +4472,14 @@ ldlang_open_ctf (void)
     }
 }
 
-static void lang_merge_ctf (void) {}
 void
 ldlang_ctf_acquire_strings (struct elf_strtab_hash *dynstrtab
 			    ATTRIBUTE_UNUSED) {}
 void
 ldlang_ctf_new_dynsym (int symidx ATTRIBUTE_UNUSED,
 		       struct elf_internal_sym *sym ATTRIBUTE_UNUSED) {}
-int ldlang_ctf_remove_section (void) {};
-static void lang_write_ctf (int late ATTRIBUTE_UNUSED) {}
+int ldlang_ctf_remove_section (void) {}
+static void ldlang_write_ctf (int late ATTRIBUTE_UNUSED) {}
 void ldlang_write_ctf_late (void) {}
 #endif
 
@@ -8896,13 +9006,19 @@ lang_process (void)
 	}
     }
 
-  /* Merge together CTF and BTF sections.  After this, only the symtab-dependent
-     function and data object sections need adjustment.  */
-  lang_merge_ctf ();
+  /* Merge together CTF sections.  After this, only the symtab-dependent
+     function and data object sections need adjustment.
+
+     The ordering constraints here are quite tricky.  The actual merging must be
+     done this early even if the emulation requires late emission after the
+     symtabs are laid out, because we need to add strings from the strtab before
+     linking, and that happens while the symtab is being populated, before the
+     late call to ldlang_write_ctf in bfd_elf_final_link).  */
+  ldlang_merge_ctf ();
 
   /* Emit the CTF, iff the emulation doesn't need to do late emission after
      examining things laid out late, like the strtab.  */
-  lang_write_ctf (0);
+  ldlang_write_ctf (0);
 
   /* Copy forward lma regions for output sections in same lma region.  */
   lang_propagate_lma_regions ();
