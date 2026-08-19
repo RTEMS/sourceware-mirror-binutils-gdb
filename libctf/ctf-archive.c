@@ -21,6 +21,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <elf.h>
+#include "ctf-api.h"
 #include "ctf-util-endian.h"
 #include "ctf-util-swap.h"
 #include <errno.h>
@@ -56,15 +57,13 @@ static int ctf_arc_range_check_v1_modents (ctf_archive_v1_modent_t *modent,
 					   uint64_t contents_base,
 					   size_t contents_els, size_t arc_len,
 					   ctf_error_t *errp);
+static ctf_error_t ctf_arc_init_symtypetab (struct ctf_archive_internal *arci,
+					    ctf_sect_t *symtypetabsect,
+					    ctf_sect_t *symtypetaballsect,
+					    int foreign_endian);
 static void *arc_mmap_file (int fd, size_t size);
 static int arc_mmap_unmap (void *header, size_t headersz, const char **errmsg);
 static void *arc_pread_file (int fd, size_t size);
-static ctf_dict_t *ctf_dict_open_cached (struct ctf_archive_internal *arci,
-					 size_t index, ctf_error_t *errp);
-
-/* Flag to indicate "symbol not present" in ctf_archive_internal.ctfi_symdicts
-   and ctfi_symnamedicts.  Never initialized.  */
-static ctf_dict_t enosym;
 
 /* Prepare to serialize everything.  Members of archives have dependencies on
    each other, because the strtabs and type IDs of children depend on the
@@ -129,14 +128,112 @@ ctf_arc_preserialize (ctf_dict_t **ctf_dicts, ssize_t ctf_dict_cnt)
   return err;
 }
 
+/* Write out the symtypetabs.  */
+
+static ctf_error_t
+ctf_arc_write_symtypetabs (ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
+			   ctf_sect_t **ctf_sects, size_t *ctf_sect_cnt)
+{
+  ctf_archive_t *arc;
+  ctf_bool_t symtypetabs_allowed = 1;
+  ctf_error_t err;
+  size_t i;
+
+  ctf_sect_t symtypetab =
+    {
+      .cts_section = CTF_ELF_SYMTYPETABSECT,
+      .cts_name = _CTF_SYMTYPETAB_SECTION,
+      .cts_data = NULL,
+      .cts_size = 0
+    };
+  ctf_sect_t symtypetaball =
+    {
+      .cts_section = CTF_ELF_SYMTYPETABALLSECT,
+      .cts_name = _CTF_SYMTYPETABALL_SECTION,
+      .cts_data = NULL,
+      .cts_size = 0
+    };
+  ctf_sect_t *symtypetabp;
+
+  *ctf_sect_cnt = 0;
+  arc = ctf_dicts[0]->ctf_archive;
+
+  /* This will never be seen with normal (ctf_link-produced) archives, but
+     this code is not yet ready for hand-written archives for which the
+     parent is not the first dict in the archive.  ctf_open cannot open such
+     archives in any case.  */
+
+  for (i = 1; i < ctf_dict_cnt; i++)
+    {
+      if (ctf_dicts[i]->ctf_archive != arc)
+	symtypetabs_allowed = 0;
+
+      /* Populate the archive index, to help symtypetabs population.  */
+
+      ctf_dicts[i]->ctf_new_archive_index = i;
+    }
+
+  if (!arc)
+    symtypetabs_allowed = 0;
+
+  if (symtypetabs_allowed)
+    {
+      ctf_archive_t *arc = ctf_dict_arc (ctf_dicts[0], 0);
+
+      if (!arc)
+	return ctf_errno (ctf_dicts[0]);
+
+      if ((ctf_serialize_emit_symtypetabs (arc, &symtypetab,
+					   &symtypetaball, &err)) < 0)
+	return err;
+
+      if (symtypetab.cts_data)
+	(*ctf_sect_cnt)++;
+      if (symtypetaball.cts_data)
+	(*ctf_sect_cnt)++;
+
+      if (*ctf_sect_cnt
+	  && ((*ctf_sects = calloc (*ctf_sect_cnt,
+				    sizeof (ctf_sect_t))) == NULL))
+	{
+	  free ((void *) symtypetab.cts_data);
+	  free ((void *) symtypetaball.cts_data);
+	  *ctf_sect_cnt = 0;
+	  return errno;
+	}
+
+      symtypetabp = *ctf_sects;
+      if (symtypetab.cts_data)
+	{
+	  *symtypetabp = symtypetab;
+	  symtypetabp++;
+	}
+      if (symtypetaball.cts_data)
+	{
+	  *symtypetabp = symtypetaball;
+	  symtypetabp++;
+	}
+    }
+  return 0;
+}
+
+
 /* Write out a CTF archive consisting of at least one member dictionary to the
    start of the file referenced by the passed-in fd.  The entries are named
    according to their cunames, unless CTF_ARC_WRITE_NAMELESS is set in the
    flags, in which case no name table is written.
 
+   The archives should usually all be children of the same parent, and the
+   parent passed in first.  Some features (like symtypetabs) will be
+   disabled if this is not the case.
+
+   CTF_SECTS, if non-null, is set to an array of additional sections which
+   should be written out (.ctf.symtypetab et al).
+
    Returns 0 on success, or an errno, or an ECTF_* value.  */
 ctf_error_t
 ctf_arc_write_fd (int fd, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
+		  ctf_sect_t **ctf_sects, size_t *ctf_sect_cnt,
 		  ctf_arc_write_flags_t flags)
 {
   size_t i;
@@ -162,12 +259,24 @@ ctf_arc_write_fd (int fd, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
   if ((err = ctf_arc_preserialize (ctf_dicts, ctf_dict_cnt)) != 0)
     return err;
 
+  /* Figure out the symtypetabs first, because they're easier to free if things
+     go wrong.  They are only written out if all dicts passed in share a
+     parent, which is the first dict.  */
+
+  if (ctf_sects && ctf_sect_cnt)
+    if ((err = ctf_arc_write_symtypetabs (ctf_dicts, ctf_dict_cnt, ctf_sects,
+					  ctf_sect_cnt)) != 0)
+      {
+	errmsg = N_("cannot write CTF symtypetabs to archive");
+	goto err;
+      }
+
   for (i = 0; i < ctf_dict_cnt; i++)
     {
       if (arc_write_one_ctf (ctf_dicts[i], fd) < 0)
 	{
 	  errmsg = N_("cannot write CTF file to archive");
-	  goto err;
+	  goto err_no;
 	}
     }
 
@@ -182,7 +291,7 @@ ctf_arc_write_fd (int fd, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
       if ((len = write (fd, mp, magic_len)) < 0)
 	{
 	  errmsg = N_("cannot write magic number to archive");
-	  goto err;
+	  goto err_no;
 	}
       magic_len -= len;
       mp += len;
@@ -216,15 +325,32 @@ ctf_arc_write_fd (int fd, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
 
   return 0;
 
+err_no:
+  err = errno;
 err:
   for (j = ctf_dict_cnt - 1; j >= 0; j--)
     ctf_depreserialize (ctf_dicts[j]);
 
+  if (ctf_sects && ctf_sect_cnt)
+    ctf_free_write_sects (ctf_sects, *ctf_sect_cnt);
+
   /* We report errors into the first file in the archive, if any: if this is a
      zero-file archive, put it in the open-errors stream for lack of anywhere
      else for it to go.  */
-  ctf_err (err_locus (ctf_dicts[0]), errno, "%s", gettext (errmsg));
-  return errno;
+  ctf_err (err_locus (ctf_dicts[0]), err, "%s", gettext (errmsg));
+  return err;
+}
+
+/* Free a set of written-out sections returned by ctf_arc_write_fd et al.  */
+void
+ctf_free_write_sects (ctf_sect_t **ctf_sects,
+		      size_t ctf_sect_cnt)
+{
+  ssize_t i;
+  for (i = ctf_sect_cnt - 1; i >= 0; i--)
+    free ((void *) ctf_sects[i]->cts_data);
+
+  free (ctf_sects);
 }
 
 /* Write out a CTF archive containing at least one member dictionary.  The
@@ -232,11 +358,19 @@ err:
    CTF_ARC_WRITE_NAMELESS is set in the flags, in which case no name table is
    written.
 
+   The archives should usually all be children of the same parent, and the
+   parent passed in first.  Some features (like symtypetabs) will be
+   disabled if this is not the case.
+
+   CTF_SECTS, if non-null, is set to an array of additional sections which
+   should be written out (.ctf.symtypetab et al)
+
    If the filename is NULL, create a temporary file and return a pointer to it.
 
    Returns 0 on success, or an errno, or an ECTF_* value.  */
 ctf_error_t
 ctf_arc_write (const char *file, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
+	       ctf_sect_t **ctf_sects, size_t *ctf_sect_cnt,
 	       ctf_arc_write_flags_t flags)
 {
   ctf_error_t err;
@@ -255,7 +389,8 @@ ctf_arc_write (const char *file, ctf_dict_t **ctf_dicts, size_t ctf_dict_cnt,
       return errno;
     }
 
-  err = ctf_arc_write_fd (fd, ctf_dicts, ctf_dict_cnt, flags);
+  err = ctf_arc_write_fd (fd, ctf_dicts, ctf_dict_cnt, ctf_sects, ctf_sect_cnt,
+			  flags);
   if (err)
     goto err_close;
 
@@ -287,7 +422,7 @@ arc_write_one_ctf (ctf_dict_t *fp, int fd)
 
   if (ctf_write (fp, fd) != 0)
     {
-      errno = fp->ctf_errno;
+      errno = ctf_errno (fp);
       return -1;
     }
 
@@ -308,7 +443,7 @@ arc_write_one_ctf (ctf_dict_t *fp, int fd)
 
 static ctf_ret_t
 ctf_arc_flip_v1_archive (struct ctf_archive_internal *arci, size_t arc_len,
-			 ctf_error_t *errp)
+			 int *foreign_endian, ctf_error_t *errp)
 {
   struct ctf_archive_v1 *hdr = arci->ctfi_v1_hdr;
   int needs_flipping = 0;
@@ -317,10 +452,16 @@ ctf_arc_flip_v1_archive (struct ctf_archive_internal *arci, size_t arc_len,
   unsigned char *ents;
 
   if (bswap_64 (hdr->magic) == CTFA_V1_MAGIC)
-    needs_flipping = 1;
+    {
+      needs_flipping = 1;
+      *foreign_endian = 1;
+    }
 
   if (!needs_flipping)
-    return 0;
+    {
+      *foreign_endian = 0;
+      return 0;
+    }
 
   /* Headers.  */
 
@@ -567,12 +708,13 @@ ctf_arc_range_check_v1 (struct ctf_archive_internal *arci, size_t arc_len,
 
 /* Hunt down one of the magic numbers for a CTFv4 or BTF dict or its
    trailing strtab in a given range in BUF.  If a strtab magic is found, set
-   STRTAB.
+   STRTAB.  Return a pointer to it, and its endianness.
 
    Allow up to 64 bytes of padding.  */
 
 static unsigned char *
-ctf_arc_find_magic (unsigned char *buf, size_t len, int *strtab)
+ctf_arc_find_magic (unsigned char *buf, size_t len, int *strtab,
+		    int *foreign_endian)
 {
   uint64_t magic;
   uint16_t magic_16;
@@ -581,13 +723,17 @@ ctf_arc_find_magic (unsigned char *buf, size_t len, int *strtab)
   if (len == 0)
     return NULL;
 
+  *foreign_endian = 0;
   magic_16 = CTF_BTF_MAGIC;
   if ((ret = memmem (buf, len, &magic_16, sizeof (magic_16))) != NULL)
     return ret;
 
   swap_thing (magic_16);
   if ((ret = memmem (buf, len, &magic_16, sizeof (magic_16))) != NULL)
-    return ret;
+    {
+      *foreign_endian = 1;
+      return ret;
+    }
 
   magic_16 = CTF_MAGIC;
   if ((ret = memmem (buf, len, &magic_16, sizeof (magic_16))) != NULL)
@@ -595,7 +741,10 @@ ctf_arc_find_magic (unsigned char *buf, size_t len, int *strtab)
 
   swap_thing (magic_16);
   if ((ret = memmem (buf, len, &magic_16, sizeof (magic_16))) != NULL)
-    return ret;
+    {
+      *foreign_endian = 1;
+      return ret;
+    }
 
   magic = CTFA_MAGIC;
   if ((ret = memmem (buf, len, &magic, sizeof (magic))) != NULL)
@@ -607,6 +756,7 @@ ctf_arc_find_magic (unsigned char *buf, size_t len, int *strtab)
   swap_thing (magic);
   if ((ret = memmem (buf, len, &magic, sizeof (magic))) != NULL)
     {
+      *foreign_endian = 1;
       *strtab = 1;
       return ret;
     }
@@ -615,10 +765,12 @@ ctf_arc_find_magic (unsigned char *buf, size_t len, int *strtab)
 
 /* Make a new struct ctf_archive_internal wrapper for a buffer (which may
    contain a ctf_archive) or a single ctf_dict: endian-swap the archive
-   header as necessary, and check all its offsets for validity.
+   header as necessary, and check all its offsets for validity.  Read in the
+   symtypetabs if an archive is passed and they are archive-level (v4+).
    Close/optionally unmap BUF and/or FP on error.  Arrange to free or unmap
    any passed-in symbol or string sections on close.  The CTF section in the
-   passed-in SECTS is ignored: it's assumed to already be passed in as BUF.  */
+   passed-in SECTS is ignored: it's assumed to already be passed in as
+   BUF.  */
 
 struct ctf_archive_internal *
 ctf_new_archive_internal (unsigned char *buf, ctf_dict_t *fp, int v1,
@@ -626,10 +778,13 @@ ctf_new_archive_internal (unsigned char *buf, ctf_dict_t *fp, int v1,
 			  size_t len, ctf_open_sect_t *sects,
 			  ctf_error_t *errp)
 {
-  ctf_sect_t *strsect = NULL, *symsect = NULL;
   struct ctf_archive_internal *arci = NULL;
   size_t ufsize;
   ctf_error_t err = 0;
+  int foreign_endian = 0;
+
+  ctf_sect_t *strsect = NULL, *symsect = NULL;
+  ctf_sect_t *symtypetabsect = NULL, *symtypetaballsect = NULL;
 
   ctf_set_open_errno (errp, 0);
 
@@ -668,7 +823,7 @@ ctf_new_archive_internal (unsigned char *buf, ctf_dict_t *fp, int v1,
 
       memcpy (arci->ctfi_v1_hdr, buf, sizeof (struct ctf_archive_v1));
 
-      if (ctf_arc_flip_v1_archive (arci, len, errp) < 0)
+      if (ctf_arc_flip_v1_archive (arci, len, &foreign_endian, errp) < 0)
 	goto err_set;
 
       if (ctf_arc_range_check_v1 (arci, len, errp) < 0)
@@ -736,7 +891,8 @@ ctf_new_archive_internal (unsigned char *buf, ctf_dict_t *fp, int v1,
 	  || (le32toh ((*(unsigned short *) buf) == CTF_MAGIC)))
 	v1 = 1;
 
-      while ((magic = ctf_arc_find_magic (p, len - (p - buf), &strtab)) != NULL)
+      while ((magic = ctf_arc_find_magic (p, len - (p - buf), &strtab,
+					  &foreign_endian)) != NULL)
 	{
 	  if (strtab)
 	    break;
@@ -770,7 +926,8 @@ ctf_new_archive_internal (unsigned char *buf, ctf_dict_t *fp, int v1,
 	goto err;
 
       p = buf;
-      while ((magic = ctf_arc_find_magic (p, MIN (65, len - (p - buf)), &strtab)) != NULL)
+      while ((magic = ctf_arc_find_magic (p, MIN (65, len - (p - buf)), &strtab,
+					  &foreign_endian)) != NULL)
 	{
 	  ssize_t dict_len;
 	  ctf_sect_t tmp = {0};
@@ -862,6 +1019,7 @@ ctf_new_archive_internal (unsigned char *buf, ctf_dict_t *fp, int v1,
 
       arci->ctfi_dict = fp;
       arci->ctfi_nmemb = 1;
+      foreign_endian = fp->ctf_foreign_endian;
 
       if ((arci->ctfi_members = calloc (1, sizeof (size_t))) == NULL)
 	goto err;
@@ -889,6 +1047,8 @@ ctf_new_archive_internal (unsigned char *buf, ctf_dict_t *fp, int v1,
 	    {
 	    case CTF_ELF_SYMSECT: symsect = sect; break;
 	    case CTF_ELF_STRSECT: strsect = sect; break;
+	    case CTF_ELF_SYMTYPETABSECT: symtypetabsect = sect; break;
+	    case CTF_ELF_SYMTYPETABALLSECT: symtypetaballsect = sect; break;
 	    default:
 	      ;
 	    }
@@ -900,9 +1060,42 @@ ctf_new_archive_internal (unsigned char *buf, ctf_dict_t *fp, int v1,
     memcpy (&arci->ctfi_symsect, symsect, sizeof (struct ctf_sect));
   if (strsect)
     memcpy (&arci->ctfi_strsect, strsect, sizeof (struct ctf_sect));
+  if (symtypetabsect)
+    memcpy (&arci->ctfi_symtypetabsect, symtypetabsect, sizeof (struct ctf_sect));
+  if (symtypetaballsect)
+    memcpy (&arci->ctfi_symtypetaballsect, symtypetaballsect, sizeof (struct ctf_sect));
+
+  if (symtypetabsect || symtypetaballsect)
+    {
+      if ((err = ctf_arc_init_symtypetab (arci, symtypetabsect, symtypetaballsect,
+					  foreign_endian)) != 0)
+	{
+	  *errp = err;
+	  goto err_set;
+	}
+    }
+
+  /* v1 archives implies v3 or below CTF dicts.  These store symtypetabs at
+     the dict level, so we must pre-emptively open the lot to pull the
+     symtypetabs in: an unavoidable efficiency loss.  The actual population
+     of the symtypetabs happens in the compat-reading code.  */
+  if (v1)
+    {
+      ctf_next_t *it = NULL;
+
+      while ((fp = ctf_archive_next (arci, &it, NULL, 0, &err)) != NULL)
+	ctf_dict_close (fp);
+      if (err != ECTF_NEXT_END)
+	{
+	  *errp = err;
+	  goto err_set;
+	}
+    }
 
   arci->ctfi_free_symsect = 0;
   arci->ctfi_free_strsect = 0;
+  arci->ctfi_free_symtypetabsect = 0;
+  arci->ctfi_free_symtypetaballsect = 0;
   arci->ctfi_symsect_little_endian = -1;
   arci->ctfi_refcnt++;
 
@@ -936,9 +1129,12 @@ struct ctf_archive_internal *
 ctf_new_archive_wrapper (ctf_dict_t *fp, ctf_open_sect_t *sects, ctf_error_t *errp)
 {
   struct ctf_archive_internal *arci;
+
   if ((arci = ctf_new_archive_internal (NULL, fp, 0, FREE_ARCHIVE_ON_DICT_CLOSE,
-					0, sects, errp)) != NULL)
-    arci->ctfi_symsect_little_endian = fp->ctf_symsect_little_endian;
+					0, sects, errp)) == NULL)
+    return NULL;
+
+  arci->ctfi_symsect_little_endian = fp->ctf_symsect_little_endian;
   return arci;
 }
 
@@ -982,6 +1178,10 @@ ctf_arc_elf_sect (const struct ctf_archive_internal *arci,
       return arci->ctfi_symsect;
     case CTF_ELF_STRSECT:
       return arci->ctfi_strsect;
+    case CTF_ELF_SYMTYPETABSECT:
+      return arci->ctfi_symtypetabsect;
+    case CTF_ELF_SYMTYPETABALLSECT:
+      return arci->ctfi_symtypetaballsect;
     default:
       return error;
     }
@@ -1049,7 +1249,8 @@ ctf_arc_bufopen (ctf_open_sect_t *sects, ctf_error_t *errp)
 
 /* Open a CTF archive from a given fd.  Returns the archive (wrapper), or
    NULL and an error in *err (if not NULL).  Both dicts and archives may be
-   passed in.  */
+   passed in.  This is for raw dictionaries: ELF objects take the
+   ctf_arc_bufopen path (above).  */
 
 struct ctf_archive_internal *
 ctf_arc_open_internal (int fd, const char *filename, ctf_error_t *errp)
@@ -1155,13 +1356,17 @@ ctf_arc_close (struct ctf_archive_internal *arci)
   ctf_dynhash_destroy (arci->ctfi_member_names);
   free (arci->ctfi_default_parent_cuname);
   ctf_dict_close (arci->ctfi_parent);
-  free (arci->ctfi_symdicts);
-  free (arci->ctfi_symnamedicts);
   ctf_dynhash_destroy (arci->ctfi_dicts);
   if (arci->ctfi_free_symsect)
     free ((void *) arci->ctfi_symsect.cts_data);
   if (arci->ctfi_free_strsect)
     free ((void *) arci->ctfi_strsect.cts_data);
+  if (arci->ctfi_free_symtypetabsect)
+    free ((void *) arci->ctfi_symtypetabsect.cts_data);
+  if (arci->ctfi_free_symtypetaballsect)
+    free ((void *) arci->ctfi_symtypetaballsect.cts_data);
+  free (arci->ctfi_symtypetab);
+  free (arci->ctfi_symtypetab_all);
   free (arci->ctfi_data);
   if (arci->ctfi_bfd_close)
     arci->ctfi_bfd_close (arci);
@@ -1205,6 +1410,8 @@ ctf_arc_flag (struct ctf_archive_internal *arci, ctf_arc_flags_t flag)
     {
     case CTF_ARC_FLAGS_LIBCTF_CREATED:
       return arci->ctfi_has_strtab;
+    case CTF_ARC_HAS_SYMBOL_TYPES:
+      return arci->ctfi_symtypetab_len != 0;
     default:
       return -1;                        /* No errno for this function.  */
     }
@@ -1224,12 +1431,27 @@ ctf_arc_flag (struct ctf_archive_internal *arci, ctf_arc_flags_t flag)
 ctf_ret_t
 ctf_arc_set_parent (struct ctf_archive_internal *arci, ctf_dict_t *parent)
 {
+  size_t i;
+
   if (parent == arci->ctfi_parent)
     return 0;
 
+  /* Throw out all cached dicts (which have incorrect parent strtab and type
+     offsets) and symtypetab names: they are derived from ctf_strptr() and
+     thus from the incorrect strtabs.  If we thought the symtypetabs were
+     sorted, we no longer think so, since they are sorted by name.  */
+
+  ctf_dynhash_empty (arci->ctfi_dicts);
+
+  for (i = 0; i < arci->ctfi_symtypetab_len; i++)
+    {
+      arci->ctfi_symtypetab[i].sta_name = NULL;
+      arci->ctfi_symtypetab_all[i].sta_name = NULL;
+    }
+  arci->ctfi_flags &= ~CTFA_F_SYMTYPES_POPULATED;
+
   ctf_dict_close (arci->ctfi_parent);
   arci->ctfi_parent = parent;
-  ctf_arc_flush_caches (arci);
 
   if (!parent)
     return 0;
@@ -1309,8 +1531,9 @@ ctf_dict_open_by_index (struct ctf_archive_internal *arci, size_t index,
     {
       ctf_dict_t *fp;
       ctf_dict_t *parent = arci->ctfi_parent;
-      ctf_sect_t symsect, strsect;
+      ctf_sect_t symsect, strsect, symtypetabsect, symtypetaballsect;
       ctf_sect_t *symsectp = NULL, *strsectp = NULL;
+      ctf_sect_t *symtypetabsectp = NULL, *symtypetaballsectp = NULL;
       size_t len;
 
       if (index >= arci->ctfi_nmemb)
@@ -1351,13 +1574,25 @@ ctf_dict_open_by_index (struct ctf_archive_internal *arci, size_t index,
 	  memcpy (&strsect, &arci->ctfi_strsect, sizeof (struct ctf_sect));
 	  strsectp = &strsect;
 	}
+      if (arci->ctfi_symtypetabsect.cts_name != NULL)
+	{
+	  memcpy (&symtypetabsect, &arci->ctfi_symtypetabsect, sizeof (struct ctf_sect));
+	  symtypetabsectp = &symtypetabsect;
+	}
+      if (arci->ctfi_symtypetaballsect.cts_name != NULL)
+	{
+	  memcpy (&symtypetaballsect, &arci->ctfi_symtypetaballsect, sizeof (struct ctf_sect));
+	  symtypetaballsectp = &symtypetaballsect;
+	}
 
-      fp = ctf_dict_open_by_offset (arci, ctf_open_sect (ctf_open_sect (NULL, symsectp), strsectp),
+      fp = ctf_dict_open_by_offset (arci, ctf_open_sect (ctf_open_sect (ctf_open_sect (ctf_open_sect (NULL,
+				    symtypetabsectp), symtypetaballsectp), symsectp), strsectp),
 				    arci->ctfi_members[index], len, parent,
 				    errp);
       if (fp)
 	{
 	  fp->ctf_archive = (struct ctf_archive_internal *) arci;
+	  fp->ctf_archive_index = index;
 	  arci->ctfi_refcnt++;
 	}
 
@@ -1416,6 +1651,93 @@ ctf_dict_open (struct ctf_archive_internal *arci, const char *name,
   return ctf_dict_open_by_index (arci, index, errp);
 }
 
+/* Read in and possibly endian-flip and expand the symtypetabs.  The
+   symtypetabs passed in are already stored in the archive at this point:
+   they are passed in to make it easier to tell if they were not provided
+   (via nullity).
+
+   The name member is not initialized at this stage: it requires opening
+   the underlying dict, so is done lazily as needs require, and cached.  */
+
+static ctf_error_t
+ctf_arc_init_symtypetab (struct ctf_archive_internal *arci, ctf_sect_t *symtypetabsect,
+			 ctf_sect_t *symtypetaballsect, int foreign_endian)
+{
+  ctf_symtypetab_all_named_ent_t *out, *all_out;
+
+  /* Figure out how many symbols there are.  .ctf.symtypetab.all symbols get
+     stored in two places.  */
+
+  if (symtypetaballsect)
+    {
+      arci->ctfi_symtypetab_len = symtypetaballsect->cts_size / sizeof (uint32_t);
+      arci->ctfi_symtypetab_all_len = arci->ctfi_symtypetab_len;
+    }
+
+  if (symtypetabsect)
+    arci->ctfi_symtypetab_len += symtypetabsect->cts_size;
+
+  if ((arci->ctfi_symtypetab = calloc (arci->ctfi_symtypetab_len,
+				       sizeof (ctf_symtypetab_all_named_ent_t))) == NULL)
+    return ENOMEM;
+
+  if ((arci->ctfi_symtypetab_all = calloc (arci->ctfi_symtypetab_all_len,
+					   sizeof (ctf_symtypetab_all_named_ent_t))) == NULL)
+    {
+      free (arci->ctfi_symtypetab);
+      return ENOMEM;
+    }
+
+  out = arci->ctfi_symtypetab;
+
+  if (symtypetabsect)
+    {
+      uint32_t *in = (uint32_t *) symtypetabsect->cts_data;
+      size_t i;
+
+      for (i = 0; i < symtypetabsect->cts_size; i++, in++, out++)
+	{
+	  out->sta_archive_member = 0;
+	  out->sta_type = *in;
+
+	  if (foreign_endian)
+	    {
+	      swap_thing (out->sta_archive_member);
+	      swap_thing (out->sta_type);
+	    }
+	}
+    }
+
+  all_out = arci->ctfi_symtypetab_all;
+
+  if (symtypetaballsect)
+    {
+      ctf_symtypetab_all_ent_t *in = (ctf_symtypetab_all_ent_t *)
+	symtypetaballsect->cts_data;
+      size_t i;
+
+      for (i = 0; i < symtypetaballsect->cts_size; i++, in++, out++, all_out++)
+	{
+	  out->sta_archive_member = in->sta_archive_member;
+	  out->sta_type = in->sta_type;
+
+          all_out->sta_archive_member = in->sta_archive_member;
+	  all_out->sta_type = in->sta_type;
+
+          if (foreign_endian)
+	    {
+	      swap_thing (out->sta_archive_member);
+	      swap_thing (out->sta_type);
+
+              swap_thing (all_out->sta_archive_member);
+	      swap_thing (all_out->sta_type);
+	    }
+	}
+    }
+  return 0;
+}
+
+
 static void
 ctf_cached_dict_close (void *fp)
 {
@@ -1424,7 +1746,7 @@ ctf_cached_dict_close (void *fp)
 
 /* Return the ctf_dict_t with the given index and cache it in the archive's
    ctfi_dicts.  The archive is already known not to be a wrapper.  */
-static ctf_dict_t *
+ctf_dict_t *
 ctf_dict_open_cached (struct ctf_archive_internal *arci, size_t index,
 		      ctf_error_t *errp)
 {
@@ -1483,236 +1805,11 @@ ctf_dict_open_cached (struct ctf_archive_internal *arci, size_t index,
   return NULL;
 }
 
-/* Flush any caches the CTF archive may have open.  */
-void
-ctf_arc_flush_caches (struct ctf_archive_internal *arci)
-{
-  free (arci->ctfi_symdicts);
-  ctf_dynhash_destroy (arci->ctfi_symnamedicts);
-  ctf_dynhash_destroy (arci->ctfi_dicts);
-  arci->ctfi_symdicts = NULL;
-  arci->ctfi_symnamedicts = NULL;
-  arci->ctfi_dicts = NULL;
-}
-
 /* Return the number of members in an archive.  */
 size_t
 ctf_archive_count (const struct ctf_archive_internal *arci)
 {
   return arci->ctfi_nmemb;
-}
-
-/* Look up a symbol in an archive by name or index (if the name is set, a lookup
-   by name is done).  Return the dict in the archive that the symbol is found
-   in, and (optionally) the ctf_id_t of the symbol in that dict (so you don't
-   have to look it up yourself).  The dict is cached, so repeated lookups are
-   nearly free.
-
-   As usual, you should ctf_dict_close() the returned dict once you are done
-   with it.
-
-   Returns NULL on error, and an error in errp (if set).  */
-
-static ctf_dict_t *
-ctf_arc_lookup_sym_or_name (struct ctf_archive_internal *arci, unsigned long symidx,
-			    const char *symname, ctf_id_t *typep, ctf_error_t *errp)
-{
-  ctf_dict_t *fp;
-  void *fpkey;
-  ctf_id_t type;
-
-  /* The usual non-archive-transparent-wrapper special case.  */
-  if (arci->ctfi_dict)
-    {
-      if (!symname)
-	{
-	  if ((type = ctf_lookup_by_symbol (arci->ctfi_dict, symidx)) == CTF_ERR)
-	    {
-	      if (errp)
-		*errp = ctf_errno (arci->ctfi_dict);
-	      return NULL;
-	    }
-	}
-      else
-	{
-	  if ((type = ctf_lookup_by_symbol_name (arci->ctfi_dict,
-						 symname)) == CTF_ERR)
-	    {
-	      if (errp)
-		*errp = ctf_errno (arci->ctfi_dict);
-	      return NULL;
-	    }
-	}
-      if (typep)
-	*typep = type;
-      arci->ctfi_dict->ctf_refcnt++;
-      return arci->ctfi_dict;
-    }
-
-  if (arci->ctfi_symsect.cts_name == NULL
-      || arci->ctfi_symsect.cts_data == NULL
-      || arci->ctfi_symsect.cts_size == 0
-      || arci->ctfi_symsect.cts_entsize == 0)
-    {
-      if (errp)
-	*errp = ECTF_NOSYMTAB;
-      return NULL;
-    }
-
-  /* Make enough space for all possible symbol indexes, if not already done.  We
-     cache the originating dictionary of all symbols.  The dict links are weak,
-     to the dictionaries cached in ctfi_dicts: their refcnts are *not* bumped.
-     We also cache similar mappings for symbol names: these are ordinary
-     dynhashes, with weak links to dicts.  */
-
-  if (!arci->ctfi_symdicts)
-    {
-      if ((arci->ctfi_symdicts = calloc (arci->ctfi_symsect.cts_size
-					 / arci->ctfi_symsect.cts_entsize,
-					 sizeof (ctf_dict_t *))) == NULL)
-	{
-	  if (errp)
-	    *errp = ENOMEM;
-	  return NULL;
-	}
-    }
-  if (!arci->ctfi_symnamedicts)
-    {
-      if ((arci->ctfi_symnamedicts = ctf_dynhash_create (ctf_hash_string,
-							 ctf_hash_eq_string,
-							 free, NULL)) == NULL)
-	{
-	  if (errp)
-	    *errp = ENOMEM;
-	  return NULL;
-	}
-    }
-
-  /* Perhaps the dict in which we found a previous lookup is cached.  If it's
-     supposed to be cached but we don't find it, pretend it was always not
-     found: this should never happen, but shouldn't be allowed to cause trouble
-     if it does.  */
-
-  if ((symname && ctf_dynhash_lookup_kv (arci->ctfi_symnamedicts,
-					 symname, NULL, &fpkey))
-      || (!symname && arci->ctfi_symdicts[symidx] != NULL))
-    {
-      if (symname)
-	fp = (ctf_dict_t *) fpkey;
-      else
-	fp = arci->ctfi_symdicts[symidx];
-
-      if (fp == &enosym)
-	goto no_sym;
-
-      if (symname)
-	{
-	  if ((type = ctf_lookup_by_symbol_name (fp, symname)) == CTF_ERR)
-	    goto cache_no_sym;
-	}
-      else
-	{
-	  if ((type = ctf_lookup_by_symbol (fp, symidx)) == CTF_ERR)
-	    goto cache_no_sym;
-	}
-
-      if (typep)
-	*typep = type;
-      fp->ctf_refcnt++;
-      return fp;
-    }
-
-  /* Not cached: find it and cache it.  We must track open errors ourselves even
-     if our caller doesn't, to be able to distinguish no-error end-of-iteration
-     from open errors.  */
-
-  ctf_error_t local_err;
-  ctf_error_t *local_errp;
-  ctf_next_t *i = NULL;
-
-  if (errp)
-    local_errp = errp;
-  else
-    local_errp = &local_err;
-
-  while ((fp = ctf_archive_next (arci, &i, NULL, 0, local_errp)) != NULL)
-    {
-      if (!symname)
-	{
-	  if ((type = ctf_lookup_by_symbol (fp, symidx)) != CTF_ERR)
-	    arci->ctfi_symdicts[symidx] = fp;
-	}
-      else
-	{
-	  if ((type = ctf_lookup_by_symbol_name (fp, symname)) != CTF_ERR)
-	    {
-	      char *tmp;
-	      /* No error checking, as above.  */
-	      if ((tmp = strdup (symname)) != NULL)
-		ctf_dynhash_insert (arci->ctfi_symnamedicts, tmp, fp);
-	    }
-	}
-
-      if (type != CTF_ERR)
-	{
-	  if (typep)
-	    *typep = type;
-	  ctf_next_destroy (i);
-	  return fp;
-	}
-      if (ctf_errno (fp) != ECTF_NOTYPEDAT)
-	{
-	  if (errp)
-	    *errp = ctf_errno (fp);
-	  ctf_dict_close (fp);
-	  ctf_next_destroy (i);
-	  return NULL;				/* errno is set for us.  */
-	}
-      ctf_dict_close (fp);
-    }
-  if (*local_errp != ECTF_NEXT_END)
-    return NULL;
-
-  /* Don't leak end-of-iteration to the caller.  */
-  *local_errp = 0;
-
- cache_no_sym:
-  if (!symname)
-    arci->ctfi_symdicts[symidx] = &enosym;
-  else
-    {
-      char *tmp;
-
-      /* No error checking: if caching fails, there is only a slight performance
-	 impact.  */
-      if ((tmp = strdup (symname)) != NULL)
-	if (ctf_dynhash_insert (arci->ctfi_symnamedicts, tmp, &enosym) < 0)
-	  free (tmp);
-    }
-
- no_sym:
-  if (errp)
-    *errp = ECTF_NOTYPEDAT;
-  if (typep)
-    *typep = CTF_ERR;
-  return NULL;
-}
-
-/* The public API for looking up a symbol by index.  */
-ctf_dict_t *
-ctf_arc_lookup_symbol (struct ctf_archive_internal *arci, unsigned long symidx,
-		       ctf_id_t *typep, ctf_error_t *errp)
-{
-  return ctf_arc_lookup_sym_or_name (arci, symidx, NULL, typep, errp);
-}
-
-/* The public API for looking up a symbol by name. */
-
-ctf_dict_t *
-ctf_arc_lookup_symbol_name (struct ctf_archive_internal *arci, const char *symname,
-			    ctf_id_t *typep, ctf_error_t *errp)
-{
-  return ctf_arc_lookup_sym_or_name (arci, 0, symname, typep, errp);
 }
 
 /* Return all enumeration constants with a given NAME across all dicts in an
@@ -1732,12 +1829,11 @@ ctf_arc_lookup_enumerator_next (struct ctf_archive_internal *arci,
   int opened_this_time = 0;
   ctf_error_t err;
 
-  /* We have two nested iterators in here: ctn_next tracks archives, while
-     within it ctn_next_inner tracks enumerators within an archive.  We
-     keep track of the dict by simply reusing the passed-in arg: if it's
-     changed by the caller, the caller will get an ECTF_WRONGFP error,
-     so this is quite safe and means we don't have to track the arc and fp
-     simultaneously in the ctf_next_t.  */
+  /* We have two nested iterators in here: ctn_next tracks dicts, while within
+     it ctn_next_inner tracks enumerators within a dict.  We keep track of the
+     dict by simply reusing the passed-in arg: if it's changed by the caller,
+     the caller will get an ECTF_WRONGFP error, so this is quite safe and means
+     we don't have to track the arc and fp simultaneously in the ctf_next_t.  */
 
   if (!i)
     {
