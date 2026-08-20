@@ -178,15 +178,16 @@ ctf_add_prefix (ctf_dict_t *fp, ctf_dtdef_t *dtd, size_t vbytes)
 ctf_dict_t *
 ctf_create (ctf_dict_t *parent, ctf_error_t *errp)
 {
-  return ctf_create_internal (parent, 0, errp);
+  return ctf_create_internal (parent, NULL, 0, errp);
 }
 
 /* Implementation of ctf_create().  Allows the caller to specify specific import
-   flags.  Not public, because these flags are an internal implementation
-   detail.  */
+   flags, and to size the hashes from some other dict.  Not public, because
+   the flags and hashtab sizes are an internal implementation detail.  */
 
 ctf_dict_t *
-ctf_create_internal (ctf_dict_t *parent, ctf_import_flags_t import_flags,
+ctf_create_internal (ctf_dict_t *parent, ctf_dict_t *sizer,
+		     ctf_import_flags_t import_flags,
 		     ctf_error_t *errp)
 {
   static ctf_header_t hdr =
@@ -209,18 +210,31 @@ ctf_create_internal (ctf_dict_t *parent, ctf_import_flags_t import_flags,
 
   hdr.cth_preamble.ctp_magic_version = (CTFv4_MAGIC << 16) | CTF_VERSION;
 
-  structs = ctf_dynhash_create (ctf_hash_string, ctf_hash_eq_string,
+  if (!sizer)
+    {
+      structs = ctf_dynhash_create (ctf_hash_string, ctf_hash_eq_string,
 				NULL, NULL);
-  unions = ctf_dynhash_create (ctf_hash_string, ctf_hash_eq_string,
-			       NULL, NULL);
-  enums = ctf_dynhash_create (ctf_hash_string, ctf_hash_eq_string,
-			      NULL, NULL);
-  names = ctf_dynhash_create (ctf_hash_string, ctf_hash_eq_string,
-			      NULL, NULL);
-  datasecs = ctf_dynhash_create (ctf_hash_string, ctf_hash_eq_string,
+      unions = ctf_dynhash_create (ctf_hash_string, ctf_hash_eq_string,
+				   NULL, NULL);
+      enums = ctf_dynhash_create (ctf_hash_string, ctf_hash_eq_string,
+				  NULL, NULL);
+      names = ctf_dynhash_create (ctf_hash_string, ctf_hash_eq_string,
+				  NULL, NULL);
+      datasecs = ctf_dynhash_create (ctf_hash_string, ctf_hash_eq_string,
 				 NULL, NULL);
-  tags = ctf_dynhash_create (ctf_hash_string, ctf_hash_eq_string,
-			     NULL, (ctf_hash_free_fun) ctf_dynset_destroy);
+      tags = ctf_dynhash_create (ctf_hash_string, ctf_hash_eq_string,
+				 NULL, (ctf_hash_free_fun) ctf_dynset_destroy);
+    }
+  else
+    {
+      structs = ctf_dynhash_create_like (sizer->ctf_structs);
+      unions = ctf_dynhash_create_like (sizer->ctf_unions);
+      enums = ctf_dynhash_create_like (sizer->ctf_enums);
+      names = ctf_dynhash_create_like (sizer->ctf_names);
+      datasecs = ctf_dynhash_create_like (sizer->ctf_datasecs);
+      tags = ctf_dynhash_create_like (sizer->ctf_tags);
+    }
+
   if (!structs || !unions || !enums || !names || !datasecs || !tags)
     {
       ctf_set_open_errno (errp, EAGAIN);

@@ -249,6 +249,25 @@ ctf_dynhash_create_sized (unsigned long nelems, ctf_hash_fun hash_fun,
   return dynhash;
 }
 
+/* Create a hash like some other hash (but empty).  */
+ctf_dynhash_t *
+ctf_dynhash_create_like (ctf_dynhash_t *other)
+{
+  ctf_hash_free_arg_fun key_free = NULL, value_free = NULL;
+  void *arg = NULL;
+
+  if (other->htab->del_f == ctf_dynhash_item_free)
+    {
+      key_free = other->key_arg_free_;
+      value_free = other->value_arg_free_;
+      arg = other->arg;
+    }
+
+  return ctf_dynhash_create_sized (htab_size (other->htab), other->htab->hash_f,
+				   other->htab->eq_f, key_free, value_free,
+				   arg);
+}
+
 ctf_dynhash_t *
 ctf_dynhash_create_arg (ctf_hash_fun hash_fun, ctf_hash_eq_fun eq_fun,
 			ctf_hash_free_arg_fun key_free,

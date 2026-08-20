@@ -810,6 +810,7 @@ extern ctf_dynhash_t *ctf_dynhash_create_sized (unsigned long, ctf_hash_fun,
 						ctf_hash_free_arg_fun,
 						ctf_hash_free_arg_fun,
 						void *);
+extern ctf_dynhash_t * ctf_dynhash_create_like (ctf_dynhash_t *other);
 
 extern int ctf_dynhash_insert (ctf_dynhash_t *, void *, void *);
 extern void ctf_dynhash_remove (ctf_dynhash_t *, const void *);
@@ -937,7 +938,7 @@ typedef enum ctf_import_flags
     CTF_IMPORT_NEW   = 0x02
   } ctf_import_flags_t;
 
-extern ctf_dict_t *ctf_create_internal (ctf_dict_t *parent,
+extern ctf_dict_t *ctf_create_internal (ctf_dict_t *parent, ctf_dict_t *sizer,
 					ctf_import_flags_t import_flags,
 					ctf_error_t *errp);
 extern void *ctf_set_open_errno (ctf_error_t *, ctf_error_t);
