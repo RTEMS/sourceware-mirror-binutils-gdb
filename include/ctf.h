@@ -624,7 +624,7 @@ typedef struct ctf_btf_layout
   uint16_t cbl_flags;		/* Currently unused.  */
 } ctf_btf_layout_t;
 
-/* Values for ctt_type when kind is CTF_K_INTEGER.  The flags, offset in bits,
+/* Values for variant data when kind is CTF_K_INTEGER.  The flags, offset in bits,
    and size in bits are encoded as a single word using the following macros.
    (However, you can also encode the offset and bitness directly in a struct:
    many clients, e.g. libbpf, do not allow nonzero bit offsets or bits values in
