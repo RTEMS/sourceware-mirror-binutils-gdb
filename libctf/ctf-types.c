@@ -1811,6 +1811,18 @@ ctf_type_encoding (ctf_dict_t *fp, ctf_id_t type, ctf_encoding_t *ep)
       return ctf_err (type_err_locus (ofp, type), ECTF_WRONGKIND, NULL);
     }
 
+  /* Allow the encoding to be overridden.  Not a permanent part of the file
+     format: used by compat opening, etc (and fixed up by linking).  */
+
+  if (fp->ctf_override_encoding)
+    {
+      ctf_encoding_t *override = NULL;
+
+      if ((override = ctf_dynhash_lookup (fp->ctf_override_encoding,
+					  (void *) (uintptr_t) type)) != NULL)
+	memcpy (ep, override, sizeof (ctf_encoding_t));
+    }
+
   return 0;
 }
 
