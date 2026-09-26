@@ -741,7 +741,8 @@ ctf_add_generic (ctf_dict_t *fp, const char *name, ctf_kind_t kind,
      the non-dynamic portion.  Two exceptions: type and decl tags, whose
      names are not identifiers in the C sense at all.  */
 
-  if (!fp->ctf_add_conflicting && name != NULL && name[0] != '\0'
+  if (!fp->ctf_add_conflicting && !(fp->ctf_flags & LCTF_NO_NAME_VALIDATION)
+      && name != NULL && name[0] != '\0'
       && kind != CTF_K_TYPE_TAG && kind != CTF_K_DECL_TAG)
     {
       ctf_id_t existing;
@@ -1347,7 +1348,8 @@ ctf_add_struct (ctf_dict_t *fp, const char *name,
 			  name ? name : "(unnamed)", bitfield);
 
   /* Promote root-visible forwards to structs/unions.  */
-  if (name != NULL && !fp->ctf_add_conflicting)
+  if (name != NULL && !fp->ctf_add_conflicting
+      && !(fp->ctf_flags & LCTF_NO_NAME_VALIDATION))
     type = ctf_lookup_by_rawname (fp, struct_union_unknown, name);
 
   if (type > 0)
@@ -1406,7 +1408,8 @@ ctf_add_enum (ctf_dict_t *fp, const char *name, ctf_kind_t enum_64_unknown,
     initial_vbytes = sizeof (ctf_enum64_t) * INITIAL_VLEN;
 
   /* Promote root-visible forwards to enums.  */
-  if (name != NULL && !fp->ctf_add_conflicting)
+  if (name != NULL && !fp->ctf_add_conflicting
+      && !(fp->ctf_flags & LCTF_NO_NAME_VALIDATION))
     type = ctf_lookup_by_rawname (fp, kind, name);
 
   /* Prohibit promotion if this type was ctf_open()ed.  */
@@ -1522,6 +1525,7 @@ ctf_add_unknown (ctf_dict_t *fp, const char *name)
      or just return it.  */
 
   if (name != NULL && name[0] != '\0' && !fp->ctf_add_conflicting
+      && !(fp->ctf_flags & LCTF_NO_NAME_VALIDATION)
       && (type = ctf_lookup_by_rawname (fp, CTF_K_UNKNOWN, name)))
     {
       if (ctf_type_kind (fp, type) == CTF_K_UNKNOWN)
@@ -1781,7 +1785,7 @@ ctf_add_member_bitfield (ctf_dict_t *fp, ctf_id_t souid, const char *name,
 
   memb = (ctf_member_t *) dtd->dtd_vlen;
 
-  if (name != NULL)
+  if (name != NULL && !(fp->ctf_flags & LCTF_NO_NAME_VALIDATION))
     {
       for (i = 0; i < vlen; i++)
 	if (strcmp (ctf_strptr (fp, memb[i].ctm_name), name) == 0)
@@ -2008,6 +2012,7 @@ ctf_add_section_variable (ctf_dict_t *fp, const char *datasec,
     return (ctf_set_typed_errno (fp, ECTF_LINKAGE));
 
   if (!fp->ctf_add_conflicting
+      && !(fp->ctf_flags & LCTF_NO_NAME_VALIDATION)
       && ctf_lookup_by_rawname (fp, CTF_K_VAR, name) != 0)
     return (ctf_set_typed_errno (fp, ECTF_DUPLICATE));
 
@@ -2635,7 +2640,8 @@ ctf_add_type_internal (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type
      struct, union, or enum already exists), which is a NOP and returns the
      already-present struct, union, or enum.  */
 
-  if (dst_type != CTF_ERR && dst_kind != kind)
+  if (dst_type != CTF_ERR && dst_kind != kind
+      && !(dst_fp->ctf_flags & LCTF_NO_NAME_VALIDATION))
     {
       if (kind == CTF_K_FORWARD
 	  && (dst_kind == CTF_K_ENUM || dst_kind == CTF_K_STRUCT
@@ -2684,11 +2690,11 @@ ctf_add_type_internal (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type
 
 	  if (LCTF_ISROOT (fp, dst_prefix))
 	    {
-	      /* The type that we found in the hash is also root-visible.  If
-		 the two types match then use the existing one; otherwise,
-		 declare a conflict.  */
+	      /* Existing root-visible type found.  If the two types match then
+		 use the existing one; otherwise, declare a conflict.  */
 
-	      if (memcmp (&src_en, &dst_en, sizeof (ctf_encoding_t)) == 0)
+	      if (dst_fp->ctf_flags & LCTF_NO_NAME_VALIDATION
+		  || memcmp (&src_en, &dst_en, sizeof (ctf_encoding_t)) == 0)
 		{
 		  ctf_add_type_mapping (src_fp, src_type, dst_fp, dst_type);
 		  return dst_type;
