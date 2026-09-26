@@ -534,6 +534,8 @@ struct ctf_dict
   size_t ctf_new_archive_index;	  /* Index of this dict within a newly-built
 				     archive.  */
   ctf_list_t ctf_errs_warnings;	  /* CTF errors and warnings.  */
+  ctf_dynhash_t *ctf_replaced;	  /* Replaced types map.  */
+  ctf_dynhash_t *ctf_override_encoding; /* Override the encoding for a given type.  */
   ctf_dict_t *ctf_link_parent;	  /* Parent dict for against-types mode.  */
   ctf_dynhash_t *ctf_link_inputs; /* Inputs to this link.  */
   ctf_dynhash_t *ctf_link_outputs; /* Additional outputs from this link.  */
@@ -869,6 +871,10 @@ extern ctf_dtdef_t *ctf_dynamic_type (const ctf_dict_t *, ctf_id_t);
 
 extern ctf_id_t ctf_add_encoded (ctf_dict_t *, const char *,
 				 const ctf_encoding_t *, ctf_kind_t kind);
+extern ctf_ret_t ctf_replace_type (ctf_dict_t *, ctf_id_t old, ctf_id_t new);
+extern ctf_id_t ctf_add_type_encoded (ctf_dict_t *dst_fp, ctf_dict_t *src_fp,
+					ctf_id_t src_type,
+					const ctf_encoding_t *overriding_en);
 
 extern int ctf_insert_type_decl_tag (ctf_dict_t *, ctf_id_t, const char *);
 extern int ctf_insert_decl_tag_rmap (ctf_dict_t *fp, ctf_id_t tag_type,

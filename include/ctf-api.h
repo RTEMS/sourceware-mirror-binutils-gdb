@@ -338,7 +338,7 @@ typedef int ctf_func_type_flags_t;
   _CTF_ITEM (ECTF_CTFVERS_NO_SERIALIZE, "CTFv1 dicts are too old to serialize") \
   _CTF_ITEM (ECTF_UNSTABLE, "attempt to write unstable file format version: set I_KNOW_LIBCTF_IS_UNSTABLE in the environment") \
   _CTF_ITEM (ECTF_WRONGPARENT, "incorrect parent provided") \
-  _CTF_ITEM (ECTF_NOTSERIALIZED, "CTF dict must be serialized first") \
+  _CTF_ITEM (ECTF_NOTSERIALIZED, "cannot write out this CTF dict") \
   _CTF_ITEM (ECTF_BADCOMPONENT, "declaration tag component_idx is invalid") \
   _CTF_ITEM (ECTF_DESCENDING, "structure offsets may not descend") \
   _CTF_ITEM (ECTF_LINKAGE, "invalid linkage") \
@@ -1095,6 +1095,12 @@ extern ctf_id_t ctf_add_array (ctf_dict_t *, const ctf_arinfo_t *);
    with an encoding of 0 (CTF_INT_SIGNED and everything else off).  Calling
    ctf_add_enum_encoded() with bitfield values currently returns an error: this
    restriction will be lifted shortly.
+
+   Adding encodings with a non-0 ctt_offset or ctt_bits is not supported in the
+   file format: such a dict will refuse to be written out, and must be
+   ctf_link()ed instead.  Enum bitfields, typedef enum bitfields, etc should be
+   added via ctf_add_struct_member()'s bitfield facility, not this.  (ctf_link()
+   converts enum encodings into struct bitfields for you.)
 
    The SIZE can be 0 (for 'architectural default'), or a size in bytes.
 

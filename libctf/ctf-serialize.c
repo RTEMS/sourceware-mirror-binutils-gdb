@@ -1026,7 +1026,7 @@ ctf_preserialize (ctf_dict_t *fp)
 
 	  if (dtd && dtd->dtd_final_type == 0)
 	    return ctf_err (err_locus (fp), ECTF_NOTSERIALIZED,
-			    _("cannot write out child dict: write out the parent dict first"));
+			    _("write out the parent dict first"));
 	}
 
       /* Prohibit serialization of a dict which has already been serialized and
@@ -1039,7 +1039,7 @@ ctf_preserialize (ctf_dict_t *fp)
       if (fp->ctf_header->btf.bth_str_len > 0 &&
 	  fp->ctf_header->cth_parent_ntypes < fp->ctf_parent->ctf_typemax)
 	return ctf_err (err_locus (fp), ECTF_NOTSERIALIZED,
-			_("cannot write out already-written child dict: parent has had %u types added"),
+			_("parent has had %u types added, and child has been written out before"),
 			fp->ctf_parent->ctf_typemax - fp->ctf_header->cth_parent_ntypes);
     }
   else
@@ -1055,13 +1055,23 @@ ctf_preserialize (ctf_dict_t *fp)
 	  && fp->ctf_max_children > 0
 	  && fp->ctf_str_prov_len != 0)
 	return ctf_err (err_locus (fp), ECTF_NOTSERIALIZED,
-			_("cannot write out already-written dict with children and newly-added strings"));
+			_("dict has live children and new strings added"));
     }
 
   /* Prohibit serialization of a dict that contains alien type kinds.  */
   if (fp->ctf_alien)
     return ctf_err (err_locus (fp), ECTF_CTFVERS,
 		    _("cannot serialize BTF containing unknown type kinds"));
+
+  /* Prohibit serialization of a dict containing replaced types or overridden
+     encodings.  */
+  if ((fp->ctf_replaced && ctf_dynhash_elements (fp->ctf_replaced) != 0)
+      || (fp->ctf_override_encoding
+	  && ctf_dynhash_elements (fp->ctf_override_encoding) != 0))
+    return ctf_err (err_locus (fp), ECTF_NOTSERIALIZED,
+		    _("cannot serialize dict containing replaced types or overridden encodings "
+		      "(probably a CTFv3 dict containing slices): "
+		      "link it instead"));
 
   /* Fill in an initial CTF header.  The type section begins at a 4-byte aligned
      boundary past the CTF header itself (at relative offset zero).

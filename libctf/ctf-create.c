@@ -1386,6 +1386,8 @@ ctf_add_enum (ctf_dict_t *fp, const char *name, ctf_kind_t enum_64_unknown,
   ctf_type_t *prefix;
   ctf_kind_t kind = enum_64_unknown;
   int is_signed = 1;
+  ctf_snapshot_id_t err_snap = ctf_snapshot (fp);
+  ctf_encoding_t *epp = NULL;
 
   if (kind == CTF_K_UNKNOWN)
     kind = CTF_K_ENUM64;
@@ -1445,9 +1447,30 @@ ctf_add_enum (ctf_dict_t *fp, const char *name, ctf_kind_t enum_64_unknown,
       && ep->cte_offset == 0)
     return dtd->dtd_type;
 
-  /* Other changes to the encoding of enums are not yet implemented.  */
+  /* Add an override encoding for this enum.  This is not in the BTF file
+     format: writeout (as opposed to relinking) is suppressed for this dict.  */
 
-  return (ctf_set_typed_errno (fp, ECTF_NOTYET));
+  if (!fp->ctf_override_encoding
+      && ((fp->ctf_override_encoding = ctf_dynhash_create (ctf_hash_integer,
+							   ctf_hash_eq_integer,
+							   NULL, free)) == NULL))
+    goto oom;
+
+  if ((epp = malloc (sizeof (ctf_encoding_t))) == NULL)
+    goto oom;
+
+  memcpy (epp, ep, sizeof (ctf_encoding_t));
+
+  if (ctf_dynhash_insert (fp->ctf_override_encoding,
+			  (void *) (uintptr_t) dtd->dtd_type, epp) < 0)
+    goto oom;
+
+  return dtd->dtd_type;
+
+ oom:
+  ctf_rollback (fp, err_snap);
+ free (epp);
+  return ctf_set_typed_errno (fp, ENOMEM);
 }
 
 ctf_id_t
@@ -2266,6 +2289,38 @@ ctf_datasec_sort (ctf_dict_t *fp, ctf_dtdef_t *dtd)
   dtd->dtd_flags &= ~DTD_F_UNSORTED;
 }
 
+/* State that a type is replaced by some other type.  ID lookups of the first
+   type will yield the second.  Not a public function: used by compatibility
+   reading.  */
+ctf_ret_t
+ctf_replace_type (ctf_dict_t *fp, ctf_id_t old, ctf_id_t new)
+{
+  ctf_dict_t *tmp = fp;
+
+  /* Replacements necessarily always happen in the child dict if one is
+     involved, beacuse the type IDs in question may only be valid in that
+     dict.  So keep the original fp.  */
+
+  if (ctf_lookup_by_id (&tmp, old, NULL) == NULL)
+    return -1;				/* errno is set for us.  */
+
+  tmp = fp;
+  if (ctf_lookup_by_id (&tmp, new, NULL) == NULL)
+    return -1;				/* errno is set for us.  */
+
+  if (!fp->ctf_replaced
+      && ((fp->ctf_replaced = ctf_dynhash_create (ctf_hash_integer,
+						  ctf_hash_eq_integer,
+						  NULL, NULL)) == NULL))
+    return ctf_set_errno (fp, ENOMEM);
+
+  if (ctf_dynhash_insert (fp->ctf_replaced, (void *) (uintptr_t) old,
+			  (void *) (uintptr_t) new) < 0)
+    return ctf_set_errno (fp, ENOMEM);
+
+  return 0;
+}
+
 /* Add an enumeration constant observed in a given enum type as an identifier.
    They appear as names that cite the enum type.
 
@@ -2493,6 +2548,7 @@ ctf_type_mapping (ctf_dict_t *src_fp, ctf_id_t src_type, ctf_dict_t **dst_fp)
    then we succeed and return this type but no changes occur.  */
 static ctf_id_t
 ctf_add_type_internal (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type,
+		       const ctf_encoding_t *overriding_en,
 		       ctf_dict_t *proc_tracking_fp)
 {
   ctf_id_t dst_type = CTF_ERR;
@@ -2609,6 +2665,13 @@ ctf_add_type_internal (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type
       if (ctf_type_encoding (src_fp, src_type, &src_en) != 0)
 	return (ctf_set_typed_errno (dst_fp, ctf_errno (src_fp)));
 
+      /* If we are overriding encodings, override the offset/bits here.  */
+      if (overriding_en)
+	{
+	  src_en.cte_bits = overriding_en->cte_bits;
+	  src_en.cte_offset = overriding_en->cte_offset;
+	}
+
       if (dst_type != CTF_ERR)
 	{
 	  ctf_dict_t *fp = dst_fp;
@@ -2698,7 +2761,7 @@ ctf_add_type_internal (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type
     case CTF_K_RESTRICT:
       src_type = ctf_type_reference (src_fp, src_type);
       src_type = ctf_add_type_internal (dst_fp, src_fp, src_type,
-					proc_tracking_fp);
+					overriding_en, proc_tracking_fp);
 
       if (src_type == CTF_ERR)
 	return CTF_ERR;				/* errno is set for us.  */
@@ -2715,9 +2778,10 @@ ctf_add_type_internal (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type
 
       src_ar.ctr_contents =
 	ctf_add_type_internal (dst_fp, src_fp, src_ar.ctr_contents,
-			       proc_tracking_fp);
+			       overriding_en, proc_tracking_fp);
       src_ar.ctr_index = ctf_add_type_internal (dst_fp, src_fp,
 						src_ar.ctr_index,
+						overriding_en,
 						proc_tracking_fp);
       src_ar.ctr_nelems = src_ar.ctr_nelems;
 
@@ -2759,7 +2823,8 @@ ctf_add_type_internal (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type
 	    && ctf_errno (src_fp) != 0)
 	  return CTF_ERR;			/* errno is set for us. */
 
-	ret = ctf_add_type_internal (dst_fp, src_fp, ret, proc_tracking_fp);
+	ret = ctf_add_type_internal (dst_fp, src_fp, ret, overriding_en,
+				     proc_tracking_fp);
 
 	if (ret == CTF_ERR)
 	  {
@@ -2770,7 +2835,7 @@ ctf_add_type_internal (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type
 	for (i = 0; i < nargs; i++)
 	  {
 	    argv[i] = ctf_add_type_internal (dst_fp, src_fp,
-					     argv[i],
+					     argv[i], overriding_en,
 					     proc_tracking_fp);
 	    if (argv[i] == CTF_ERR)
 	      {
@@ -2861,7 +2926,7 @@ ctf_add_type_internal (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type
 	    if (dst_membtype == 0)
 	      {
 		dst_membtype = ctf_add_type_internal (dst_fp, src_fp,
-						      src_membtype,
+						      src_membtype, overriding_en,
 						      proc_tracking_fp);
 		if (dst_membtype == CTF_ERR)
 		  {
@@ -2952,7 +3017,7 @@ ctf_add_type_internal (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type
 
     case CTF_K_TYPEDEF:
       src_type = ctf_type_reference (src_fp, src_type);
-      src_type = ctf_add_type_internal (dst_fp, src_fp, src_type,
+      src_type = ctf_add_type_internal (dst_fp, src_fp, src_type, overriding_en,
 					proc_tracking_fp);
 
       if (src_type == CTF_ERR)
@@ -2980,8 +3045,11 @@ ctf_add_type_internal (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type
   return dst_type;
 }
 
+/* Internal only: used in compatibility opening as part of the process to erase
+   CTFv3 slices.  */
 ctf_id_t
-ctf_add_type (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type)
+ctf_add_type_encoded (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type,
+		      const ctf_encoding_t *overriding_en)
 {
   ctf_id_t id;
 
@@ -2995,8 +3063,14 @@ ctf_add_type (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type)
   if (!src_fp->ctf_add_processing)
     return (ctf_set_typed_errno (dst_fp, ENOMEM));
 
-  id = ctf_add_type_internal (dst_fp, src_fp, src_type, src_fp);
+  id = ctf_add_type_internal (dst_fp, src_fp, src_type, overriding_en, src_fp);
   ctf_dynhash_empty (src_fp->ctf_add_processing);
 
   return id;
+}
+
+ctf_id_t
+ctf_add_type (ctf_dict_t *dst_fp, ctf_dict_t *src_fp, ctf_id_t src_type)
+{
+  return ctf_add_type_encoded (dst_fp, src_fp, src_type, NULL);
 }

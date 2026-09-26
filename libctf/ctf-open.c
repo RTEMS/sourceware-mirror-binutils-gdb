@@ -2506,6 +2506,8 @@ ctf_dict_close (ctf_dict_t *fp)
   ctf_dynhash_destroy (fp->ctf_names);
   ctf_dynhash_destroy (fp->ctf_var_datasecs);
   ctf_dynhash_destroy (fp->ctf_decl_tag_map);
+  ctf_dynhash_destroy (fp->ctf_replaced);
+  ctf_dynhash_destroy (fp->ctf_override_encoding);
 
   ctf_dynhash_destroy (fp->ctf_symtypehash);
   free (fp->ctf_symbol_next_cache);

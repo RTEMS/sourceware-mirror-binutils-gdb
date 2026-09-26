@@ -384,6 +384,19 @@ ctf_lookup_by_id (ctf_dict_t **fpp, ctf_id_t type, const ctf_type_t **suffix)
   ctf_dict_t *fp = *fpp;
   ctf_id_t idx;
 
+  /* Handle replaced types first.  The original type is never visible to type
+     lookup.  */
+
+  if (fp->ctf_replaced)
+    {
+      void *tmp;
+
+      if (fp->ctf_replaced &&
+	  (ctf_dynhash_lookup_kv (fp->ctf_replaced, (void *) (uintptr_t) type,
+				  NULL, &tmp) == 0))
+	type = (ctf_id_t) tmp;
+    }
+
   if ((fp = ctf_get_dict (fp, type)) == NULL)
     {
       (void) ctf_set_errno (*fpp, ECTF_NOPARENT);

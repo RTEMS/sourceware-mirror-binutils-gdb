@@ -253,6 +253,7 @@ ctf_member_next (ctf_dict_t *fp, ctf_id_t type, ctf_next_t **it,
     {
       ctf_member_t *memb = (ctf_member_t *) vlen;
       const char *membname;
+      ctf_encoding_t en;
 
       if (i->ctn_n >= nmemb)
 	{
@@ -1792,6 +1793,18 @@ ctf_type_encoding (ctf_dict_t *fp, ctf_id_t type, ctf_encoding_t *ep)
       break;
     default:
       return ctf_err (type_err_locus (ofp, type), ECTF_WRONGKIND, NULL);
+    }
+
+  /* Allow the encoding to be overridden.  Not a permanent part of the file
+     format: used by compat opening, etc (and fixed up by linking).  */
+
+  if (fp->ctf_override_encoding)
+    {
+      ctf_encoding_t *override = NULL;
+
+      if ((override = ctf_dynhash_lookup (fp->ctf_override_encoding,
+					  (void *) (uintptr_t) type)) != NULL)
+	memcpy (ep, override, sizeof (ctf_encoding_t));
     }
 
   return 0;
