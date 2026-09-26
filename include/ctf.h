@@ -651,7 +651,8 @@ typedef struct ctf_btf_layout
 
 /* Values for ctt_type when kind is CTF_K_FLOAT in CTFv3 and below.  The
    encoding, offset in bits, and size in bits are encoded as a single word using
-   the following macros.  */
+   the following macros.  CTFv4 no longer supports floating-point bitfields, which are
+   not a thing in C.  */
 
 #define CTF_FP_ENCODING(data)  (((data) & 0xff000000) >> 24)
 #define CTF_FP_OFFSET(data)    (((data) & 0x00ff0000) >> 16)

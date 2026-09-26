@@ -178,15 +178,21 @@ ctf_add_prefix (ctf_dict_t *fp, ctf_dtdef_t *dtd, size_t vbytes)
 ctf_dict_t *
 ctf_create (ctf_dict_t *parent, ctf_error_t *errp)
 {
-  return ctf_create_internal (parent, NULL, 0, errp);
+  return ctf_create_internal (parent, NULL, NULL, NULL, 0, errp);
 }
 
 /* Implementation of ctf_create().  Allows the caller to specify specific import
-   flags, and to size the hashes from some other dict.  Not public, because
-   the flags and hashtab sizes are an internal implementation detail.  */
+   flags, to size the hashes from some other dict, to provide ELF sections, and
+   to specify that this dict is already part of an archive (only used by compat
+   loading).  Not public, because the flags and hashtab sizes are an internal
+   implementation detail, and because normal users should never need to specify
+   that this new dict is actually not a new dict at all but one read from an
+   existing archive.  */
 
 ctf_dict_t *
 ctf_create_internal (ctf_dict_t *parent, ctf_dict_t *sizer,
+		     ctf_open_sect_t *sects,
+		     ctf_archive_t *archive,
 		     ctf_import_flags_t import_flags,
 		     ctf_error_t *errp)
 {
@@ -247,8 +253,9 @@ ctf_create_internal (ctf_dict_t *parent, ctf_dict_t *sizer,
   cts.cts_size = sizeof (hdr);
   cts.cts_entsize = 1;
 
-  if ((fp = ctf_bufopen_len (ctf_open_sect (NULL, &cts), NULL, parent, NULL,
-			     import_flags | CTF_IMPORT_NEW, errp)) == NULL)
+  if ((fp = ctf_bufopen_len (ctf_open_sect (sects, &cts), NULL, parent,
+			     archive, import_flags | CTF_IMPORT_NEW,
+			     errp)) == NULL)
     goto err;
 
   /* These hashes will have been initialized with a starting size of zero,

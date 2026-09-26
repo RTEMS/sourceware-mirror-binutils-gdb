@@ -946,11 +946,13 @@ typedef enum ctf_import_flags
   } ctf_import_flags_t;
 
 extern ctf_dict_t *ctf_create_internal (ctf_dict_t *parent, ctf_dict_t *sizer,
+					ctf_open_sect_t *sects,
+					ctf_archive_t *archive,
 					ctf_import_flags_t import_flags,
 					ctf_error_t *errp);
 extern void *ctf_set_open_errno (ctf_error_t *, ctf_error_t);
 extern ssize_t ctf_buflen (ctf_open_sect_t *sects, ctf_error_t *errp);
-extern ctf_ret_t ctf_flip_header (void *, int, int, int);
+extern void ctf_flip_header (ctf_header_t *, int);
 extern ctf_error_t ctf_flip (ctf_dict_t *, ctf_header_t *, unsigned char *,
 			     int to_foreign);
 extern ctf_dict_t *ctf_bufopen_len (ctf_open_sect_t *sects,
@@ -959,7 +961,17 @@ extern ctf_dict_t *ctf_bufopen_len (ctf_open_sect_t *sects,
 				    ctf_import_flags_t import_flags,
 				    ctf_error_t *errp);
 
-extern ctf_ret_t ctf_write_thresholded (ctf_dict_t *fp, int fd, size_t threshold);
+extern ctf_header_v3_t *ctf_compat_upgrade_header_v3 (ctf_header_t *hp);
+extern void ctf_compat_flip_header_v3 (ctf_header_v3_t *cth);
+extern ctf_ret_t ctf_compat_upgrade_header_v4 (ctf_header_t *hp,
+					       ctf_header_v3_t *oldhp,
+					       ctf_error_t *errp);
+extern ctf_dict_t *ctf_compat_upgrade_types (int version,
+					     ctf_dict_t *fp, ctf_header_t *cth,
+					     ctf_open_sect_t *sects, ctf_dict_t *parent,
+					     ctf_archive_t *ctf_archive,
+					     int foreign_endian,
+					     ctf_error_t *errp);
 
 _libctf_malloc_
 extern void *ctf_mmap (size_t length, size_t offset, int fd);

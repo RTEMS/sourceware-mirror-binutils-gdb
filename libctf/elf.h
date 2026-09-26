@@ -34,6 +34,8 @@ typedef uint64_t Elf64_Xword;
 typedef uint16_t Elf32_Section;
 typedef uint16_t Elf64_Section;
 
+#define SHN_UNDEF 0
+
 /* Symbol table entry.  */
 
 typedef struct

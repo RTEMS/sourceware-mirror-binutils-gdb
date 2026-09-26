@@ -327,7 +327,8 @@ ctf_create_per_cu (ctf_dict_t *fp, ctf_dict_t *input, const char *cu_name)
 	 reference to cu_fp itself, and ctf_create doesn't provide a way to pass
 	 internal flags to the importing machinery.  */
 
-      if ((cu_fp = ctf_create_internal (fp, NULL, CTF_IMPORT_UNREF, &err)) == NULL)
+      if ((cu_fp = ctf_create_internal (fp, NULL, NULL, NULL,
+					CTF_IMPORT_UNREF, &err)) == NULL)
 	{
 	  ctf_err (err_locus (fp), err, _("cannot create per-CU CTF archive for "
 			    "input CU %s"), cu_name);

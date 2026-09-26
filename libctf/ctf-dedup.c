@@ -3382,7 +3382,8 @@ ctf_dedup_emit_type (const char *hval, ctf_dict_t *output, ctf_dict_t **inputs,
 	      import_flags = CTF_IMPORT_UNREF;
 	    }
 
-	  if ((target = ctf_create_internal (parent, NULL, import_flags, &err)) == NULL)
+	  if ((target = ctf_create_internal (parent, NULL, NULL, NULL,
+					     import_flags, &err)) == NULL)
 	    return ctf_err (link_err_locus (output, input, input_num), err,
 			    _("cannot create per-CU CTF archive"));
 
