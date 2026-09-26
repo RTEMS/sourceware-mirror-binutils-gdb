@@ -370,30 +370,24 @@ ctf_dump_v3_header (ctf_dict_t *fp, ctf_dump_state_t *state)
 
   if (hp->cth_flags > 0)
     {
-      if (asprintf (&flagstr, "%s%s%s%s%s%s%s%s%s",
-		    hp->cth_flags & CTF_F_COMPRESS
+      if (asprintf (&flagstr, "%s%s%s%s%s%s%s",
+		    hp->cth_flags & CTF_3_F_COMPRESS
 		    ? "CTF_F_COMPRESS": "",
-		    (hp->cth_flags & CTF_F_COMPRESS)
-		    && (hp->cth_flags & ~CTF_F_COMPRESS)
+		    (hp->cth_flags & CTF_3_F_COMPRESS)
+		    && (hp->cth_flags & ~CTF_3_F_COMPRESS)
 		    ? ", " : "",
-		    hp->cth_flags & CTF_F_NEWFUNCINFO
+		    hp->cth_flags & CTF_3_F_NEWFUNCINFO
 		    ? "CTF_F_NEWFUNCINFO" : "",
-		    (hp->cth_flags & (CTF_F_NEWFUNCINFO))
-		    && (hp->cth_flags & ~(CTF_F_COMPRESS | CTF_F_NEWFUNCINFO))
+		    (hp->cth_flags & (CTF_3_F_NEWFUNCINFO))
+		    && (hp->cth_flags & ~(CTF_3_F_COMPRESS | CTF_3_F_NEWFUNCINFO))
 		    ? ", " : "",
-		    hp->cth_flags & CTF_F_IDXSORTED
+		    hp->cth_flags & CTF_3_F_IDXSORTED
 		    ? "CTF_F_IDXSORTED" : "",
-		    hp->cth_flags & (CTF_F_IDXSORTED)
-		    && (hp->cth_flags & ~(CTF_F_COMPRESS | CTF_F_NEWFUNCINFO
-					  | CTF_F_IDXSORTED))
+		    hp->cth_flags & (CTF_3_F_IDXSORTED)
+		    && (hp->cth_flags & ~(CTF_3_F_COMPRESS | CTF_3_F_NEWFUNCINFO
+					  | CTF_3_F_IDXSORTED))
 		    ? ", " : "",
-		    hp->cth_flags & CTF_F_ARRNELEMS
-		    ? "CTF_F_ARRNELEMS" : "",
-		    hp->cth_flags & (CTF_F_ARRNELEMS)
-		    && (hp->cth_flags & ~(CTF_F_COMPRESS | CTF_F_NEWFUNCINFO
-					  | CTF_F_IDXSORTED | CTF_F_ARRNELEMS))
-		    ? ", " : "",
-		    hp->cth_flags & CTF_F_DYNSTR
+		    hp->cth_flags & CTF_3_F_DYNSTR
 		    ? "CTF_F_DYNSTR" : "") < 0)
 	goto err;
 
@@ -457,7 +451,6 @@ static int
 ctf_dump_header (ctf_dict_t *fp, ctf_dump_state_t *state)
 {
   char *str;
-  char *flagstr = NULL;
   const ctf_header_t *hp = fp->ctf_header;
   const char *vertab[] =
     {
@@ -499,21 +492,8 @@ ctf_dump_header (ctf_dict_t *fp, ctf_dump_state_t *state)
 
       if (fp->ctf_openflags > 0)
 	{
-	  if (asprintf (&flagstr, "%s%s%s%s",
-			fp->ctf_openflags & CTF_F_COMPRESS
-			? "CTF_F_COMPRESS": "",
-			(fp->ctf_openflags & CTF_F_COMPRESS)
-			&& (fp->ctf_openflags & ~CTF_F_COMPRESS)
-			? ", " : "",
-			fp->ctf_openflags & CTF_F_IDXSORTED
-			? "CTF_F_IDXSORTED" : "",
-			(fp->ctf_openflags & ~(CTF_F_COMPRESS | CTF_F_IDXSORTED))
-			? "; unknown flags present" : "") < 0)
+	  if (asprintf (&str, "Flags: 0x%x (unknown meaning)", fp->ctf_openflags) < 0)
 	    goto err;
-
-	  if (asprintf (&str, "Flags: 0x%x (%s)", fp->ctf_openflags, flagstr) < 0)
-	    goto err;
-	  free (flagstr);
 	  ctf_dump_append (fp, state, str);
 	}
 
@@ -544,7 +524,6 @@ ctf_dump_header (ctf_dict_t *fp, ctf_dump_state_t *state)
 
   return 0;
  err:
-  free (flagstr);
   return (ctf_set_errno (fp, errno));
 }
 

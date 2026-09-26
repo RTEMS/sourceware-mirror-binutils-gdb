@@ -191,7 +191,7 @@ ctf_bfdopen (struct bfd *abfd _libctf_unused_, ctf_open_sect_t *sects, ctf_error
       goto err_free_ctf;
     }
 
-  if (!preamble || (preamble && preamble->ctp_flags & CTF_F_DYNSTR))
+  if (!preamble || (preamble && preamble->ctp_flags & CTF_3_F_DYNSTR))
     {
       symhdr = &elf_tdata (abfd)->dynsymtab_hdr;
       strtab_name = ".dynstr";

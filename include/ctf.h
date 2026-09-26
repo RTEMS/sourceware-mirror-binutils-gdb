@@ -272,23 +272,22 @@ typedef struct ctf_header
 
 #define CTF_BTF_VERSION 1
 
-/* All of these flags bar CTF_F_COMPRESS and CTF_F_IDXSORTED are
-   bug-workaround flags; all of these flags without exception are valid only
-   in format v3: in v2 and below they cannot occur and in v4 and later,
+/* All of these flags bar CTF_3_F_COMPRESS and CTF_3_F_IDXSORTED are
+   bug-workaround flags; all of these flags without exceptiokn are valid
+   only in format v3: in v2 and below they cannot occur and in v4 and later,
    their values will be recycled for other purposes.  Of the
    non-bug-workaround flags, CTFv4 relies on external compression (such as
-   ELF compresed sections), and libctf figures out whether the index section
-   is sorted without needing flags to help.  */
+   ELF compressed sections), and libctf figures out whether the index
+   section is sorted without needing flags to help.  */
 
-#define CTF_F_COMPRESS	0x1		/* Data buffer is compressed by libctf.  */
-#define CTF_F_NEWFUNCINFO 0x2		/* New v3 func info section format.  */
-#define CTF_F_IDXSORTED 0x4		/* Index sections already sorted.  */
-#define CTF_F_DYNSTR 0x8		/* Strings come from .dynstr.  */
-#define CTF_F_ARRNELEMS 0x10		/* Array elems no longer reversed.  */
-#define CTF_F_MAX_3 (CTF_F_COMPRESS | CTF_F_NEWFUNCINFO | CTF_F_IDXSORTED	\
-		     | CTF_F_DYNSTR | CTF_F_ARRNELEMS)
+#define CTF_3_F_COMPRESS 0x1	 /* Data buffer is compressed by libctf.  */
+#define CTF_3_F_NEWFUNCINFO 0x2	 /* New v3 func info section format.  */
+#define CTF_3_F_IDXSORTED 0x4	 /* Index sections already sorted.  */
+#define CTF_3_F_DYNSTR 0x8	 /* Strings come from .dynstr.  */
+#define CTF_3_F_MAX (CTF_3_F_COMPRESS | CTF_3_F_NEWFUNCINFO | CTF_3_F_IDXSORTED	\
+		     | CTF_3_F_DYNSTR)
 
-#define CTF_F_MAX (CTF_F_IDXSORTED)
+#define CTF_F_MAX (0)
 
   /* CTFv3 and below: variable entries.  */
 typedef struct ctf_varent_v3

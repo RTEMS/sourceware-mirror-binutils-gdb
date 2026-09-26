@@ -1997,7 +1997,7 @@ ctf_bufopen_len (ctf_open_sect_t *sects, ssize_t *len, ctf_dict_t *parent,
 	  return (ctf_set_open_errno (errp, ECTF_INTERNAL));
 	}
 
-      if (format == IS_CTF && (hp->cth_flags & CTF_F_COMPRESS))
+      if (format == IS_CTF && (hp->cth_flags & CTF_3_F_COMPRESS))
 	{
 	  free (hpcopy);
 	  ctf_err (err_locus (NULL), ECTF_INTERNAL,
@@ -2170,7 +2170,7 @@ ctf_bufopen_len (ctf_open_sect_t *sects, ssize_t *len, ctf_dict_t *parent,
   /* Note: if this is a v1 -- v3 buffer, it will be reallocated and expanded by
      upgrade_types(), invoked by init_static_types().  */
 
-  if (format != IS_BTF && hp->cth_flags & CTF_F_COMPRESS)
+  if (format != IS_BTF && hp->cth_flags & CTF_3_F_COMPRESS)
     {
       size_t srclen;
       uLongf dstlen;
@@ -2183,7 +2183,7 @@ ctf_bufopen_len (ctf_open_sect_t *sects, ssize_t *len, ctf_dict_t *parent,
 	  goto bad;
 	}
       fp->ctf_dynbase = fp->ctf_base;
-      hp->cth_flags &= ~CTF_F_COMPRESS;
+      hp->cth_flags &= ~CTF_3_F_COMPRESS;
 
       src = (unsigned char *) ctfsect->cts_data + max_hdr_sz;
       srclen = ctfsect->cts_size - max_hdr_sz;
