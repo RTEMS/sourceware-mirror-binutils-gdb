@@ -879,6 +879,7 @@ extern ctf_id_t ctf_add_type_encoded (ctf_dict_t *dst_fp, ctf_dict_t *src_fp,
 extern int ctf_insert_type_decl_tag (ctf_dict_t *, ctf_id_t, const char *);
 extern int ctf_insert_decl_tag_rmap (ctf_dict_t *fp, ctf_id_t tag_type,
 				     ctf_id_t decl_type, int component_idx);
+extern ctf_ret_t ctf_add_sym_forced (ctf_dict_t *fp, const char *name, ctf_id_t id);
 extern ctf_ret_t ctf_track_enumerator (ctf_dict_t *, ctf_id_t, const char *);
 extern ctf_bool_t ctf_enum_unsigned (ctf_dict_t *, ctf_id_t);
 
@@ -940,16 +941,19 @@ extern void ctf_arc_close_free (struct ctf_archive_internal *arci);
 
 typedef enum ctf_import_flags
   {
-    CTF_IMPORT_UNREF = 0x01,
-    CTF_IMPORT_NEW   = 0x02
+    CTF_IMPORT_UNREF  = 0x01,
+    CTF_IMPORT_NEW    = 0x02,
+    CTF_IMPORT_COMPAT = 0x04,
   } ctf_import_flags_t;
 
 extern ctf_dict_t *ctf_create_internal (ctf_dict_t *parent,
+					ctf_open_sect_t *sects,
+					ctf_archive_t *archive,
 					ctf_import_flags_t import_flags,
 					ctf_error_t *errp);
 extern void *ctf_set_open_errno (ctf_error_t *, ctf_error_t);
 extern ssize_t ctf_buflen (ctf_open_sect_t *sects, ctf_error_t *errp);
-extern ctf_ret_t ctf_flip_header (void *, int, int, int);
+extern void ctf_flip_header (ctf_header_t *, int);
 extern ctf_error_t ctf_flip (ctf_dict_t *, ctf_header_t *, unsigned char *,
 			     int to_foreign);
 extern ctf_dict_t *ctf_bufopen_len (ctf_open_sect_t *sects,
@@ -958,7 +962,17 @@ extern ctf_dict_t *ctf_bufopen_len (ctf_open_sect_t *sects,
 				    ctf_import_flags_t import_flags,
 				    ctf_error_t *errp);
 
-extern ctf_ret_t ctf_write_thresholded (ctf_dict_t *fp, int fd, size_t threshold);
+extern void ctf_compat_upgrade_header_v3 (ctf_header_v3_t *hp, ctf_header_t *oldhp);
+extern void ctf_compat_flip_header_v3 (ctf_header_v3_t *cth);
+extern ctf_ret_t ctf_compat_upgrade_header_v4 (ctf_header_t *hp,
+					       ctf_header_v3_t *oldhp,
+					       ctf_error_t *errp);
+extern ctf_dict_t *ctf_compat_upgrade_types (int version,
+					     ctf_dict_t *fp, ctf_header_t *cth,
+					     ctf_open_sect_t *sects, ctf_dict_t *parent,
+					     ctf_archive_t *ctf_archive,
+					     int foreign_endian,
+					     ctf_error_t *errp);
 
 _libctf_malloc_
 extern void *ctf_mmap (size_t length, size_t offset, int fd);

@@ -1041,6 +1041,13 @@ ctf_preserialize (ctf_dict_t *fp)
 	return ctf_err (err_locus (fp), ECTF_NOTSERIALIZED,
 			_("parent has had %u types added, and child has been written out before"),
 			fp->ctf_parent->ctf_typemax - fp->ctf_header->cth_parent_ntypes);
+
+      /* Prohibit serialization of a child dict that was upgraded from v3: its
+	 parent type count and base strtab offset is different from the v4 norm,
+	 and v4 has no way to record a different value.  */
+      if (fp->ctf_v3_header)
+	return ctf_err (err_locus (fp), ECTF_NOTSERIALIZED,
+			_("cannot re-ctf_write child dicts upgraded from v3 and below: ctf_link instead"));
     }
   else
     {
@@ -1326,8 +1333,7 @@ ctf_write_mem (ctf_dict_t *fp, size_t *size)
   hp = (ctf_header_t *) buf;
   bp = buf + sizeof (ctf_btf_header_t);
 
-  if (ctf_flip_header (hp, 1, fp->ctf_serialize.cs_is_btf, 0) < 0)
-    goto err;				/* errno is set for us.  */
+  ctf_flip_header (hp, fp->ctf_serialize.cs_is_btf);
   if (ctf_flip (fp, hp, bp, 1) < 0)
     goto err;				/* errno is set for us.  */
 

@@ -178,15 +178,20 @@ ctf_add_prefix (ctf_dict_t *fp, ctf_dtdef_t *dtd, size_t vbytes)
 ctf_dict_t *
 ctf_create (ctf_dict_t *parent, ctf_error_t *errp)
 {
-  return ctf_create_internal (parent, 0, errp);
+  return ctf_create_internal (parent, NULL, NULL, 0, errp);
 }
 
 /* Implementation of ctf_create().  Allows the caller to specify specific import
-   flags.  Not public, because these flags are an internal implementation
-   detail.  */
+   flags, to provide ELF sections, and to specify that this dict is already part
+   of an archive (only used by compat loading).  Not public, because the flags
+   are an internal implementation detail, and because normal users should never
+   need to specify that this new dict is actually not a new dict at all but one
+   read from an existing archive.  */
 
 ctf_dict_t *
-ctf_create_internal (ctf_dict_t *parent, ctf_import_flags_t import_flags,
+ctf_create_internal (ctf_dict_t *parent, ctf_open_sect_t *sects,
+		     ctf_archive_t *archive,
+		     ctf_import_flags_t import_flags,
 		     ctf_error_t *errp)
 {
   static ctf_header_t hdr =
@@ -204,6 +209,7 @@ ctf_create_internal (ctf_dict_t *parent, ctf_import_flags_t import_flags,
   ctf_dynhash_t *datasecs = NULL, *tags = NULL;
   ctf_sect_t cts = {0};
   ctf_dict_t *fp;
+  ctf_sect_t orig_sect_head, orig_sect_tail, *sect_tail;
 
   libctf_init_debug();
 
@@ -233,9 +239,28 @@ ctf_create_internal (ctf_dict_t *parent, ctf_import_flags_t import_flags,
   cts.cts_size = sizeof (hdr);
   cts.cts_entsize = 1;
 
-  if ((fp = ctf_bufopen_len (ctf_open_sect (NULL, &cts), NULL, parent, NULL,
-			     import_flags | CTF_IMPORT_NEW, errp)) == NULL)
+  /* Preserve SECTS around the call (ctf_open_sect mutates its head and
+     tail).  */
+
+  if (sects)
+    {
+      memcpy (&orig_sect_head, sects, sizeof (ctf_sect_t));
+      sect_tail = ctf_list_prev ((ctf_list_t *) sects);
+      if (sect_tail)
+	memcpy (&orig_sect_tail, sect_tail, sizeof (ctf_sect_t));
+   }
+
+  if ((fp = ctf_bufopen_len (ctf_open_sect (sects, &cts), NULL, parent,
+			     archive, import_flags | CTF_IMPORT_NEW,
+			     errp)) == NULL)
     goto err;
+
+  if (sects)
+    {
+      memcpy (sects, &orig_sect_head, sizeof (ctf_sect_t));
+      if (sect_tail)
+	memcpy (sect_tail, &orig_sect_tail, sizeof (ctf_sect_t));
+    }
 
   /* These hashes will have been initialized with a starting size of zero,
      which is surely wrong.  Use ones with slightly larger sizes.  */
@@ -2201,30 +2226,14 @@ ctf_remove_datasec (ctf_dict_t *fp, ctf_id_t type, const char *name)
 	     _("iteration error rolling back addition of variable %s"), name);
 }
 
-/* Add a type for a symbol to this dict.  Not written out unless the dict is
-   written to an archive, since symbols have no representation at the CTF
-   dict level. */
+/* Add a type for a symbol to this dict, with no duplicate detection.  Not a
+   public function. */
 
 ctf_ret_t
-ctf_add_sym (ctf_dict_t *fp, const char *name, ctf_id_t id)
+ctf_add_sym_forced (ctf_dict_t *fp, const char *name, ctf_id_t id)
 {
-  ctf_dict_t *foo = NULL;
-  ctf_id_t bar;
-  ctf_error_t err;
   ctf_dict_t *tmp = fp;
   char *dupname;
-
-  if (ctf_dynhash_lookup_kv (fp->ctf_symtypehash, name, NULL, NULL)
-      || (fp->ctf_archive
-	  && (foo = ctf_arc_lookup_symbol_name (fp->ctf_archive, name,
-						&bar, &err)) != NULL))
-    {
-      ctf_dict_close (foo);
-      return (ctf_set_errno (fp, ECTF_DUPLICATE));
-    }
-
-  if (err != ECTF_NOTYPEDAT)
-    return (ctf_set_errno (fp, err));
 
   fp->ctf_serialize.cs_initialized = 0;
 
@@ -2241,6 +2250,32 @@ ctf_add_sym (ctf_dict_t *fp, const char *name, ctf_id_t id)
       return (ctf_set_errno (fp, ENOMEM));
     }
   return 0;
+}
+
+/* Add a type for a symbol to this dict.  Not written out unless the dict is
+   written to an archive, since symbols have no representation at the CTF
+   dict level. */
+
+ctf_ret_t
+ctf_add_sym (ctf_dict_t *fp, const char *name, ctf_id_t id)
+{
+  ctf_dict_t *foo = NULL;
+  ctf_id_t bar;
+  ctf_error_t err;
+
+  if (ctf_dynhash_lookup_kv (fp->ctf_symtypehash, name, NULL, NULL)
+      || (fp->ctf_archive
+	  && (foo = ctf_arc_lookup_symbol_name (fp->ctf_archive, name,
+						&bar, &err)) != NULL))
+    {
+      ctf_dict_close (foo);
+      return (ctf_set_errno (fp, ECTF_DUPLICATE));
+    }
+
+  if (err != ECTF_NOTYPEDAT)
+    return (ctf_set_errno (fp, err));
+
+  return ctf_add_sym_forced (fp, name, id);
 }
 
 /* Sort function used by ctf_datasec_sort.  */
