@@ -171,6 +171,16 @@ ctf_dump_format_type (ctf_dict_t *fp, ctf_id_t id, int flag)
 	  bit = NULL;
 	}
 
+      if (kind == CTF_K_FLOAT && ctf_type_encoding (fp, id, &ep) == 0)
+	{
+	  if (asprintf (&bit, " (format 0x%x, m:e %i:%i)",
+			ep.cte_format, ep.cte_mantissa, ep.cte_exponent) < 0)
+	    goto oom;
+	  str = str_append (str, bit);
+	  free (bit);
+	  bit = NULL;
+	}
+
       size = ctf_type_size (fp, id);
       if (kind != CTF_K_FUNCTION && kind != CTF_K_FUNC_LINKAGE
 	  && kind != CTF_K_DATASEC && size >= 0)
