@@ -720,6 +720,8 @@ ctf_add_encoded (ctf_dict_t *fp, uint32_t flag,
       encoding = ep->cte_format;
       if (kind == CTF_K_INTEGER)
 	encoding = CTF_INT_DATA (ep->cte_format, ep->cte_offset, ep->cte_bits);
+      else
+	encoding = CTF_FP_DATA (ep->cte_format, ep->cte_mantissa, ep->cte_exponent);
 
       memcpy (dtd->dtd_vlen, &encoding, sizeof (encoding));
     }

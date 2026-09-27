@@ -1479,8 +1479,8 @@ ctf_type_encoding (ctf_dict_t *fp, ctf_id_t type, ctf_encoding_t *ep)
     case CTF_K_FLOAT:
       data = *(const uint32_t *) vlen;
       ep->cte_format = CTF_FP_ENCODING (data);
-      ep->cte_offset = CTF_FP_OFFSET (data);
-      ep->cte_bits = CTF_FP_BITS (data);
+      ep->cte_mantissa = CTF_FP_MANTISSA (data);
+      ep->cte_exponent = CTF_FP_EXPONENT (data);
       break;
     case CTF_K_ENUM:
     case CTF_K_ENUM64:

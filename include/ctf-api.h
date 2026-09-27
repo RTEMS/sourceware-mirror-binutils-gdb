@@ -137,14 +137,50 @@ typedef enum ctf_sect_names
    intrinsics can be obtained by calling ctf_type_encoding, below.  The flags
    field will contain values appropriate for the type defined in <ctf.h>.
 
-   For floats, only the first of these fields is meaningful.  */
+   For ints, cte_offset and cte_bits apply, defining a base-type bitfield
+   (deprecated); for floats, cte_mantissa and cte_exponent apply.  0 for both
+   means "not known".  */
 
 typedef struct ctf_encoding
 {
-  uint32_t cte_format;		 /* Data format (CTF_INT_* or CTF_FP_* flags).  */
-  uint32_t cte_offset;		 /* Offset of value in bits.  */
-  uint32_t cte_bits;		 /* Size of storage in bits.  */
+  uint32_t cte_format;		 /* Data format (CTF_INT_* or CTF_FP_* flags). */
+#if !defined (__GNUC__) || !defined __STDC_VERSION__ || __STDC_VERSION__ < 201112L
+#ifdef __GNUC__
+  __extension__
+#endif
+  union
+    {
+      uint32_t _cte_offset;	 /* Offset of value in bits.  */
+      uint32_t _cte_mantissa;	 /* Mantissa of float in bits.  */
+      } _om;
+  union
+    {
+      uint32_t _cte_bits;	 /* Size of storage in bits.  */
+      uint32_t _cte_exponent;	 /* Exponent of float in bits.  */
+    } _be;
+#else
+#ifdef __GNUC__
+  __extension__
+  union
+    {
+      uint32_t cte_offset;	 /* Offset of value in bits.  */
+      uint32_t cte_mantissa;	 /* Mantissa of float in bits.  */
+      };
+  union
+    {
+      uint32_t cte_bits;	 /* Size of storage in bits.  */
+      uint32_t cte_exponent;	 /* Exponent of float in bits.  */
+    };
+#endif
+#endif
 } ctf_encoding_t;
+
+#if !defined (__GNUC__) || !defined __STDC_VERSION__ || __STDC_VERSION__ < 201112L
+#define cte_offset _om._cte_offset
+#define cte_mantissa _om._cte_mantissa
+#define cte_bits _be._cte_bits
+#define cte_exponent _be._cte_exponent
+#endif
 
 /* "Not bitfield" here really means "not recorded as a bitfield in the
    structure". ctf_type_encoding() may reveal that the base type or an
