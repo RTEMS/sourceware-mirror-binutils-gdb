@@ -442,10 +442,18 @@ read_base_type (struct ctf_context *ccp, ctf_id_t tid)
   struct type *type = nullptr;
   const char *name;
   uint32_t kind;
+  size_t size;
 
   if (ctf_type_encoding (dict, tid, &cet))
     {
       complaint (_("ctf_type_encoding read_base_type failed - %s"),
+		 ctf_errmsg (ctf_errno (dict)));
+      return nullptr;
+    }
+
+  if ((size = ctf_type_size (dict, tid)) < 0)
+    {
+      complaint (_("ctf_type_size read_base_type failed - %s"),
 		 ctf_errmsg (ctf_errno (dict)));
       return nullptr;
     }
@@ -477,25 +485,25 @@ read_base_type (struct ctf_context *ccp, ctf_id_t tid)
       else
 	{
 	  int bits;
-	  if (cet.cte_bits && ((cet.cte_bits % TARGET_CHAR_BIT) == 0))
+	  if (cet.cte_bits != 0)
 	    bits = cet.cte_bits;
 	  else
-	    bits = gdbarch_int_bit (gdbarch);
+	    bits = size * TARGET_CHAR_BIT;
 	  type = init_integer_type (alloc, bits, !issigned, name);
 	}
     }
   else if (kind == CTF_K_FLOAT)
     {
       uint32_t isflt;
-      isflt = !((cet.cte_format & CTF_FP_IMAGRY) == CTF_FP_IMAGRY
-		 || (cet.cte_format & CTF_FP_DIMAGRY) == CTF_FP_DIMAGRY
-		 || (cet.cte_format & CTF_FP_LDIMAGRY) == CTF_FP_LDIMAGRY);
+      isflt = !(cet.cte_format == CTF_FP_CPLX
+		|| cet.cte_format == CTF_FP_DCPLX
+		|| cet.cte_format == CTF_FP_LDCPLX);
       if (isflt)
-	type = ctf_init_float_type (of, cet.cte_bits, name, name);
+	type = ctf_init_float_type (of, size * TARGET_CHAR_BIT, name, name);
       else
 	{
-	  struct type *t
-	    = ctf_init_float_type (of, cet.cte_bits / 2, NULL, name);
+	  struct type *t = ctf_init_float_type (of, (size * TARGET_CHAR_BIT) / 2,
+						NULL, name);
 	  type = init_complex_type (name, t);
 	}
     }
