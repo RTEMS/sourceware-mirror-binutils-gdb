@@ -896,21 +896,23 @@ init_static_types_names_internal (ctf_dict_t *fp, ctf_header_t *cth, int is_btf,
 	    if (!isroot)
 	      break;
 
-	    /* Names are reused by bitfields, which are differentiated by
-	       their encodings.  So check for the type already existing, and
-	       iff the new type is a root-visible non-bitfield, replace the
-	       old one.  It's a little hard to figure out whether a type is
-	       a non-bitfield without already knowing that type's native
-	       width, but we can converge on it by replacing an existing
-	       type as long as the new type is zero-offset and has a
-	       bit-width wider than the existing one, since the native type
-	       must necessarily have a bit-width at least as wide as any
-	       bitfield based on it.
+	    /* For integers, names are reused by bitfields, which are
+	       differentiated by their encodings.  So check for the type already
+	       existing, and iff the new type is a root-visible non-bitfield,
+	       replace the old one.  It's a little hard to figure out whether a
+	       type is a non-bitfield without already knowing that type's native
+	       width, but we can converge on it by replacing an existing type as
+	       long as the new type is zero-offset and has a bit-width wider
+	       than the existing one, since the native type must necessarily
+	       have a bit-width at least as wide as any bitfield based on it.
 
-	       BTF floats are more or less useless, having no encoding:
-	       the ctf_type_encoding check here suffices to replace them.  */
+	       BTF floats are more or less useless, having no encoding: the
+	       ctf_type_encoding check here suffices to replace them.  Float
+	       encodings specify mantissa/exponent bits and cannot trigger reuse
+	       of the same name for multiple distinct types.  */
 
-	    if (((existing = ctf_dynhash_lookup_type (fp->ctf_names, name)) == 0)
+	    if (kind == CTF_K_FLOAT || kind == CTF_K_BTF_FLOAT
+		|| ((existing = ctf_dynhash_lookup_type (fp->ctf_names, name)) == 0)
 		|| ctf_type_encoding (fp, existing, &existing_en) != 0
 		|| (ctf_type_encoding (fp, ctf_index_to_type (fp, id), &this_en) == 0
 		    && this_en.cte_offset == 0
