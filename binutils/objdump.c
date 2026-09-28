@@ -4925,7 +4925,7 @@ dump_ctf (bfd *abfd, const char *sect_name, const char *parent_name,
   if (parent_sect_name)
     {
       psec = read_section (abfd, parent_sect_name, &ctfpdata);
-      if (sec == NULL)
+      if (psec == NULL)
 	{
 	  my_bfd_nonfatal (bfd_get_filename (abfd));
 	  free (ctfdata);
