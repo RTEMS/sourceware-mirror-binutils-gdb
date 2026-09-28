@@ -1333,9 +1333,9 @@ ctf_write_mem (ctf_dict_t *fp, size_t *size)
   hp = (ctf_header_t *) buf;
   bp = buf + sizeof (ctf_btf_header_t);
 
-  ctf_flip_header (hp, fp->ctf_serialize.cs_is_btf);
   if (ctf_flip (fp, hp, bp, 1) < 0)
     goto err;				/* errno is set for us.  */
+  ctf_flip_header (hp, fp->ctf_serialize.cs_is_btf);
 
   return buf;
 err:
