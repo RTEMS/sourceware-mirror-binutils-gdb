@@ -1960,7 +1960,7 @@ ctf_archive_raw_next (const struct ctf_archive_internal *arci, ctf_next_t **it,
 
   if (!i)
     {
-      if ((i = ctf_next_create()) == NULL)
+      if ((i = ctf_next_create ()) == NULL)
 	{
 	  if (errp)
 	    *errp = ENOMEM;
@@ -2039,7 +2039,7 @@ ctf_archive_next (const struct ctf_archive_internal *arci, ctf_next_t **it,
 
   if (!i)
     {
-      if ((i = ctf_next_create()) == NULL)
+      if ((i = ctf_next_create ()) == NULL)
 	{
 	  if (errp)
 	    *errp = ENOMEM;
