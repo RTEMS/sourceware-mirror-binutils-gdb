@@ -4029,7 +4029,8 @@ ldlang_open_ctf (void)
       return;
     }
 
-  /* Create sections if we have somewhere to create them.  */
+  /* Create sections if we have somewhere to create them.  This will be some
+     input which has either a .ctf or .BTF section.  */
 
   if (emission_file)
     {
