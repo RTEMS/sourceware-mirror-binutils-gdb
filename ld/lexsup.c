@@ -637,6 +637,14 @@ static const struct ld_option ld_options[] =
   { {"no-ctf-variables", no_argument, NULL, OPTION_NO_CTF_VARIABLES},
     '\0', NULL, N_("Do not emit names and types of static variables in CTF"),
     TWO_DASHES },
+  { {"ctf-format=<format>", required_argument, NULL,
+     OPTION_CTF_FORMAT},
+    '\0', NULL, N_("Format to be emitted when CTF or BTF is found.\n"
+		   "                                <format> is: btf-preferred (default),\n"
+		   "                                             btf,\n"
+		   "                                             btf-error,\n"
+		   "                                             ctf"),
+    TWO_DASHES },
   { {"ctf-share-types=<method>", required_argument, NULL,
      OPTION_CTF_SHARE_TYPES},
     '\0', NULL, N_("How to share CTF types between translation units.\n"
@@ -1855,6 +1863,19 @@ parse_args (unsigned argc, char **argv)
 
 	case OPTION_NO_CTF_VARIABLES:
 	  config.ctf_variables = false;
+	  break;
+
+	case OPTION_CTF_FORMAT:
+	  if (strcmp (optarg, "btf-preferred") == 0)
+	    config.ctf_format = ctf_format_btf_preferred;
+	  else if (strcmp (optarg, "btf") == 0)
+	    config.ctf_format = ctf_format_btf;
+	  else if (strcmp (optarg, "btf-error") == 0)
+	    config.ctf_format = ctf_format_btf_error;
+	  else if (strcmp (optarg, "ctf") == 0)
+	    config.ctf_format = ctf_format_ctf;
+	  else
+	    fatal (_("%P: bad --ctf-format option: %s\n"), optarg);
 	  break;
 
 	case OPTION_CTF_SHARE_TYPES:

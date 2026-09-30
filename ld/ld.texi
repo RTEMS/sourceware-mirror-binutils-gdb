@@ -1983,13 +1983,35 @@ symbol are listed.
 @kindex --no-ctf-variables
 @item --ctf-variables
 @item --no-ctf-variables
-The CTF debuginfo format supports a section which encodes the names and
-types of variables found in the program which do not appear in any symbol
-table. These variables clearly cannot be looked up by address by
-conventional debuggers, so the space used for their types and names is
-usually wasted: the types are usually small but the names are often not.
-@option{--ctf-variables} causes the generation of such a section.
-The default behaviour can be restored with @option{--no-ctf-variables}.
+The CTF and BTF formats support preserving the names and types of variables
+and static-scope function prototypes found in the program which do not
+appear in any symbol table. These things clearly cannot be looked up by
+address by conventional debuggers, so the space used for their types and
+names is usually wasted: the types are usually small but the names are often
+not.  @option{--ctf-variables} causes the generation of such variables.  The
+default behaviour can be restored with @option{--no-ctf-variables}.
+
+@cindex ctf output format
+@kindex --ctf-format
+@item --ctf-format=@var{format}
+Specify the format to be generated when CTF or BTF debug information is
+found, after deduplication.  This list is likely to change.
+
+@table @samp
+@item btf-preferred
+Emit BTF when possible, lowering CTF to BTF whenever doing so will not lose
+information.  (Notably, any output containing any floating-point variables
+will not be lowered and will remain CTF.)
+
+This is the default.
+@item btf
+Emit BTF no matter what: replace unknown type kinds (like floating-point
+variables) with BTF_KIND_UNKNOWN.
+@item btf-error
+Emit BTF no matter what, erroring out if unknown type kinds are found.
+@item ctf
+Emit CTFv4 even if all the input is valid BTF.
+@end table
 
 @cindex ctf type sharing
 @kindex --ctf-share-types

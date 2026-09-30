@@ -225,6 +225,24 @@ enum orphan_handling_enum
   orphan_handling_error,
 };
 
+/* The expected output format for libctf linking.  */
+enum ctf_format
+{
+  /* Emit BTF if the output can be lowered into BTF without information loss. */
+  ctf_format_btf_preferred = 0,
+
+  /* Emit BTF no matter what, replacing CTF-specific type kinds with
+     BTF_KIND_UNKNOWN.  */
+  ctf_format_btf,
+
+  /* Emit BTF no matter what, erroring out if CTF-specific type kinds
+     are found.  */
+  ctf_format_btf_error,
+
+  /* Emit CTF even if the section is representable as BTF.  */
+  ctf_format_ctf
+};
+
 typedef struct
 {
   bool magic_demand_paged;
@@ -329,6 +347,9 @@ typedef struct
   /* If set, share only duplicated types in CTF, rather than sharing
      all types that are not in conflict.  */
   bool ctf_share_duplicated;
+
+  /* The output format libctf will produce.  */
+  enum ctf_format ctf_format;
 
   /* Compress DWARF debug sections.  */
   enum compressed_debug_section_type compress_debug;

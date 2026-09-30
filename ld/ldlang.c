@@ -4173,6 +4173,36 @@ ldlang_merge_ctf (void)
   if (bfd_link_relocatable (&link_info))
     flags |= CTF_LINK_NO_FILTER_REPORTED_SYMS;
 
+  switch (config.ctf_format)
+    {
+      /* This is the default, but let's be explicit.  */
+    case ctf_format_btf_preferred: break;
+      if (ctf_version (0, 0, LIBCTF_BTM_CTF_POSSIBLE) < 0)
+	goto setup_err;
+      break;
+
+      /* For this case, we must tell libctf to suppress unwanted type kinds,
+	 replacing them with CTF_K_UNKNOWN.  */
+    case ctf_format_btf:
+      if (ctf_version (0, 0, LIBCTF_BTM_BTF_ALWAYS) < 0
+	  || ctf_write_suppress_kind (ctf_output, CTF_K_FLOAT, 0) < 0
+	  || ctf_write_suppress_kind (ctf_output, CTF_K_BIG, 0) < 0
+	  || ctf_write_suppress_kind (ctf_output, CTF_K_CONFLICTING, 0) < 0)
+	goto setup_err;
+      break;
+
+      /* This is easier: the default in always-write-BTF mode is to error if CTF
+	 type kinds are encountered.  */
+    case ctf_format_btf_error:
+      if (ctf_version (0, 0, LIBCTF_BTM_BTF_ALWAYS) < 0)
+	goto setup_err;
+      break;
+
+    case ctf_format_ctf:
+      if (ctf_version (0, 0, LIBCTF_BTM_CTF_ALWAYS) < 0)
+	goto setup_err;
+    }
+
   if (ctf_link (ctf_output, flags) < 0)
     {
       ldlang_ctf_errs_warnings (ctf_output);
@@ -4189,6 +4219,16 @@ ldlang_merge_ctf (void)
   ldlang_ctf_errs_warnings (ctf_output);
 
   ld_stop_phase (PHASE_CTF);
+  return;
+
+ setup_err:
+  einfo (_("%P: warning: cannot set up libctf for BTF-only linking: `%s'\n"),
+	 file->the_bfd, ctf_errmsg (ctf_errno (ctf_output)));
+  ctf_dict_close (ctf_output);
+  ctf_close (file->the_ctf);
+  file->the_ctf = NULL;
+  ld_stop_phase (PHASE_CTF);
+  return;
 }
 
 /* Let the emulation acquire strings from the dynamic strtab to help it optimize
