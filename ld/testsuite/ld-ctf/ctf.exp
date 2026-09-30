@@ -18,18 +18,18 @@
 # MA 02110-1301, USA.
 #
 
-if [skip_ctf_tests] {
-    unsupported "no CTF format support in the compiler, or CTF disabled"
+if {[skip_ctf_tests "ctf" ".ctf"] && [skip_ctf_tests "btf" ".BTF"]} {
+    unsupported "no CTF or BTF format support in the compiler, or disabled"
     return 0
 }
 
 if ![is_elf_format] {
-    unsupported "CTF needs bfd changes to be emitted on non-ELF"
+    unsupported "CTF/BTF needs bfd changes to be emitted on non-ELF"
     return 0
 }
 
 if ![check_shared_lib_support] {
-    unsupported "CTF needs shared lib support"
+    unsupported "CTF/BTF testing needs shared lib support"
     return 0
 }
 
@@ -52,7 +52,12 @@ foreach ctf_test $ctf_test_list {
 	}
     }
     verbose [file rootname $ctf_test]
-    run_dump_test [file rootname $ctf_test] { { cc "-gctf -fPIC" } }
+    if ![skip_ctf_tests "ctf" ".ctf"] {
+	run_dump_test [file rootname $ctf_test] { { cc "-gctf -fPIC" } }
+    }
+    if ![skip_ctf_tests "btf" ".BTF"] {
+	run_dump_test [file rootname $ctf_test] { { cc "-gbtf -fPIC" } }
+    }
 }
 
 set ASFLAGS "$saved_ASFLAGS"

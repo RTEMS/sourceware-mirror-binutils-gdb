@@ -1629,12 +1629,16 @@ proc compile_one_cc { src output additional_flags } {
     return [run_host_noleak "$CC_FOR_TARGET" "$flags $CFLAGS_FOR_TARGET $additional_flags $src -o $output"]
 }
 
-# Returns true if the target compiler supports -gctf.
-proc check_ctf_available { } {
+# Returns true if the target compiler supports -gctf / -gbtf / some similar -g flag.
+proc check_ctf_available { gflag section } {
     global ctf_available_saved
 
     if {![info exists ctf_available_saved]} {
-	set ctf_available_saved 0
+	set ctf_available_saved [dict create]
+    }
+
+    if {![dict exists ctf_available_saved $gflag]} {
+	dict set ctf_available_saved $gflag 0
 
 	# Don't check for compiler availability, because that FNs if the
 	# compiler is available but emits warnings.  An unavailable
@@ -1646,30 +1650,31 @@ proc check_ctf_available { } {
 	set f [open $src "w"]
 	puts $f "int main() { return 0; }"
 	close $f
-	compile_one_cc $src $output "-gctf -S -c"
+	append gflag_str "-g" $gflag
+	compile_one_cc $src $output "$gflag_str -S -c"
 	remote_file host delete $src
 	if {! [remote_file host exists $output] } {
-		file delete $src
-		return 0
+	    file delete $src
+	    return 0
 	}
-	set status [remote_exec host fgrep ".ctf $output"]
+	set status [remote_exec host fgrep "$section $output"]
 	remote_file host delete $output
 	file delete $src
 	if { [lindex $status 0] == 0 } {
-		set ctf_available_saved 1
+	    dict set ctf_available_saved $gflag 1
 	}
     }
-    return $ctf_available_saved
+    return [dict get $ctf_available_saved $gflag]
 }
 
-proc skip_ctf_tests { } {
+proc skip_ctf_tests { gflag section } {
     global enable_libctf
 
     if {$enable_libctf eq "no"} {
 	return 1
     }
 
-    if [check_ctf_available] {
+    if [check_ctf_available $gflag $section ] {
 	return 0
     }
 
